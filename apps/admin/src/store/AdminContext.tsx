@@ -35,7 +35,7 @@ import {
   getSystemCityConfigs, setSystemCityConfigs,
 } from '@shared/utils/configStore'
 import { MOCK_DRIVERS } from '@shared/mock-data/drivers'
-import { MOCK_USERS }   from '@shared/mock-data/users'
+import { fetchProfiles } from '@shared/utils/profileStore'
 
 // ── State ─────────────────────────────────────────────────────────────────────
 
@@ -52,7 +52,7 @@ interface AdminState {
 const initialState: AdminState = {
   orders:      [],
   drivers:     MOCK_DRIVERS,
-  users:       MOCK_USERS,
+  users:       [],           // populated from public.profiles on mount
   receipts:    [],
   incidents:   [],
   cityConfigs: getSystemCityConfigs(),
@@ -76,6 +76,7 @@ type Action =
   | { type: 'UPDATE_INCIDENT';      id: string; patch: Partial<IncidentReport> }
   | { type: '_HYDRATE_ORDERS';      orders: Order[] }
   | { type: '_HYDRATE_DRIVERS';     drivers: Driver[] }
+  | { type: '_HYDRATE_USERS';       users: User[] }
   | { type: '_HYDRATE_RECEIPTS';    receipts: Receipt[] }
   | { type: '_HYDRATE_INCIDENTS';   incidents: IncidentReport[] }
   | { type: '_HYDRATE_CONFIGS';     configs: CityConfig[] }
@@ -96,6 +97,9 @@ function reducer(state: AdminState, action: Action): AdminState {
 
     case '_HYDRATE_DRIVERS':
       return { ...state, drivers: action.drivers }
+
+    case '_HYDRATE_USERS':
+      return { ...state, users: action.users }
 
     case '_HYDRATE_RECEIPTS':
       return { ...state, receipts: action.receipts }
@@ -543,18 +547,28 @@ export function AdminProvider({ children }: { children: React.ReactNode }) {
 
     async function load() {
       try {
-        const [orders, receipts, incidents, configs] = await Promise.all([
+        const [orders, receipts, incidents, configs, profiles] = await Promise.all([
           fetchOrders(),
           fetchReceipts(),
           fetchIncidents(),
           fetchCityConfigs(),
+          fetchProfiles('customer'),
         ])
         if (cancelled) return
 
-        baseDispatch({ type: '_HYDRATE_ORDERS',   orders   })
-        baseDispatch({ type: '_HYDRATE_RECEIPTS',  receipts })
+        // Build User[] from profiles — orderIds derived from loaded orders
+        const users: User[] = profiles.map(p => ({
+          ...p,
+          orderIds: orders
+            .filter(o => o.customerId === p.id)
+            .map(o => o.id),
+        }))
+
+        baseDispatch({ type: '_HYDRATE_ORDERS',    orders    })
+        baseDispatch({ type: '_HYDRATE_USERS',     users     })
+        baseDispatch({ type: '_HYDRATE_RECEIPTS',  receipts  })
         baseDispatch({ type: '_HYDRATE_INCIDENTS', incidents })
-        baseDispatch({ type: '_HYDRATE_CONFIGS',   configs  })
+        baseDispatch({ type: '_HYDRATE_CONFIGS',   configs   })
 
         if (isSupabaseConfigured) {
           const { data: driverRows } = await supabase

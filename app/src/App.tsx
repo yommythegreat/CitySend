@@ -106,11 +106,25 @@ export default function App() {
     [state.selectedCityId, configVersion],
   )
 
-  // ── Session restore ─────────────────────────────────────────────────────────
+  // ── Session restore + /auth/callback handler ────────────────────────────────
   useEffect(() => {
     async function restoreSession() {
       if (isSupabaseConfigured) {
+        // Detect if we landed here from a Supabase email-confirmation link.
+        // The Supabase JS client auto-exchanges ?code= or #access_token= in the
+        // URL when getSession() is called (detectSessionInUrl defaults to true).
+        const isCallback =
+          window.location.pathname === '/auth/callback' ||
+          window.location.hash.includes('access_token') ||
+          window.location.search.includes('code=')
+
         const { data: { session } } = await supabase.auth.getSession()
+
+        // Clean up the URL — remove the auth code/token from the address bar
+        if (isCallback) {
+          window.history.replaceState({}, document.title, '/')
+        }
+
         if (session?.user) {
           const authUser = {
             id:    session.user.id,

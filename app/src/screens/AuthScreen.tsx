@@ -2,8 +2,7 @@ import React, { useState } from 'react'
 import { LogoWordmark } from '../components/Logo'
 import { Button } from '../components/Button'
 import { Field } from '../components/Field'
-import { User, Lock, Back } from '../components/Icons'
-import { IconButton } from '../components/IconButton'
+import { User, Lock } from '../components/Icons'
 import { supabase, isSupabaseConfigured } from '../lib/supabase'
 import type { AuthUser, ScreenName } from '../types'
 
@@ -18,13 +17,31 @@ function Spinner() {
   return <div style={{ width: 16, height: 16, border: '2px solid rgba(255,255,255,.3)', borderTopColor: '#fff', borderRadius: 8, animation: 'cs-spin 0.7s linear infinite' }} />
 }
 
+/** Map Supabase error strings to user-friendly copy. */
+function friendlyError(msg: string): string {
+  const m = msg.toLowerCase()
+  if (m.includes('rate limit') || m.includes('email rate') || m.includes('too many'))
+    return 'Too many attempts. Please wait a few minutes.'
+  if (m.includes('already registered') || m.includes('user already exists'))
+    return 'An account with this email already exists. Try signing in.'
+  if (m.includes('invalid login') || m.includes('invalid credentials') || m.includes('invalid email or password'))
+    return 'Incorrect email or password.'
+  if (m.includes('email not confirmed'))
+    return 'Please confirm your email first. Check your inbox.'
+  if (m.includes('password'))
+    return 'Password must be at least 6 characters.'
+  return msg
+}
+
 export function AuthScreen({ onAuth, go }: Props) {
-  const [tab, setTab]         = useState<Tab>('login')
-  const [name, setName]       = useState('')
-  const [email, setEmail]     = useState('')
-  const [password, setPass]   = useState('')
-  const [error, setError]     = useState<string | null>(null)
-  const [loading, setLoading] = useState(false)
+  const [tab,       setTab]       = useState<Tab>('login')
+  const [name,      setName]      = useState('')
+  const [email,     setEmail]     = useState('')
+  const [password,  setPass]      = useState('')
+  const [error,     setError]     = useState<string | null>(null)
+  const [loading,   setLoading]   = useState(false)
+  /** true after signUp returns without a session (email confirmation required) */
+  const [emailSent, setEmailSent] = useState(false)
 
   const valid = tab === 'login'
     ? email.trim().length > 4 && password.trim().length >= 6
@@ -40,7 +57,7 @@ export function AuthScreen({ onAuth, go }: Props) {
           const { data, error } = await supabase.auth.signInWithPassword({
             email: email.trim().toLowerCase(), password,
           })
-          if (error || !data.user) throw new Error(error?.message ?? 'Invalid credentials.')
+          if (error || !data.user) throw new Error(friendlyError(error?.message ?? 'Invalid credentials.'))
 
           const authUser: AuthUser = {
             id:    data.user.id,
@@ -50,26 +67,39 @@ export function AuthScreen({ onAuth, go }: Props) {
           localStorage.setItem('cs_token', data.session?.access_token ?? '')
           localStorage.setItem('cs_user',  JSON.stringify(authUser))
           onAuth(authUser, data.session?.access_token ?? '')
-        } else {
-          // Register
-          const { data, error } = await supabase.auth.signUp({
-            email: email.trim().toLowerCase(),
-            password,
-            options: { data: { name: name.trim(), role: 'customer' } },
-          })
-          if (error || !data.user) throw new Error(error?.message ?? 'Registration failed.')
 
+        } else {
+          // ── Register ────────────────────────────────────────────────────
+          const { data, error } = await supabase.auth.signUp({
+            email:    email.trim().toLowerCase(),
+            password,
+            options: {
+              data: { name: name.trim(), role: 'customer' },
+              // Redirect here after the user clicks the confirmation link
+              emailRedirectTo: `${window.location.origin}/auth/callback`,
+            },
+          })
+          if (error) throw new Error(friendlyError(error.message))
+          if (!data.user) throw new Error('Registration failed. Please try again.')
+
+          if (!data.session) {
+            // Email confirmation is enabled in Supabase — user must verify first
+            setEmailSent(true)
+            return
+          }
+
+          // Email confirmation disabled — log straight in
           const authUser: AuthUser = {
             id:    data.user.id,
             email: data.user.email ?? '',
             name:  name.trim(),
           }
-          localStorage.setItem('cs_token', data.session?.access_token ?? '')
+          localStorage.setItem('cs_token', data.session.access_token)
           localStorage.setItem('cs_user',  JSON.stringify(authUser))
-          onAuth(authUser, data.session?.access_token ?? '')
+          onAuth(authUser, data.session.access_token)
         }
       } else {
-        // ── Fallback: use Express server (original behaviour) ──────────────
+        // ── Fallback: Express server (local dev without Supabase) ──────────
         const endpoint = tab === 'login' ? '/api/auth/login' : '/api/auth/register'
         const body     = tab === 'login'
           ? { email: email.trim(), password }
@@ -80,12 +110,12 @@ export function AuthScreen({ onAuth, go }: Props) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body),
         })
-        const data = await res.json()
-        if (!res.ok) throw new Error(data.error ?? 'Something went wrong')
+        const json = await res.json()
+        if (!res.ok) throw new Error(json.error ?? 'Something went wrong')
 
-        localStorage.setItem('cs_token', data.token)
-        localStorage.setItem('cs_user',  JSON.stringify(data.user))
-        onAuth(data.user as AuthUser, data.token)
+        localStorage.setItem('cs_token', json.token)
+        localStorage.setItem('cs_user',  JSON.stringify(json.user))
+        onAuth(json.user as AuthUser, json.token)
       }
     } catch (e: any) {
       setError(e.message)
@@ -97,6 +127,38 @@ export function AuthScreen({ onAuth, go }: Props) {
   const continueAsGuest = () => {
     const guest: AuthUser = { id: 'guest', email: '', name: 'Guest' }
     onAuth(guest, '')
+  }
+
+  // ── Email-sent confirmation screen ───────────────────────────────────────────
+  if (emailSent) {
+    return (
+      <div className="cs-screen cs-screen--paper" style={{ justifyContent: 'center', alignItems: 'center' }}>
+        <div style={{ padding: '0 32px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0 }}>
+          <div style={{ fontSize: 52, marginBottom: 20 }}>📬</div>
+          <div style={{ fontSize: 22, fontWeight: 700, letterSpacing: -0.6, color: 'var(--cs-ink)', textAlign: 'center' }}>
+            Check your inbox
+          </div>
+          <div style={{ fontSize: 14, color: 'var(--cs-slate-500)', marginTop: 10, lineHeight: 1.6, textAlign: 'center', maxWidth: 280 }}>
+            We sent a confirmation link to <strong style={{ color: 'var(--cs-ink)' }}>{email.trim().toLowerCase()}</strong>.
+            Click it to activate your account and sign in.
+          </div>
+          <div style={{ marginTop: 8, fontSize: 12, color: 'var(--cs-slate-400)', fontFamily: 'var(--cs-mono)', textAlign: 'center' }}>
+            Didn't get it? Check spam or wait 60 seconds before retrying.
+          </div>
+          <button
+            onClick={() => { setEmailSent(false); setError(null) }}
+            style={{
+              marginTop: 28, padding: '12px 28px',
+              background: 'var(--cs-slate-100)', border: 'none', borderRadius: 12,
+              fontFamily: 'var(--cs-font)', fontSize: 14, fontWeight: 500,
+              color: 'var(--cs-ink)', cursor: 'pointer',
+            }}
+          >
+            ← Back to sign in
+          </button>
+        </div>
+      </div>
+    )
   }
 
   return (
