@@ -40,7 +40,8 @@ export function LoginScreen({ onLogin }: Props) {
           await supabase.auth.signOut()
           throw new Error('This account does not have admin access.')
         }
-        sessionStorage.setItem('cs_admin_auth', data.session?.access_token ?? '1')
+        // Supabase manages its own session — onAuthStateChange in App.tsx sets
+        // authed=true via SIGNED_IN / INITIAL_SESSION events
         onLogin()
       } else {
         // Mock fallback

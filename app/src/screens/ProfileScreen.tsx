@@ -1,10 +1,10 @@
 import React from 'react'
 import { IconButton } from '../components/IconButton'
-import { Back, User, Phone, Home as HomeIcon, Package, Pin, Repeat, Settings } from '../components/Icons'
+import { Back, User, Phone, Home as HomeIcon, Package, Pin, Repeat, Settings, Plus } from '../components/Icons'
 import type { AppState, AuthUser, ScreenName } from '../types'
 
 interface Props {
-  go: (screen: ScreenName) => void
+  go: (screen: ScreenName, opts?: any) => void
   user: AuthUser
   state: AppState
 }
@@ -80,24 +80,40 @@ export function ProfileScreen({ go, user, state }: Props) {
 
         {/* Saved addresses */}
         <div style={{ marginBottom: 16 }}>
-          <div style={{ fontSize: 12, fontFamily: 'var(--cs-mono)', color: 'var(--cs-slate-500)', letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 10 }}>
-            Saved places
+          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 10 }}>
+            <div style={{ fontSize: 12, fontFamily: 'var(--cs-mono)', color: 'var(--cs-slate-500)', letterSpacing: 0.8, textTransform: 'uppercase' }}>
+              Saved places
+            </div>
+            <button
+              onClick={() => go('add-place')}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--cs-accent)', fontWeight: 500, fontSize: 13, fontFamily: 'var(--cs-font)', padding: 0, display: 'flex', alignItems: 'center', gap: 4 }}
+            >
+              <Plus size={13} color="var(--cs-accent)" /> Add
+            </button>
           </div>
           <div style={{ background: '#fff', borderRadius: 16, border: '1px solid var(--cs-slate-100)', overflow: 'hidden' }}>
-            {state.savedAddresses.map((a, i) => (
-              <div key={i}>
-                {i > 0 && <div style={{ height: 1, background: 'var(--cs-slate-100)', margin: '0 16px' }} />}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px' }}>
-                  <div style={{ width: 36, height: 36, borderRadius: 10, background: 'var(--cs-slate-100)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    {a.icon === 'home' ? <HomeIcon size={16} /> : a.icon === 'package' ? <Package size={16} /> : <Pin size={16} />}
-                  </div>
-                  <div>
-                    <div style={{ fontSize: 15, fontWeight: 500, color: 'var(--cs-ink)' }}>{a.label}</div>
-                    <div style={{ fontSize: 13, color: 'var(--cs-slate-500)', marginTop: 1 }}>{a.address}</div>
-                  </div>
+            {state.savedAddresses.length === 0 ? (
+              <div style={{ padding: '20px 16px', textAlign: 'center' }}>
+                <div style={{ fontSize: 13, color: 'var(--cs-slate-500)', lineHeight: 1.5 }}>
+                  No saved places yet. Tap <strong>Add</strong> to save a frequent address.
                 </div>
               </div>
-            ))}
+            ) : (
+              state.savedAddresses.map((a, i) => (
+                <div key={i}>
+                  {i > 0 && <div style={{ height: 1, background: 'var(--cs-slate-100)', margin: '0 16px' }} />}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px' }}>
+                    <div style={{ width: 36, height: 36, borderRadius: 10, background: 'var(--cs-slate-100)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      {a.icon === 'home' ? <HomeIcon size={16} /> : a.icon === 'package' ? <Package size={16} /> : <Pin size={16} />}
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 15, fontWeight: 500, color: 'var(--cs-ink)' }}>{a.label}</div>
+                      <div style={{ fontSize: 13, color: 'var(--cs-slate-500)', marginTop: 1 }}>{a.address}</div>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         </div>
 

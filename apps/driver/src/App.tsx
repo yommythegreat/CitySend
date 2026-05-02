@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { DriverProvider, useDriver } from './store/DriverContext'
+import { DriverProvider, useDriver, signOutDriver } from './store/DriverContext'
 import { LoginScreen }            from './screens/LoginScreen'
 import { DashboardScreen }        from './screens/DashboardScreen'
 import { DeliveryScreen }         from './screens/DeliveryScreen'
@@ -22,9 +22,13 @@ function DriverApp() {
 
   if (!state.auth) return <LoginScreen />
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    // Dispatch LOGOUT immediately for instant UI feedback (shows LoginScreen)
     dispatch({ type: 'LOGOUT' })
     setScreen({ name: 'dashboard' })
+    // Then call Supabase signOut so the server-side session is invalidated
+    // and onAuthStateChange SIGNED_OUT fires (handled in DriverProvider)
+    await signOutDriver()
   }
 
   // ── Topbar ──────────────────────────────────────────────────────────────────

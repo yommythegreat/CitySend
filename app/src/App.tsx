@@ -14,13 +14,13 @@ import { SettingsScreen }      from './screens/SettingsScreen'
 import { AddPlaceScreen }      from './screens/AddPlaceScreen'
 import { CityBlockedScreen }   from './screens/CityBlockedScreen'
 import { TabBar }              from './components/TabBar'
-import { INITIAL_DRAFT, BLANK_DRAFT, INITIAL_STATE } from './data/mock'
+import { BLANK_DRAFT, INITIAL_STATE } from './data/mock'
 import { getCityConfig, getCityConfigByDetectedName, computeOrderPrice } from './utils/serviceAvailability'
 import { canStartOrder } from './utils/serviceAvailability'
-import { pushNewOrder } from './utils/orderStore'
+import { pushNewOrder, getCustomerOrders, type CustomerOrder } from './utils/orderStore'
 import { pushCustomerNotif, NOTIFS_STORAGE_KEY, subscribeToCustomerNotifs } from './utils/notificationStore'
 import { supabase, isSupabaseConfigured } from './lib/supabase'
-import type { ScreenName, Draft, AppState, NavOptions, AuthUser, CityId } from './types'
+import type { ScreenName, Draft, AppState, NavOptions, AuthUser, CityId, Delivery } from './types'
 
 const TAB_SCREENS: ScreenName[] = ['home', 'history', 'notifications']
 
@@ -56,12 +56,57 @@ async function detectCityFromGeolocation(): Promise<CityId | null> {
   })
 }
 
+// ── User-scoped localStorage helpers ─────────────────────────────────────────
+
+const savedAddressesKey = (userId: string) => `cs_saved_places_${userId}`
+
+function loadSavedAddresses(userId: string): AppState['savedAddresses'] {
+  try {
+    const raw = localStorage.getItem(savedAddressesKey(userId))
+    return raw ? JSON.parse(raw) : []
+  } catch {
+    return []
+  }
+}
+
+/** Convert a CustomerOrder (from Supabase/orderStore) into the legacy Delivery UI type. */
+function orderToDelivery(o: CustomerOrder): Delivery {
+  const created = new Date(o.createdAt)
+  const now     = new Date()
+  const diffDays = Math.floor((now.getTime() - created.getTime()) / 86_400_000)
+  const when    = diffDays === 0 ? 'Today' : diffDays === 1 ? 'Yesterday'
+    : created.toLocaleDateString('en-CA', { weekday: 'short' })
+  const date    = created.toLocaleDateString('en-CA', { month: 'short', day: 'numeric' })
+
+  // Map OrderStatus → legacy Delivery status
+  const statusMap: Record<string, Delivery['status']> = {
+    new:        'in-transit',
+    assigned:   'in-transit',
+    picked_up:  'in-transit',
+    in_transit: 'in-transit',
+    delivered:  'delivered',
+    cancelled:  'canceled',
+  }
+
+  // Strip the 'CS-' prefix to get the numeric ID the UI expects
+  const numericId = o.id.replace(/^CS-/, '')
+
+  return {
+    id:     numericId,
+    to:     { name: o.dropoff.name, address: o.dropoff.address, phone: o.dropoff.phone },
+    date,
+    price:  o.priceBreakdown?.total?.toFixed(2) ?? '0.00',
+    status: statusMap[o.status] ?? 'in-transit',
+    when,
+  }
+}
+
 // ── App ───────────────────────────────────────────────────────────────────────
 
 export default function App() {
   const [screen,          setScreen]          = useState<ScreenName>('home')
   const [state,           setState]           = useState<AppState>(INITIAL_STATE)
-  const [draft,           setDraft]           = useState<Draft>(INITIAL_DRAFT)
+  const [draft,           setDraft]           = useState<Draft>(BLANK_DRAFT)
   const [user,            setUser]            = useState<AuthUser | null>(null)
   const [authChecked,     setAuthChecked]     = useState(false)
   const [trackingOrderId, setTrackingOrderId] = useState<string | undefined>(undefined)
@@ -106,45 +151,114 @@ export default function App() {
     [state.selectedCityId, configVersion],
   )
 
-  // ── Session restore + /auth/callback handler ────────────────────────────────
+  // ── Load user-specific data (addresses from localStorage, orders from Supabase) ─
+  const loadUserData = useCallback(async (authUser: AuthUser) => {
+    // Addresses: user-scoped localStorage
+    const addresses = authUser.id !== 'guest' ? loadSavedAddresses(authUser.id) : []
+
+    // Past deliveries: fetch from order store, map to legacy Delivery type
+    let deliveries: Delivery[] = []
+    if (authUser.id !== 'guest') {
+      try {
+        const orders = await getCustomerOrders(authUser.id)
+        deliveries = orders.map(orderToDelivery)
+      } catch {
+        deliveries = []
+      }
+    }
+
+    setState(s => ({
+      ...s,
+      savedAddresses:  addresses,
+      pastDeliveries:  deliveries,
+      paymentMethods:  [],  // payment methods come from Stripe, not local state
+    }))
+  }, [])
+
+  // ── Auth session: Supabase is the single source of truth ────────────────────
+  //
+  // Strategy:
+  //   • When Supabase is configured: onAuthStateChange drives ALL auth state.
+  //     We never manually read/write cs_user or cs_token.
+  //   • When Supabase is NOT configured (local dev fallback): read cs_user from
+  //     localStorage (written by the Express /api/auth endpoints).
+  //   • SIGNED_OUT clears every piece of local state immediately regardless of
+  //     which path triggered the logout.
+  //
   useEffect(() => {
-    async function restoreSession() {
-      if (isSupabaseConfigured) {
-        // Detect if we landed here from a Supabase email-confirmation link.
-        // The Supabase JS client auto-exchanges ?code= or #access_token= in the
-        // URL when getSession() is called (detectSessionInUrl defaults to true).
-        const isCallback =
-          window.location.pathname === '/auth/callback' ||
-          window.location.hash.includes('access_token') ||
-          window.location.search.includes('code=')
-
-        const { data: { session } } = await supabase.auth.getSession()
-
-        // Clean up the URL — remove the auth code/token from the address bar
-        if (isCallback) {
-          window.history.replaceState({}, document.title, '/')
-        }
-
-        if (session?.user) {
-          const authUser = {
-            id:    session.user.id,
-            email: session.user.email ?? '',
-            name:  session.user.user_metadata?.name ?? session.user.email?.split('@')[0] ?? 'User',
-          }
+    if (!isSupabaseConfigured) {
+      // ── Dev / no-Supabase fallback ──────────────────────────────────────────
+      const stored = localStorage.getItem('cs_user')
+      if (stored) {
+        try {
+          const authUser: AuthUser = JSON.parse(stored)
           setUser(authUser)
-          localStorage.setItem('cs_user',  JSON.stringify(authUser))
-          localStorage.setItem('cs_token', session.access_token)
-        }
-      } else {
-        const stored = localStorage.getItem('cs_user')
-        const token  = localStorage.getItem('cs_token')
-        if (stored && token) {
-          try { setUser(JSON.parse(stored)) } catch {}
-        }
+          loadUserData(authUser)
+        } catch {}
       }
       setAuthChecked(true)
+      return
     }
-    restoreSession()
+
+    // ── Supabase mode ────────────────────────────────────────────────────────
+    // onAuthStateChange fires immediately with INITIAL_SESSION (existing session
+    // or null), then for every future sign-in / sign-out / token-refresh.
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        console.log('[Auth] state change:', event, session?.user?.email ?? 'no user')
+
+        if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN') {
+          if (session?.user) {
+            const authUser: AuthUser = {
+              id:    session.user.id,
+              email: session.user.email ?? '',
+              name:  session.user.user_metadata?.name
+                     ?? session.user.email?.split('@')[0]
+                     ?? 'User',
+            }
+            setUser(authUser)
+            await loadUserData(authUser)
+          }
+          // Whether or not a session was found, the initial auth check is done
+          setAuthChecked(true)
+
+        } else if (event === 'SIGNED_OUT') {
+          console.log('[Auth] SIGNED_OUT — clearing all user state')
+          setUser(null)
+          setState(INITIAL_STATE)
+          setDraft(BLANK_DRAFT)
+          setScreen('home')
+          setAuthChecked(true)
+
+        } else if (event === 'TOKEN_REFRESHED' && session?.user) {
+          // Keep name/email in sync with latest metadata; don't reload data
+          setUser({
+            id:    session.user.id,
+            email: session.user.email ?? '',
+            name:  session.user.user_metadata?.name
+                   ?? session.user.email?.split('@')[0]
+                   ?? 'User',
+          })
+        }
+      }
+    )
+
+    // Handle /auth/callback URL (email confirmation PKCE code exchange).
+    // getSession() triggers the automatic code exchange when detectSessionInUrl
+    // is true (the default). onAuthStateChange fires SIGNED_IN after exchange.
+    const isCallback =
+      window.location.pathname === '/auth/callback' ||
+      window.location.hash.includes('access_token') ||
+      window.location.search.includes('code=')
+
+    if (isCallback) {
+      supabase.auth.getSession().then(() => {
+        window.history.replaceState({}, document.title, '/')
+      })
+    }
+
+    return () => subscription.unsubscribe()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // ── Geolocation city detection (non-blocking, runs once) ────────────────────
@@ -158,18 +272,37 @@ export default function App() {
   }, [])
 
   // ── Auth ────────────────────────────────────────────────────────────────────
-  const handleAuth = useCallback((authUser: AuthUser, _token: string) => {
+  const handleAuth = useCallback(async (authUser: AuthUser, _token: string) => {
+    // For Supabase mode: setUser + loadUserData happen here for instant UI
+    // feedback. onAuthStateChange SIGNED_IN also fires and is harmlessly
+    // redundant (same data). For guest / non-Supabase, this is the only path.
     setUser(authUser)
+    await loadUserData(authUser)
     setScreen('home')
+  }, [loadUserData])
+
+  const handleLogout = useCallback(async () => {
+    // Clear state immediately so the UI snaps to the auth screen at once.
+    setUser(null)
+    setState(INITIAL_STATE)
+    setDraft(BLANK_DRAFT)
+    setScreen('home')
+
+    if (isSupabaseConfigured) {
+      // Await so Supabase clears its own localStorage tokens before we return.
+      // onAuthStateChange SIGNED_OUT will also fire but state is already null.
+      await supabase.auth.signOut()
+    } else {
+      localStorage.removeItem('cs_token')
+      localStorage.removeItem('cs_user')
+    }
   }, [])
 
-  const handleLogout = useCallback(() => {
-    localStorage.removeItem('cs_token')
-    localStorage.removeItem('cs_user')
-    setUser(null)
-    setScreen('home')
-    setDraft(INITIAL_DRAFT)
-  }, [])
+  // ── Persist saved addresses to user-scoped localStorage ─────────────────────
+  useEffect(() => {
+    if (!user || user.id === 'guest') return
+    localStorage.setItem(savedAddressesKey(user.id), JSON.stringify(state.savedAddresses))
+  }, [state.savedAddresses, user])
 
   // ── City change (called by HomeScreen / SettingsScreen pickers) ─────────────
   const handleCityChange = useCallback((cityId: CityId) => {
@@ -204,7 +337,7 @@ export default function App() {
 
     // Reset draft when returning home
     if (next === 'home') {
-      setTimeout(() => setDraft(INITIAL_DRAFT), 300)
+      setTimeout(() => setDraft(BLANK_DRAFT), 300)
     }
 
     // Already logged in + navigating to auth → redirect home (e.g. from ForgotPassword)
@@ -225,8 +358,8 @@ export default function App() {
       tip:        0,
     })
 
-    const newDelivery = {
-      id:     String(parseInt(state.pastDeliveries[0]?.id ?? '2900') + 1),
+    const newDelivery: Delivery = {
+      id:     orderId.replace(/^CS-/, ''),
       to:     {
         name:    draft.dropoff.name    || 'Recipient',
         address: draft.dropoff.address || '—',

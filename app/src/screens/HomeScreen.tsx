@@ -147,11 +147,13 @@ function CityPickerSheet({
 export function HomeScreen({ go, state, user, cityConfig, onCityChange }: Props) {
   const [showPicker,   setShowPicker]   = useState(false)
   const [trackOrders,  setTrackOrders]  = useState<CustomerOrder[]>([])
+  const [trackLoading, setTrackLoading] = useState(false)
 
   // Load recent orders for Track Delivery section
   useEffect(() => {
-    if (!user) return
+    if (!user || user.id === 'guest') return
     let cancelled = false
+    setTrackLoading(true)
     getCustomerOrders(user.id).then(orders => {
       if (cancelled) return
       // Show last 7 days, non-cancelled, max 5 cards
@@ -160,7 +162,8 @@ export function HomeScreen({ go, state, user, cityConfig, onCityChange }: Props)
         .filter(o => o.status !== 'cancelled' && new Date(o.createdAt).getTime() > cutoff)
         .slice(0, 5)
       setTrackOrders(recent)
-    })
+      setTrackLoading(false)
+    }).catch(() => { if (!cancelled) setTrackLoading(false) })
     return () => { cancelled = true }
   }, [user?.id])
 
@@ -274,65 +277,97 @@ export function HomeScreen({ go, state, user, cityConfig, onCityChange }: Props)
       </div>
 
       {/* ── Track Delivery (live orders from Supabase) ──────────────────────── */}
-      {cityIsLive && trackOrders.length > 0 && (
+      {cityIsLive && user && user.id !== 'guest' && (
         <div style={{ padding: '0 20px 20px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 12 }}>
             <div style={{ fontSize: 13, fontFamily: 'var(--cs-mono)', color: 'var(--cs-slate-500)', letterSpacing: 1, textTransform: 'uppercase' }}>
               Track delivery
             </div>
-            <button onClick={() => go('history')} style={{ fontSize: 13, color: 'var(--cs-accent)', fontWeight: 500, background: 'none', border: 'none', cursor: 'pointer' }}>
-              View all
-            </button>
+            {trackOrders.length > 0 && (
+              <button onClick={() => go('history')} style={{ fontSize: 13, color: 'var(--cs-accent)', fontWeight: 500, background: 'none', border: 'none', cursor: 'pointer' }}>
+                View all
+              </button>
+            )}
           </div>
-          <div style={{ display: 'flex', gap: 12, overflowX: 'auto', margin: '0 -20px', padding: '0 20px 4px', scrollbarWidth: 'none' }}>
-            {trackOrders.map((order) => {
-              const chip = TRACK_STATUS[order.status] ?? TRACK_STATUS['new']
-              const isActive = order.status !== 'delivered' && order.status !== 'cancelled'
-              return (
-                <button
-                  key={order.id}
-                  onClick={() => go('tracking', { trackOrderId: order.id })}
-                  style={{
-                    width: 220, flexShrink: 0, textAlign: 'left', cursor: 'pointer',
-                    background: '#fff', border: '1px solid var(--cs-slate-100)',
-                    borderRadius: 16, padding: 16, fontFamily: 'var(--cs-font)',
-                  }}
-                >
-                  {/* Status chip + ID row */}
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-                    <span style={{
-                      display: 'inline-flex', alignItems: 'center', gap: 5,
-                      fontSize: 11, fontWeight: 600, letterSpacing: 0.2,
-                      color: chip.color, background: chip.bg,
-                      padding: '3px 8px', borderRadius: 99,
-                    }}>
-                      {isActive && <Truck size={11} color={chip.color} />}
-                      {!isActive && <Check size={11} color={chip.color} />}
-                      {chip.label}
-                    </span>
-                    <span style={{ fontFamily: 'var(--cs-mono)', fontSize: 11, color: 'var(--cs-slate-400)', letterSpacing: 0.5 }}>
-                      {order.id}
-                    </span>
-                  </div>
-                  {/* Route */}
-                  <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--cs-ink)', letterSpacing: -0.1 }}>
-                    {shortAddr(order.pickup.address)}
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 4, margin: '3px 0' }}>
-                    <div style={{ width: 12, height: 1, background: 'var(--cs-slate-300)' }} />
-                    <Arrow size={10} color="var(--cs-slate-400)" />
-                  </div>
-                  <div style={{ fontSize: 13, color: 'var(--cs-slate-600)' }}>
-                    {shortAddr(order.dropoff.address)}
-                  </div>
-                  {/* Last updated */}
-                  <div style={{ fontSize: 11, fontFamily: 'var(--cs-mono)', color: 'var(--cs-slate-400)', marginTop: 10 }}>
-                    {fmtRelTime(order.updatedAt)}
-                  </div>
-                </button>
-              )
-            })}
-          </div>
+
+          {/* Loading skeleton */}
+          {trackLoading && (
+            <div style={{ display: 'flex', gap: 12 }}>
+              {[0, 1].map(i => (
+                <div key={i} style={{ width: 220, height: 110, flexShrink: 0, borderRadius: 16, background: 'var(--cs-slate-100)', opacity: 0.6 }} />
+              ))}
+            </div>
+          )}
+
+          {/* Order cards */}
+          {!trackLoading && trackOrders.length > 0 && (
+            <div style={{ display: 'flex', gap: 12, overflowX: 'auto', margin: '0 -20px', padding: '0 20px 4px', scrollbarWidth: 'none' }}>
+              {trackOrders.map((order) => {
+                const chip = TRACK_STATUS[order.status] ?? TRACK_STATUS['new']
+                const isActive = order.status !== 'delivered' && order.status !== 'cancelled'
+                return (
+                  <button
+                    key={order.id}
+                    onClick={() => go('tracking', { trackOrderId: order.id })}
+                    style={{
+                      width: 220, flexShrink: 0, textAlign: 'left', cursor: 'pointer',
+                      background: '#fff', border: '1px solid var(--cs-slate-100)',
+                      borderRadius: 16, padding: 16, fontFamily: 'var(--cs-font)',
+                    }}
+                  >
+                    {/* Status chip + ID row */}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                      <span style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 5,
+                        fontSize: 11, fontWeight: 600, letterSpacing: 0.2,
+                        color: chip.color, background: chip.bg,
+                        padding: '3px 8px', borderRadius: 99,
+                      }}>
+                        {isActive && <Truck size={11} color={chip.color} />}
+                        {!isActive && <Check size={11} color={chip.color} />}
+                        {chip.label}
+                      </span>
+                      <span style={{ fontFamily: 'var(--cs-mono)', fontSize: 11, color: 'var(--cs-slate-400)', letterSpacing: 0.5 }}>
+                        {order.id}
+                      </span>
+                    </div>
+                    {/* Route */}
+                    <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--cs-ink)', letterSpacing: -0.1 }}>
+                      {shortAddr(order.pickup.address)}
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, margin: '3px 0' }}>
+                      <div style={{ width: 12, height: 1, background: 'var(--cs-slate-300)' }} />
+                      <Arrow size={10} color="var(--cs-slate-400)" />
+                    </div>
+                    <div style={{ fontSize: 13, color: 'var(--cs-slate-600)' }}>
+                      {shortAddr(order.dropoff.address)}
+                    </div>
+                    {/* Last updated */}
+                    <div style={{ fontSize: 11, fontFamily: 'var(--cs-mono)', color: 'var(--cs-slate-400)', marginTop: 10 }}>
+                      {fmtRelTime(order.updatedAt)}
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
+          )}
+
+          {/* Empty state */}
+          {!trackLoading && trackOrders.length === 0 && (
+            <div style={{
+              padding: '20px 16px', borderRadius: 16,
+              background: '#fff', border: '1px solid var(--cs-slate-100)',
+              textAlign: 'center',
+            }}>
+              <div style={{ fontSize: 24, marginBottom: 8 }}>📦</div>
+              <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--cs-ink)', marginBottom: 4 }}>
+                No deliveries to track yet
+              </div>
+              <div style={{ fontSize: 13, color: 'var(--cs-slate-500)', lineHeight: 1.4 }}>
+                When you create a delivery, it will appear here.
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -342,6 +377,20 @@ export function HomeScreen({ go, state, user, cityConfig, onCityChange }: Props)
           Saved places
         </div>
         <div style={{ background: '#fff', borderRadius: 16, border: '1px solid var(--cs-slate-100)', overflow: 'hidden' }}>
+          {state.savedAddresses.length === 0 && (
+            <div style={{ padding: '20px 16px', textAlign: 'center' }}>
+              <div style={{ fontSize: 13, color: 'var(--cs-slate-500)', lineHeight: 1.5 }}>
+                No saved places yet.{' '}
+                <button
+                  onClick={() => go('add-place')}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--cs-accent)', fontWeight: 500, fontSize: 13, fontFamily: 'var(--cs-font)', padding: 0 }}
+                >
+                  Add your first →
+                </button>
+              </div>
+            </div>
+          )}
+
           {state.savedAddresses.map((a, i) => (
             <button
               key={i}
@@ -364,20 +413,22 @@ export function HomeScreen({ go, state, user, cityConfig, onCityChange }: Props)
             </button>
           ))}
 
-          {/* Add a place */}
-          <button
-            onClick={() => go('add-place')}
-            style={{
-              width: '100%', padding: '14px 16px', border: 'none', background: 'transparent',
-              display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer',
-              borderTop: '1px solid var(--cs-slate-100)', fontFamily: 'var(--cs-font)',
-            }}
-          >
-            <div style={{ width: 36, height: 36, borderRadius: 10, background: 'var(--cs-slate-100)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Plus size={16} />
-            </div>
-            <div style={{ fontSize: 15, color: 'var(--cs-slate-500)' }}>Add a place</div>
-          </button>
+          {/* Add a place — only shown when there are existing places */}
+          {state.savedAddresses.length > 0 && (
+            <button
+              onClick={() => go('add-place')}
+              style={{
+                width: '100%', padding: '14px 16px', border: 'none', background: 'transparent',
+                display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer',
+                borderTop: '1px solid var(--cs-slate-100)', fontFamily: 'var(--cs-font)',
+              }}
+            >
+              <div style={{ width: 36, height: 36, borderRadius: 10, background: 'var(--cs-slate-100)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Plus size={16} />
+              </div>
+              <div style={{ fontSize: 15, color: 'var(--cs-slate-500)' }}>Add a place</div>
+            </button>
+          )}
         </div>
       </div>
 

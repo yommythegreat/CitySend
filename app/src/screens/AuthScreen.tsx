@@ -64,8 +64,7 @@ export function AuthScreen({ onAuth, go }: Props) {
             email: data.user.email ?? '',
             name:  data.user.user_metadata?.name ?? email.split('@')[0],
           }
-          localStorage.setItem('cs_token', data.session?.access_token ?? '')
-          localStorage.setItem('cs_user',  JSON.stringify(authUser))
+          // Supabase manages its own session storage — no manual localStorage writes
           onAuth(authUser, data.session?.access_token ?? '')
 
         } else {
@@ -94,8 +93,7 @@ export function AuthScreen({ onAuth, go }: Props) {
             email: data.user.email ?? '',
             name:  name.trim(),
           }
-          localStorage.setItem('cs_token', data.session.access_token)
-          localStorage.setItem('cs_user',  JSON.stringify(authUser))
+          // Supabase manages its own session storage — no manual localStorage writes
           onAuth(authUser, data.session.access_token)
         }
       } else {

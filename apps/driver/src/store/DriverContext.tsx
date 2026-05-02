@@ -208,6 +208,32 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
     )
   }, [])
 
+  // ── Supabase auth state listener ────────────────────────────────────────────
+  // Supabase is the single source of truth for auth.
+  // SIGNED_OUT  → clear driver state (mirrors handleLogout for external logouts)
+  // INITIAL_SESSION with no session → wipe any stale sessionStorage auth
+  useEffect(() => {
+    if (!isSupabaseConfigured) return
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log('[DriverAuth] state change:', event, session?.user?.email ?? 'no user')
+
+      if (event === 'SIGNED_OUT') {
+        console.log('[DriverAuth] SIGNED_OUT — clearing driver state')
+        baseDispatch({ type: 'LOGOUT' })
+      } else if (event === 'INITIAL_SESSION' && !session) {
+        // No valid Supabase session on load — clear any stale sessionStorage auth
+        // that may have survived a previous improperly-terminated session
+        if (sessionStorage.getItem('cs_driver_auth')) {
+          console.log('[DriverAuth] INITIAL_SESSION: no Supabase session, clearing stale driver auth')
+          baseDispatch({ type: 'LOGOUT' })
+        }
+      }
+    })
+
+    return () => subscription.unsubscribe()
+  }, [])
+
   // Load orders when auth is established
   useEffect(() => {
     if (!state.auth) return

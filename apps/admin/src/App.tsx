@@ -1,5 +1,6 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { AdminProvider } from './store/AdminContext'
+import { supabase, isSupabaseConfigured } from '@shared/lib/supabase'
 import { Sidebar }              from './components/Sidebar'
 import { LoginScreen }          from './screens/LoginScreen'
 import { DashboardScreen }      from './screens/DashboardScreen'
@@ -105,15 +106,81 @@ function AdminApp({ onLogout }: { onLogout: () => void }) {
 // ── Root app (auth gate) ──────────────────────────────────────────────────────
 
 export default function App() {
-  const [authed, setAuthed] = useState(
-    () => sessionStorage.getItem('cs_admin_auth') === '1'
+  // authChecked: true once we know whether there is a valid session.
+  //   Prevents a flash of the login screen on page load when the user is logged in.
+  const [authChecked, setAuthChecked] = useState(!isSupabaseConfigured)
+  const [authed,      setAuthed]      = useState(
+    // Non-Supabase fallback: persist in sessionStorage (clears on tab close)
+    () => !isSupabaseConfigured && sessionStorage.getItem('cs_admin_auth') === '1'
   )
 
-  const handleLogin  = () => setAuthed(true)
-  const handleLogout = () => {
-    sessionStorage.removeItem('cs_admin_auth')
+  // ── Supabase auth listener ──────────────────────────────────────────────────
+  // Supabase is the single source of truth when configured.
+  // INITIAL_SESSION  → verify admin role, setAuthed accordingly
+  // SIGNED_OUT       → force logged out regardless of what triggered it
+  // Non-Supabase     → rely on sessionStorage flag set by LoginScreen
+  useEffect(() => {
+    if (!isSupabaseConfigured) return
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        console.log('[AdminAuth] state change:', event, session?.user?.email ?? 'no user')
+
+        if (event === 'INITIAL_SESSION') {
+          if (session?.user) {
+            // Re-verify admin role on every page load — never trust the client alone
+            const { data: profile } = await supabase
+              .from('profiles')
+              .select('role')
+              .eq('id', session.user.id)
+              .maybeSingle()
+
+            if (profile?.role === 'admin') {
+              setAuthed(true)
+            } else {
+              // Valid Supabase session but not an admin — sign out silently
+              console.warn('[AdminAuth] session user is not admin — signing out')
+              await supabase.auth.signOut()
+              setAuthed(false)
+            }
+          } else {
+            setAuthed(false)
+          }
+          setAuthChecked(true)
+
+        } else if (event === 'SIGNED_IN') {
+          // Handled by LoginScreen after role-check → calls onLogin()
+          // Nothing extra needed here; authChecked may already be true
+          setAuthChecked(true)
+
+        } else if (event === 'SIGNED_OUT') {
+          console.log('[AdminAuth] SIGNED_OUT — clearing admin session')
+          setAuthed(false)
+          setAuthChecked(true)
+        }
+      }
+    )
+
+    return () => subscription.unsubscribe()
+  }, [])
+
+  const handleLogin = () => setAuthed(true)
+
+  const handleLogout = async () => {
+    // Clear state immediately so the UI snaps to login at once
     setAuthed(false)
+
+    if (isSupabaseConfigured) {
+      // Await so Supabase clears its localStorage tokens before we return.
+      // onAuthStateChange SIGNED_OUT also fires but state is already cleared.
+      await supabase.auth.signOut()
+    } else {
+      sessionStorage.removeItem('cs_admin_auth')
+    }
   }
+
+  // Render nothing until we know the auth state (avoids login-screen flash)
+  if (!authChecked) return null
 
   if (!authed) return <LoginScreen onLogin={handleLogin} />
 
