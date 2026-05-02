@@ -24,31 +24,6 @@ import type { ScreenName, Draft, AppState, NavOptions, AuthUser, CityId } from '
 
 const TAB_SCREENS: ScreenName[] = ['home', 'history', 'notifications']
 
-// ── Environment badge ─────────────────────────────────────────────────────────
-
-function EnvBadge() {
-  const connected = isSupabaseConfigured
-  return (
-    <div style={{
-      position: 'absolute', bottom: 92, left: '50%', transform: 'translateX(-50%)',
-      zIndex: 999, pointerEvents: 'none', whiteSpace: 'nowrap',
-    }}>
-      <div style={{
-        display: 'inline-flex', alignItems: 'center', gap: 5,
-        padding: '4px 10px', borderRadius: 99,
-        fontSize: 10, fontFamily: 'var(--cs-mono)', letterSpacing: 0.5, fontWeight: 500,
-        background: connected ? 'rgba(22,120,66,.08)' : 'rgba(168,92,0,.10)',
-        color:      connected ? '#167842'             : '#a85c00',
-        border:     `1px solid ${connected ? 'rgba(22,120,66,.18)' : 'rgba(168,92,0,.22)'}`,
-        backdropFilter: 'blur(6px)',
-      }}>
-        <span style={{ width: 5, height: 5, borderRadius: '50%', background: 'currentColor', flexShrink: 0 }} />
-        {connected ? 'Supabase connected' : 'Mock mode — local data only'}
-      </div>
-    </div>
-  )
-}
-
 // ── Geolocation city detection ────────────────────────────────────────────────
 
 async function detectCityFromGeolocation(): Promise<CityId | null> {
@@ -399,7 +374,6 @@ export default function App() {
         ? <ForgotPasswordScreen go={go} />
         : <AuthScreen onAuth={handleAuth} go={go} />
       }
-      <EnvBadge />
     </div>
   )
 
@@ -407,7 +381,6 @@ export default function App() {
     <div className="cs-shell">
       {renderScreen()}
       {TAB_SCREENS.includes(screen) && <TabBar screen={screen} go={go} />}
-      <EnvBadge />
     </div>
   )
 }

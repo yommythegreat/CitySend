@@ -208,22 +208,6 @@ export function LoginScreen() {
         </button>
       </form>
 
-      {/* Demo credentials hint */}
-      <div style={{
-        marginTop: 32, padding: '12px 16px',
-        background: 'var(--d-surface)', borderRadius: 10,
-        border: '1px solid var(--d-border)',
-        fontSize: 12, color: 'var(--d-muted)',
-        maxWidth: 360, width: '100%', textAlign: 'center',
-      }}>
-        <div style={{ fontWeight: 600, color: 'var(--d-ink-2)', marginBottom: 4 }}>Demo credentials</div>
-        <div>driver@citysend.ca</div>
-        <div>Driver123!</div>
-        <div style={{ marginTop: 6, fontSize: 11, opacity: 0.7 }}>
-          Any existing driver email also works with Driver123!
-        </div>
-      </div>
-
       <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
     </div>
   )

@@ -316,33 +316,8 @@ export async function authenticateDriver(
     }
   }
 
-  // ── Mock fallback ─────────────────────────────────────────────────────────
-  const DEMO_CREDENTIALS: Record<string, string> = {
-    'driver@citysend.ca': 'Driver123!',
-  }
-  const expectedPw = DEMO_CREDENTIALS[canonEmail] ?? 'Driver123!'
-  if (password !== expectedPw) return null
-
-  const EMAIL_TO_DRIVER_ID: Record<string, string> = {
-    'driver@citysend.ca':  'd0',
-    'armen@citysend.ca':   'd1',
-    'dmitri@citysend.ca':  'd2',
-    'sofia@citysend.ca':   'd3',
-    'marcus@citysend.ca':  'd4',
-    'priya.s@citysend.ca': 'd5',
-    'liam@citysend.ca':    'd6',
-    'yuki@citysend.ca':    'd7',
-    'amara@citysend.ca':   'd8',
-  }
-  const driverId = EMAIL_TO_DRIVER_ID[canonEmail]
-  if (!driverId) return null
-  const driver = MOCK_DRIVERS.find(d => d.id === driverId)
-  if (!driver) return null
-  return {
-    driverId: driver.id, name: driver.name, email: driver.email,
-    vehicle: driver.vehicle, phone: driver.phone, rating: driver.rating,
-    completedOrders: driver.completedOrders,
-  }
+  // Supabase auth is required — no offline fallback in production
+  return null
 }
 
 /**

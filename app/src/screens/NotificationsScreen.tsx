@@ -61,41 +61,6 @@ function fmtTime(iso: string): string {
   return d.toLocaleDateString('en-CA', { month: 'short', day: 'numeric' })
 }
 
-// ── Static fallback notifs for demo when no live store data ──────────────────
-
-const STATIC_NOTIFS: CustomerNotif[] = [
-  {
-    id: 'demo-n1', event: 'delivered', audience: 'customer', orderId: 'CS-2810',
-    title: 'Mei Tanaka received your package',
-    body:  'CS-2810 · 88 Osborne St · signed by M. Tanaka',
-    read: false, createdAt: new Date(Date.now() - 20 * 60_000).toISOString(),
-  },
-  {
-    id: 'demo-n2', event: 'in_transit', audience: 'customer', orderId: 'CS-2810',
-    title: 'Armen picked up your package',
-    body:  'CS-2810 · 3.2 km to drop-off · ETA 14 min',
-    read: false, createdAt: new Date(Date.now() - 34 * 60_000).toISOString(),
-  },
-  {
-    id: 'demo-n3', event: 'driver_assigned', audience: 'customer', orderId: 'CS-2810',
-    title: 'Armen Y. is your courier today',
-    body:  'Toyota Corolla · Arriving in 9 min',
-    read: false, createdAt: new Date(Date.now() - 44 * 60_000).toISOString(),
-  },
-  {
-    id: 'demo-n4', event: 'delivered', audience: 'customer', orderId: 'CS-2788',
-    title: 'J. Morissette received your package',
-    body:  'CS-2788 · Well-received. Thanks for tipping Kai.',
-    read: true, createdAt: new Date(Date.now() - 28 * 3_600_000).toISOString(),
-  },
-  {
-    id: 'demo-n5', event: 'receipt_generated', audience: 'customer', orderId: 'CS-2788',
-    title: 'Receipt for $16.68',
-    body:  'Visa •••• 4242 · View in Billing',
-    read: true, createdAt: new Date(Date.now() - 28 * 3_600_000 + 60_000).toISOString(),
-  },
-]
-
 // Group notifications by relative day
 function groupByDay(notifs: CustomerNotif[]): { day: string; items: CustomerNotif[] }[] {
   const groups: { day: string; items: CustomerNotif[] }[] = []
@@ -134,13 +99,9 @@ export function NotificationsScreen({ go, user, notifVersion }: Props) {
     return () => { cancelled = true }
   }, [user?.id, notifVersion, tick])
 
-  // Merge: live notifs first, then static demo notifs for ids not already present
-  const allNotifs = useMemo(() => {
-    if (liveNotifs.length === 0) return [...STATIC_NOTIFS]
-    const liveIds = new Set(liveNotifs.map(n => n.id))
-    const extras  = STATIC_NOTIFS.filter(n => !liveIds.has(n.id))
-    return [...liveNotifs, ...extras].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-  }, [liveNotifs])
+  const allNotifs = useMemo(() =>
+    [...liveNotifs].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
+  [liveNotifs])
 
   const groups     = useMemo(() => groupByDay(allNotifs), [allNotifs])
   const unreadCount = allNotifs.filter(n => !n.read).length

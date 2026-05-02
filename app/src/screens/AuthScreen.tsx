@@ -137,18 +137,6 @@ export function AuthScreen({ onAuth, go }: Props) {
           ))}
         </div>
 
-        {/* Demo credentials banner (login only) */}
-        {tab === 'login' && (
-          <div style={{
-            padding: '10px 14px', background: 'rgba(11,18,32,.04)',
-            borderRadius: 10, marginBottom: 16, fontSize: 13, color: 'var(--cs-slate-600)',
-            fontFamily: 'var(--cs-mono)', lineHeight: 1.6,
-          }}>
-            <span style={{ fontWeight: 600, color: 'var(--cs-ink)' }}>Demo account</span><br />
-            demo@citysend.ca · Demo123!
-          </div>
-        )}
-
         {/* Form */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           {tab === 'register' && (
