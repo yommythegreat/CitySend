@@ -35,10 +35,16 @@ async function nominatimSearch(query: string, opts?: NominatimOptions): Promise<
   )
   if (!res.ok) return []
   const data: any[] = await res.json()
+  // Extract any leading house number the user typed (e.g. "80" from "80 Brian Monkman Bay")
+  const typedNumber = query.trim().match(/^(\d+[-–]?\d*)\s+/)?.[1] ?? ''
+
   return data.map((d) => {
     const addr   = d.address ?? {}
-    const road   = addr.road ?? addr.pedestrian ?? ''
-    const number = addr.house_number ?? ''
+    const road   = addr.road ?? addr.pedestrian ?? addr.suburb ?? ''
+    // Nominatim often omits house_number when it matches a street rather than
+    // a specific door. Fall back to whatever the user typed so the number
+    // the user entered is always preserved in the displayed suggestion.
+    const number = addr.house_number || typedNumber
     const short  = [number, road].filter(Boolean).join(' ') || d.display_name.split(',')[0]
     return {
       displayName: d.display_name,
