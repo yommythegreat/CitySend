@@ -225,19 +225,26 @@ export default function App() {
         console.log('[Auth] state change:', event, session?.user?.email ?? 'no user')
 
         if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN') {
-          if (session?.user) {
-            const authUser: AuthUser = {
-              id:    session.user.id,
-              email: session.user.email ?? '',
-              name:  session.user.user_metadata?.name
-                     ?? session.user.email?.split('@')[0]
-                     ?? 'User',
+          try {
+            if (session?.user) {
+              const authUser: AuthUser = {
+                id:    session.user.id,
+                email: session.user.email ?? '',
+                name:  session.user.user_metadata?.name
+                       ?? session.user.email?.split('@')[0]
+                       ?? 'User',
+              }
+              setUser(authUser)
+              // loadUserData can fail (network error, Supabase timeout, etc.).
+              // Always resolve authChecked so the app never stays blank.
+              await loadUserData(authUser)
             }
-            setUser(authUser)
-            await loadUserData(authUser)
+          } catch (err) {
+            console.error('[Auth] loadUserData failed during session restore', err)
+          } finally {
+            // Runs even if loadUserData throws — the app MUST render after this
+            setAuthChecked(true)
           }
-          // Whether or not a session was found, the initial auth check is done
-          setAuthChecked(true)
 
         } else if (event === 'SIGNED_OUT') {
           console.log('[Auth] SIGNED_OUT — clearing all user state')

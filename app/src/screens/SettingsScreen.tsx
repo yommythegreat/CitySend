@@ -7,7 +7,7 @@ import type { AppState, CityId, PaymentMethod, SavedAddress, ScreenName } from '
 
 interface Props {
   go: (screen: ScreenName) => void
-  onLogout: () => void
+  onLogout: () => void | Promise<void>
   state: AppState
   setState: React.Dispatch<React.SetStateAction<AppState>>
   onCityChange: (cityId: CityId) => void
