@@ -15,18 +15,20 @@ import { AddPlaceScreen }      from './screens/AddPlaceScreen'
 import { CityBlockedScreen }   from './screens/CityBlockedScreen'
 import { TabBar }              from './components/TabBar'
 import { BLANK_DRAFT, INITIAL_STATE } from './data/mock'
-import { getCityConfig, getCityConfigByDetectedName, computeOrderPrice } from './utils/serviceAvailability'
-import { canStartOrder } from './utils/serviceAvailability'
+import { getCityConfig, getCityConfigByDetectedName, computeOrderPrice, canStartOrder } from './utils/serviceAvailability'
+import { fetchCityConfigs, subscribeToCityConfigs } from './utils/configStore'
 import { pushNewOrder, getCustomerOrders, type CustomerOrder } from './utils/orderStore'
 import { pushCustomerNotif, NOTIFS_STORAGE_KEY, subscribeToCustomerNotifs } from './utils/notificationStore'
 import { supabase, isSupabaseConfigured } from './lib/supabase'
+import { CITY_CONFIGS } from './config/cityConfig'
+import type { CityConfig } from './config/cityConfig'
 import type { ScreenName, Draft, AppState, NavOptions, AuthUser, CityId, Delivery } from './types'
 
 const TAB_SCREENS: ScreenName[] = ['home', 'history', 'notifications']
 
 // ── Geolocation city detection ────────────────────────────────────────────────
 
-async function detectCityFromGeolocation(): Promise<CityId | null> {
+async function detectCityFromGeolocation(configs: CityConfig[]): Promise<CityId | null> {
   if (!('geolocation' in navigator)) return null
 
   return new Promise((resolve) => {
@@ -44,7 +46,7 @@ async function detectCityFromGeolocation(): Promise<CityId | null> {
             data?.address?.town ||
             data?.address?.village ||
             ''
-          const config = rawCity ? getCityConfigByDetectedName(rawCity) : undefined
+          const config = rawCity ? getCityConfigByDetectedName(rawCity, configs) : undefined
           resolve(config?.cityId ?? null)
         } catch {
           resolve(null)
@@ -114,41 +116,56 @@ export default function App() {
   // Refs so go() callback is never stale
   const userRef          = useRef<AuthUser | null>(null)
   const selectedCityRef  = useRef<CityId>(INITIAL_STATE.selectedCityId)
-  useEffect(() => { userRef.current = user },                      [user])
-  useEffect(() => { selectedCityRef.current = state.selectedCityId }, [state.selectedCityId])
+  const configsRef       = useRef<CityConfig[]>(CITY_CONFIGS)
+  useEffect(() => { userRef.current    = user },                       [user])
+  useEffect(() => { selectedCityRef.current = state.selectedCityId },  [state.selectedCityId])
 
-  // configVersion bumps whenever the admin panel writes new city configs to
-  // localStorage, forcing cityConfig to be re-derived from the updated data.
-  const [configVersion, setConfigVersion] = useState(0)
-  // notifVersion bumps whenever new notifications arrive (cross-tab)
-  const [notifVersion, setNotifVersion]   = useState(0)
+  // ── City configs — Supabase as single source of truth ───────────────────────
+  // Initialised with compile-time defaults so the UI renders immediately.
+  // Replaced with Supabase data on first fetch, then kept in sync via realtime.
+  const [configs, setConfigs] = useState<CityConfig[]>(CITY_CONFIGS)
+  useEffect(() => { configsRef.current = configs }, [configs])
+
+  // notifVersion bumps whenever new notifications arrive (cross-tab / realtime)
+  const [notifVersion, setNotifVersion] = useState(0)
 
   useEffect(() => {
-    // Legacy localStorage listener (when Supabase is not configured)
+    // ── Load configs from Supabase on mount ──────────────────────────────────
+    fetchCityConfigs().then(fetched => {
+      console.log('[Config] loaded', fetched.length, 'city configs from Supabase')
+      setConfigs(fetched)
+    }).catch(err => console.error('[Config] fetchCityConfigs error', err))
+
+    // ── Realtime: admin pushes config change → update specific city in state ─
+    const unsubConfigs = subscribeToCityConfigs((updated) => {
+      console.log('[Config] realtime update for', updated.cityId)
+      setConfigs(prev => prev.map(c => c.cityId === updated.cityId ? updated : c))
+    })
+
+    // ── Legacy StorageEvent (dev fallback, same-browser cross-tab) ───────────
     const legacyHandler = (e: StorageEvent) => {
-      if (e.key === 'cs_city_configs_v1') setConfigVersion(v => v + 1)
-      if (e.key === NOTIFS_STORAGE_KEY)   setNotifVersion(v => v + 1)
+      if (e.key === NOTIFS_STORAGE_KEY) setNotifVersion(v => v + 1)
     }
     window.addEventListener('storage', legacyHandler)
 
-    // Supabase realtime: bump notifVersion when new notifications arrive
+    // ── Supabase realtime: notifVersion bump on new notifications ─────────────
     const unsubNotifs = subscribeToCustomerNotifs(
       userRef.current?.id,
       (_notif) => setNotifVersion(v => v + 1),
     )
 
     return () => {
+      unsubConfigs()
       window.removeEventListener('storage', legacyHandler)
       unsubNotifs()
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Derive city config from selectedCityId (re-derived on admin config changes)
+  // Derive selected city config from live configs state
   const cityConfig = useMemo(
-    () => getCityConfig(state.selectedCityId),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [state.selectedCityId, configVersion],
+    () => getCityConfig(state.selectedCityId, configs),
+    [state.selectedCityId, configs],
   )
 
   // ── Load user-specific data (addresses from localStorage, orders from Supabase) ─
@@ -261,10 +278,11 @@ export default function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // ── Geolocation city detection (non-blocking, runs once) ────────────────────
+  // ── Geolocation city detection (non-blocking, runs once after configs load) ──
   useEffect(() => {
-    detectCityFromGeolocation().then((detectedCityId) => {
-      if (detectedCityId && detectedCityId !== state.selectedCityId) {
+    // Pass current configs so detection aliases come from Supabase data
+    detectCityFromGeolocation(configsRef.current).then((detectedCityId) => {
+      if (detectedCityId && detectedCityId !== selectedCityRef.current) {
         setState(s => ({ ...s, selectedCityId: detectedCityId }))
       }
     })
@@ -311,8 +329,8 @@ export default function App() {
 
   // ── Navigation ──────────────────────────────────────────────────────────────
   const go = useCallback((next: ScreenName, opts?: NavOptions) => {
-    // City gate — block new-1 for non-live cities using the config layer
-    if (next === 'new-1' && !canStartOrder(selectedCityRef.current)) {
+    // City gate — block new-1 for non-live cities using live Supabase configs
+    if (next === 'new-1' && !canStartOrder(selectedCityRef.current, configsRef.current)) {
       setScreen('city-blocked')
       return
     }
@@ -348,7 +366,7 @@ export default function App() {
   const onPaymentComplete = useCallback(async () => {
     const now       = new Date().toISOString()
     const orderId   = `CS-${Date.now().toString().slice(-5)}`
-    const cityConf  = getCityConfig(state.selectedCityId)
+    const cityConf  = getCityConfig(state.selectedCityId, configsRef.current)
     const distKm    = draft.route ? Math.round(draft.route.distanceM / 100) / 10 : 5
     const breakdown = computeOrderPrice({
       cityConfig: cityConf,
@@ -428,6 +446,7 @@ export default function App() {
             state={state}
             user={user}
             cityConfig={cityConfig}
+            configs={configs}
             onCityChange={handleCityChange}
           />
         )
@@ -473,14 +492,15 @@ export default function App() {
             state={state}
             setState={setState}
             onCityChange={handleCityChange}
+            configs={configs}
           />
         )
       case 'add-place':
         return <AddPlaceScreen go={go} setState={setState} />
       case 'city-blocked':
-        return <CityBlockedScreen go={go} cityConfig={cityConfig} />
+        return <CityBlockedScreen go={go} cityConfig={cityConfig} configs={configs} />
       default:
-        return <HomeScreen go={go} state={state} user={user} cityConfig={cityConfig} onCityChange={handleCityChange} />
+        return <HomeScreen go={go} state={state} user={user} cityConfig={cityConfig} configs={configs} onCityChange={handleCityChange} />
     }
   }
 

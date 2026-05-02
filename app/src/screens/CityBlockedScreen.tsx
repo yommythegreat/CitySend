@@ -9,6 +9,8 @@ interface Props {
   go: (screen: ScreenName) => void
   /** The currently selected city's config (always isLive === false when shown). */
   cityConfig: CityConfig
+  /** Full city list from Supabase — used for live city name and coming-soon list. */
+  configs: CityConfig[]
 }
 
 // ── Interest form (notify-me) ─────────────────────────────────────────────────
@@ -110,9 +112,9 @@ function NotifyForm({ cityName }: { cityName: string }) {
 
 // ── CityBlockedScreen ─────────────────────────────────────────────────────────
 
-export function CityBlockedScreen({ go, cityConfig }: Props) {
-  const comingSoonCities = getComingSoonCities().filter(c => c.cityId !== cityConfig.cityId)
-  const liveCityName = getLiveCityName()
+export function CityBlockedScreen({ go, cityConfig, configs }: Props) {
+  const comingSoonCities = getComingSoonCities(configs).filter(c => c.cityId !== cityConfig.cityId)
+  const liveCityName = getLiveCityName(configs)
 
   return (
     <div className="cs-screen cs-enter-up">

@@ -11,16 +11,19 @@ import type { CityConfig, CityPricing, TaxRates } from '../config/cityConfig'
 import type { CityId } from '../types'
 
 // ── Lookup helpers ────────────────────────────────────────────────────────────
+//
+// All functions accept an optional `configs` array. When provided (the normal
+// case in production — configs are fetched from Supabase and held in React
+// state), the passed array is used directly. When omitted, the function falls
+// back to getSystemCityConfigs() which reads from localStorage (dev fallback).
 
 /**
  * Return the full config for a city by its stable ID.
- * Always reads from getSystemCityConfigs() so admin changes are reflected.
- * Falls back to the first registered city if ID is unrecognised (guards
- * against stale localStorage values).
+ * Falls back to the first registered city if ID is unrecognised.
  */
-export function getCityConfig(cityId: CityId): CityConfig {
-  const configs = getSystemCityConfigs()
-  return configs.find(c => c.cityId === cityId) ?? configs[0]
+export function getCityConfig(cityId: CityId, configs?: CityConfig[]): CityConfig {
+  const list = configs ?? getSystemCityConfigs()
+  return list.find(c => c.cityId === cityId) ?? list[0]
 }
 
 /**
@@ -28,9 +31,12 @@ export function getCityConfig(cityId: CityId): CityConfig {
  * Matches against each city's detectionAliases (lower-cased).
  * Returns undefined when the detected place is not a CitySend market.
  */
-export function getCityConfigByDetectedName(rawName: string): CityConfig | undefined {
+export function getCityConfigByDetectedName(
+  rawName: string,
+  configs?: CityConfig[],
+): CityConfig | undefined {
   const lower = rawName.toLowerCase().trim()
-  return getSystemCityConfigs().find(c =>
+  return (configs ?? getSystemCityConfigs()).find(c =>
     c.detectionAliases.some(alias => lower.includes(alias))
   )
 }
@@ -38,8 +44,8 @@ export function getCityConfigByDetectedName(rawName: string): CityConfig | undef
 // ── Availability ──────────────────────────────────────────────────────────────
 
 /** True only if the city is currently serving customers. */
-export function isCityLive(cityId: CityId): boolean {
-  return getCityConfig(cityId).isLive
+export function isCityLive(cityId: CityId, configs?: CityConfig[]): boolean {
+  return getCityConfig(cityId, configs).isLive
 }
 
 /**
@@ -47,23 +53,23 @@ export function isCityLive(cityId: CityId): boolean {
  * Currently equivalent to isCityLive, but centralised here so additional
  * runtime checks (service hours, maintenance mode, etc.) can be added later.
  */
-export function canStartOrder(cityId: CityId): boolean {
-  return getCityConfig(cityId).isLive
+export function canStartOrder(cityId: CityId, configs?: CityConfig[]): boolean {
+  return getCityConfig(cityId, configs).isLive
 }
 
 /** All cities that are currently accepting orders. */
-export function getLiveCities(): CityConfig[] {
-  return getSystemCityConfigs().filter(c => c.isLive)
+export function getLiveCities(configs?: CityConfig[]): CityConfig[] {
+  return (configs ?? getSystemCityConfigs()).filter(c => c.isLive)
 }
 
 /** All cities that are announced but not yet live. */
-export function getComingSoonCities(): CityConfig[] {
-  return getSystemCityConfigs().filter(c => !c.isLive)
+export function getComingSoonCities(configs?: CityConfig[]): CityConfig[] {
+  return (configs ?? getSystemCityConfigs()).filter(c => !c.isLive)
 }
 
 /** Every registered city (live + coming-soon), in config order. */
-export function getAllCities(): CityConfig[] {
-  return getSystemCityConfigs()
+export function getAllCities(configs?: CityConfig[]): CityConfig[] {
+  return configs ?? getSystemCityConfigs()
 }
 
 /**
@@ -71,8 +77,8 @@ export function getAllCities(): CityConfig[] {
  * Used in UI copy that refers to "the live city" without hardcoding a name.
  * Falls back to "an available city" if no city is live yet.
  */
-export function getLiveCityName(): string {
-  return getLiveCities()[0]?.cityName ?? 'an available city'
+export function getLiveCityName(configs?: CityConfig[]): string {
+  return getLiveCities(configs)[0]?.cityName ?? 'an available city'
 }
 
 // ── Pricing & tax accessors ───────────────────────────────────────────────────

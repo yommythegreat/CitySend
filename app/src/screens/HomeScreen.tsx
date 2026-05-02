@@ -5,7 +5,7 @@ import {
   Bell, User, Send, Arrow, Truck,
   Home as HomeIcon, Package, Pin, Chevron, ChevronDown, Plus, Check,
 } from '../components/Icons'
-import { getAllCities, getLiveCityName } from '../utils/serviceAvailability'
+import { getLiveCityName } from '../utils/serviceAvailability'
 import { getCustomerOrders, type CustomerOrder } from '../utils/orderStore'
 import type { CityConfig } from '../config/cityConfig'
 import type { AppState, AuthUser, CityId, NavOptions, ScreenName } from '../types'
@@ -41,6 +41,7 @@ interface Props {
   state: AppState
   user: AuthUser | null
   cityConfig: CityConfig
+  configs: CityConfig[]
   onCityChange: (cityId: CityId) => void
 }
 
@@ -50,12 +51,14 @@ function CityPickerSheet({
   currentCityId,
   onSelect,
   onClose,
+  configs,
 }: {
   currentCityId: CityId
   onSelect: (id: CityId) => void
   onClose: () => void
+  configs: CityConfig[]
 }) {
-  const cities = getAllCities()
+  const cities = configs
 
   return (
     <>
@@ -144,7 +147,7 @@ function CityPickerSheet({
 
 // ── HomeScreen ────────────────────────────────────────────────────────────────
 
-export function HomeScreen({ go, state, user, cityConfig, onCityChange }: Props) {
+export function HomeScreen({ go, state, user, cityConfig, configs, onCityChange }: Props) {
   const [showPicker,   setShowPicker]   = useState(false)
   const [trackOrders,  setTrackOrders]  = useState<CustomerOrder[]>([])
   const [trackLoading, setTrackLoading] = useState(false)
@@ -172,7 +175,7 @@ export function HomeScreen({ go, state, user, cityConfig, onCityChange }: Props)
   const firstName = user?.name?.split(' ')[0] ?? 'there'
 
   const cityIsLive   = cityConfig.isLive
-  const liveCityName = getLiveCityName()
+  const liveCityName = getLiveCityName(configs)
 
   const handleSendPackage = () => {
     // go() will gate on canStartOrder(); if not live it routes to city-blocked.
@@ -459,6 +462,7 @@ export function HomeScreen({ go, state, user, cityConfig, onCityChange }: Props)
           currentCityId={state.selectedCityId}
           onSelect={onCityChange}
           onClose={() => setShowPicker(false)}
+          configs={configs}
         />
       )}
     </div>

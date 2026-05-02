@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { IconButton } from '../components/IconButton'
 import { Back, Bell, Card, Home as HomeIcon, Lock, Chevron, Check, Plus, X, Pin, Package } from '../components/Icons'
 import { getAllCities } from '../utils/serviceAvailability'
+import type { CityConfig } from '../config/cityConfig'
 import type { AppState, CityId, PaymentMethod, SavedAddress, ScreenName } from '../types'
 
 interface Props {
@@ -10,6 +11,7 @@ interface Props {
   state: AppState
   setState: React.Dispatch<React.SetStateAction<AppState>>
   onCityChange: (cityId: CityId) => void
+  configs: CityConfig[]
 }
 
 type Panel = 'main' | 'payment' | 'addresses' | 'security' | 'city'
@@ -424,12 +426,14 @@ function CityPanel({
   currentCityId,
   onCityChange,
   onBack,
+  configs,
 }: {
   currentCityId: CityId
   onCityChange: (id: CityId) => void
   onBack: () => void
+  configs: CityConfig[]
 }) {
-  const cities = getAllCities()
+  const cities = getAllCities(configs)
 
   return (
     <div className="cs-screen cs-enter-right">
@@ -503,7 +507,7 @@ function CityPanel({
 
 // ── Main settings screen ───────────────────────────────────────────────────
 
-export function SettingsScreen({ go, onLogout, state, setState, onCityChange }: Props) {
+export function SettingsScreen({ go, onLogout, state, setState, onCityChange, configs }: Props) {
   const [panel, setPanel] = useState<Panel>('main')
   const [notifDelivery, setNotifDelivery] = useState(true)
   const [notifPromos,   setNotifPromos]   = useState(false)
@@ -517,6 +521,7 @@ export function SettingsScreen({ go, onLogout, state, setState, onCityChange }: 
       currentCityId={state.selectedCityId}
       onCityChange={(id) => { onCityChange(id); setState(s => ({ ...s, selectedCityId: id })) }}
       onBack={() => setPanel('main')}
+      configs={configs}
     />
   )
 
@@ -526,7 +531,7 @@ export function SettingsScreen({ go, onLogout, state, setState, onCityChange }: 
     ? state.savedAddresses.map(a => a.label).join(', ')
     : 'No saved addresses'
 
-  const allCities = getAllCities()
+  const allCities = getAllCities(configs)
   const currentCity = allCities.find(c => c.cityId === state.selectedCityId)
   const citySub = currentCity
     ? `${currentCity.cityName}, ${currentCity.province}${currentCity.isLive ? ' · Live' : ' · Coming soon'}`
