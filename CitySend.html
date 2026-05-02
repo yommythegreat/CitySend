@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>CitySend — Same-day delivery, Winnipeg</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+<style>
+  :root {
+    --cs-ink: #0b1220;
+    --cs-ink-2: #1a2233;
+    --cs-slate-900: #0f1724;
+    --cs-slate-800: #1e2636;
+    --cs-slate-700: #2b3548;
+    --cs-slate-500: #5b657a;
+    --cs-slate-400: #8590a6;
+    --cs-slate-300: #b9c0cc;
+    --cs-slate-200: #d8dde5;
+    --cs-slate-100: #eceef2;
+    --cs-slate-50:  #f5f6f8;
+    --cs-paper:     #fafbfc;
+    --cs-accent:    #c94a1b;      /* terracotta signal (option 6) */
+    --cs-accent-2:  #e76a3a;
+    --cs-accent-ink:#ffffff;
+    --cs-ok:        #166b3a;
+    --cs-warn:      #a85c00;
+    --cs-err:       #b3261e;
+    --cs-radius-s:  8px;
+    --cs-radius-m:  14px;
+    --cs-radius-l:  22px;
+    --cs-font:      'Geist', -apple-system, system-ui, sans-serif;
+    --cs-mono:      'Geist Mono', ui-monospace, Menlo, monospace;
+  }
+  html, body { margin: 0; padding: 0; background: #f0eee9; font-family: var(--cs-font); }
+  body { overflow: hidden; }
+  * { box-sizing: border-box; }
+</style>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+</head>
+
+<body>
+<div id="root"></div>
+
+<script type="text/babel" src="ios-frame.jsx"></script>
+<script type="text/babel" src="design-canvas.jsx"></script>
+<script type="text/babel" src="tweaks-panel.jsx"></script>
+
+<script type="text/babel" src="src/brand.jsx"></script>
+<script type="text/babel" src="src/ds.jsx"></script>
+<script type="text/babel" src="src/icons.jsx"></script>
+<script type="text/babel" src="src/prototype-screens.jsx"></script>
+<script type="text/babel" src="src/prototype-screens-2.jsx"></script>
+<script type="text/babel" src="src/prototype.jsx"></script>
+<script type="text/babel" src="src/app.jsx"></script>
+
+<script type="text/babel">
+  const root = ReactDOM.createRoot(document.getElementById('root'));
+  root.render(<App />);
+</script>
+</body>
+</html>

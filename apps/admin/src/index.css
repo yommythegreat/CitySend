@@ -1,0 +1,127 @@
+/* CitySend Admin — global styles */
+
+:root {
+  --a-bg:           #f4f5f7;
+  --a-surface:      #ffffff;
+  --a-sidebar:      #0b1220;
+  --a-sidebar-item: rgba(255,255,255,0.06);
+  --a-sidebar-act:  rgba(201,74,27,0.18);
+  --a-sidebar-txt:  rgba(255,255,255,0.65);
+  --a-sidebar-hi:   #ffffff;
+  --a-accent:       #c94a1b;
+  --a-ink:          #111827;
+  --a-ink2:         #374151;
+  --a-muted:        #6b7280;
+  --a-border:       #e5e7eb;
+  --a-border2:      #d1d5db;
+  --a-ok:           #16a34a;
+  --a-ok-bg:        #dcfce7;
+  --a-warn:         #d97706;
+  --a-warn-bg:      #fef3c7;
+  --a-err:          #dc2626;
+  --a-err-bg:       #fee2e2;
+  --a-info:         #2563eb;
+  --a-info-bg:      #dbeafe;
+  --a-purple:       #7c3aed;
+  --a-purple-bg:    #ede9fe;
+  --a-orange:       #ea580c;
+  --a-orange-bg:    #ffedd5;
+  --a-font:         -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif;
+  --a-mono:         'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
+  --a-r:            6px;
+  --a-r-lg:         10px;
+  --a-shadow:       0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04);
+  --a-shadow-lg:    0 4px 12px rgba(0,0,0,0.08);
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: var(--a-font);
+  background:  var(--a-bg);
+  color:       var(--a-ink);
+  font-size:   14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+button { font-family: inherit; cursor: pointer; }
+input, select, textarea { font-family: inherit; }
+a { color: inherit; text-decoration: none; }
+
+/* Scrollbars */
+::-webkit-scrollbar       { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--a-border2); border-radius: 3px; }
+
+/* Layout */
+.admin-shell {
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.admin-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
+}
+
+.admin-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px;
+}
+
+/* Table */
+.a-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--a-surface);
+  border-radius: var(--a-r-lg);
+  overflow: hidden;
+  box-shadow: var(--a-shadow);
+}
+.a-table th {
+  padding: 10px 14px;
+  text-align: left;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--a-muted);
+  background: #f9fafb;
+  border-bottom: 1px solid var(--a-border);
+  white-space: nowrap;
+}
+.a-table td {
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--a-border);
+  vertical-align: middle;
+}
+.a-table tbody tr:last-child td { border-bottom: none; }
+.a-table tbody tr:hover { background: #f9fafb; }
+.a-table tbody tr.clickable { cursor: pointer; }
+
+/* Spin animation */
+@keyframes a-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Slide-in panel */
+@keyframes a-slide-in {
+  from { transform: translateX(100%); }
+  to   { transform: translateX(0); }
+}
+.panel-enter {
+  animation: a-slide-in 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Fade-in */
+@keyframes a-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.a-fade { animation: a-fade 0.15s ease; }
