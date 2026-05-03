@@ -7,11 +7,15 @@ interface LogoWordmarkProps {
 }
 
 export function LogoWordmark({ scale = 1, color = 'var(--cs-ink)', accent = 'var(--cs-accent)' }: LogoWordmarkProps) {
+  // viewBox is trimmed to the actual content width (~170 units) so that when
+  // the element is centered the visual text lands at true centre.
+  // The original 240-wide viewBox left ~72 units of dead space on the right,
+  // causing an apparent left-offset when justifyContent:'center' was applied.
   return (
-    <svg viewBox="0 0 240 60" width={240 * scale} height={60 * scale} style={{ display: 'block' }}>
-      <text x="0" y="42" fontFamily="Geist, system-ui" fontWeight="700" fontSize="38" fill={color} letterSpacing="-1.4">city</text>
-      <text x="89" y="42" fontFamily="Geist, system-ui" fontWeight="700" fontSize="38" fill={color} letterSpacing="-1.4">send</text>
-      <g transform="translate(77.5, 30)">
+    <svg viewBox="0 0 170 52" width={170 * scale} height={52 * scale} style={{ display: 'block' }}>
+      <text x="0" y="38" fontFamily="Geist, system-ui" fontWeight="700" fontSize="38" fill={color} letterSpacing="-1.4">city</text>
+      <text x="89" y="38" fontFamily="Geist, system-ui" fontWeight="700" fontSize="38" fill={color} letterSpacing="-1.4">send</text>
+      <g transform="translate(77.5, 26)">
         <path d="M0 0 L9 0 M6 -3 L9 0 L6 3" stroke={accent} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
       </g>
     </svg>
