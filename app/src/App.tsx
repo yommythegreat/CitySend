@@ -26,6 +26,17 @@ import type { ScreenName, Draft, AppState, NavOptions, AuthUser, CityId, Deliver
 
 const TAB_SCREENS: ScreenName[] = ['home', 'history', 'notifications']
 
+// ── Tracking deep-link helper ─────────────────────────────────────────────────
+
+/**
+ * Extracts orderId from a /tracking/:orderId URL path.
+ * Returns undefined for any other path.
+ */
+function parseTrackingId(pathname = window.location.pathname): string | undefined {
+  const m = pathname.match(/^\/tracking\/([^/]+)$/)
+  return m ? decodeURIComponent(m[1]) : undefined
+}
+
 // ── Geolocation city detection ────────────────────────────────────────────────
 
 async function detectCityFromGeolocation(configs: CityConfig[]): Promise<CityId | null> {
@@ -106,19 +117,30 @@ function orderToDelivery(o: CustomerOrder): Delivery {
 // ── App ───────────────────────────────────────────────────────────────────────
 
 export default function App() {
-  const [screen,          setScreen]          = useState<ScreenName>('home')
+  // Initialise screen + trackingOrderId from the URL so that a hard-refresh
+  // of /tracking/:orderId lands on the correct screen without a redirect.
+  const [screen,          setScreen]          = useState<ScreenName>(() =>
+    parseTrackingId() ? 'tracking' : 'home',
+  )
   const [state,           setState]           = useState<AppState>(INITIAL_STATE)
   const [draft,           setDraft]           = useState<Draft>(BLANK_DRAFT)
   const [user,            setUser]            = useState<AuthUser | null>(null)
   const [authChecked,     setAuthChecked]     = useState(false)
-  const [trackingOrderId, setTrackingOrderId] = useState<string | undefined>(undefined)
+  const [trackingOrderId, setTrackingOrderId] = useState<string | undefined>(
+    () => parseTrackingId(),
+  )
 
   // Refs so go() callback is never stale
-  const userRef          = useRef<AuthUser | null>(null)
-  const selectedCityRef  = useRef<CityId>(INITIAL_STATE.selectedCityId)
-  const configsRef       = useRef<CityConfig[]>(CITY_CONFIGS)
+  const userRef            = useRef<AuthUser | null>(null)
+  const selectedCityRef    = useRef<CityId>(INITIAL_STATE.selectedCityId)
+  const configsRef         = useRef<CityConfig[]>(CITY_CONFIGS)
+  // trackingOrderIdRef keeps the current orderId instantly available inside go()
+  // without waiting for a useEffect — required for the payment-flow handoff where
+  // onPaymentComplete sets the ID and go('tracking') fires synchronously after.
+  const trackingOrderIdRef = useRef<string | undefined>(parseTrackingId())
   useEffect(() => { userRef.current    = user },                       [user])
   useEffect(() => { selectedCityRef.current = state.selectedCityId },  [state.selectedCityId])
+  useEffect(() => { trackingOrderIdRef.current = trackingOrderId },    [trackingOrderId])
 
   // ── City configs — Supabase as single source of truth ───────────────────────
   // Initialised with compile-time defaults so the UI renders immediately.
@@ -128,6 +150,22 @@ export default function App() {
 
   // notifVersion bumps whenever new notifications arrive (cross-tab / realtime)
   const [notifVersion, setNotifVersion] = useState(0)
+
+  // ── Browser back / forward navigation ───────────────────────────────────────
+  useEffect(() => {
+    const handlePop = () => {
+      const id = parseTrackingId()
+      if (id) {
+        setTrackingOrderId(id)
+        trackingOrderIdRef.current = id
+        setScreen('tracking')
+      } else {
+        setScreen('home')
+      }
+    }
+    window.addEventListener('popstate', handlePop)
+    return () => window.removeEventListener('popstate', handlePop)
+  }, [])
 
   useEffect(() => {
     // ── Load configs from Supabase on mount ──────────────────────────────────
@@ -252,6 +290,11 @@ export default function App() {
           setState(INITIAL_STATE)
           setDraft(BLANK_DRAFT)
           setScreen('home')
+          // Clear any lingering /tracking/:id URL so a re-login doesn't
+          // accidentally restore an order the user may no longer have access to.
+          if (window.location.pathname.startsWith('/tracking/')) {
+            window.history.replaceState({}, '', '/')
+          }
           setAuthChecked(true)
 
         } else if (event === 'TOKEN_REFRESHED' && session?.user) {
@@ -303,7 +346,16 @@ export default function App() {
     // redundant (same data). For guest / non-Supabase, this is the only path.
     setUser(authUser)
     await loadUserData(authUser)
-    setScreen('home')
+    // Honour tracking deep-link: if the URL still contains /tracking/:id the
+    // user came here via a shared link and must be sent to tracking after auth.
+    const deepId = parseTrackingId()
+    if (deepId) {
+      setTrackingOrderId(deepId)
+      trackingOrderIdRef.current = deepId
+      setScreen('tracking')
+    } else {
+      setScreen('home')
+    }
   }, [loadUserData])
 
   const handleLogout = useCallback(async () => {
@@ -342,9 +394,27 @@ export default function App() {
       return
     }
 
-    // Capture trackOrderId so TrackingScreen knows which order to load
+    // ── Tracking URL management ──────────────────────────────────────────────
     if (next === 'tracking') {
-      setTrackingOrderId(opts?.trackOrderId)
+      // If a specific orderId is provided, update state + ref immediately so the
+      // URL push below sees the new ID (can't wait for useEffect → ref sync).
+      const newId = opts?.trackOrderId
+      if (newId !== undefined) {
+        setTrackingOrderId(newId)
+        trackingOrderIdRef.current = newId
+      }
+      // Resolve the ID to embed in the URL: prefer the freshly-provided one,
+      // then the existing ref (set synchronously by onPaymentComplete before
+      // calling go('tracking') with no opts).
+      const resolvedId = newId ?? trackingOrderIdRef.current
+      if (resolvedId) {
+        window.history.pushState({}, '', `/tracking/${encodeURIComponent(resolvedId)}`)
+      }
+    } else {
+      // Leaving any tracking URL → restore root so deep-link state is clean.
+      if (window.location.pathname.startsWith('/tracking/')) {
+        window.history.replaceState({}, '', '/')
+      }
     }
 
     // Prefill draft for "Send again" / saved-address shortcuts
@@ -396,8 +466,12 @@ export default function App() {
       when:   'Today',
     }
 
-    // Set tracking order so the next go('tracking') call shows this order
+    // Set tracking order so the next go('tracking') call shows this order.
+    // Also update the ref immediately: PaymentScreen calls go('tracking') with
+    // no opts in the same synchronous turn, so go() needs the ref to be current
+    // before the useEffect that normally keeps it in sync has a chance to run.
     setTrackingOrderId(orderId)
+    trackingOrderIdRef.current = orderId
 
     // Write to shared order store (Supabase or localStorage)
     await pushNewOrder({

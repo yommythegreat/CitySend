@@ -112,6 +112,7 @@ export function TrackingScreen({ go, draft, cityConfig, orderId }: Props) {
   useEffect(() => {
     if (routeInfo) return
     if (orderId && orderLoading) return  // wait for order to finish loading
+    if (orderId && !orderLoading && !order) return  // order not found — skip route calc
 
     let cancelled = false
     ;(async () => {
@@ -231,6 +232,47 @@ export function TrackingScreen({ go, draft, cityConfig, orderId }: Props) {
         <button
           onClick={() => go('home')}
           style={{ marginTop: 8, padding: '12px 28px', background: 'var(--cs-ink)', color: '#fff', border: 'none', borderRadius: 12, fontFamily: 'var(--cs-font)', fontSize: 15, fontWeight: 600, cursor: 'pointer' }}
+        >
+          Back to home
+        </button>
+      </div>
+    )
+  }
+
+  // ── Order not found (orderId given but fetch completed with no result) ─────────
+  // Only shown after loading finishes — while loading the spinner covers this.
+  if (orderId && !orderLoading && !order) {
+    return (
+      <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: 'var(--cs-paper)', padding: 32, gap: 16 }}>
+        <div style={{
+          width: 64, height: 64, borderRadius: 32,
+          background: 'var(--cs-slate-100)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+          <Send size={26} color="var(--cs-slate-400)" />
+        </div>
+        <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--cs-ink)', textAlign: 'center', letterSpacing: -0.4 }}>
+          Delivery not found
+        </div>
+        <div style={{ fontSize: 14, color: 'var(--cs-slate-500)', textAlign: 'center', lineHeight: 1.55, maxWidth: 268 }}>
+          We couldn't find this delivery. The link may be incorrect, or the order may have been removed.
+        </div>
+        <div style={{
+          padding: '10px 14px', background: 'var(--cs-slate-100)',
+          borderRadius: 10, display: 'flex', alignItems: 'center', gap: 6,
+        }}>
+          <span style={{ fontFamily: 'var(--cs-mono)', fontSize: 12, color: 'var(--cs-slate-500)', letterSpacing: 0.4 }}>
+            {orderId}
+          </span>
+        </div>
+        <button
+          onClick={() => go('home')}
+          style={{
+            marginTop: 4, padding: '13px 32px',
+            background: 'var(--cs-ink)', color: '#fff',
+            border: 'none', borderRadius: 14,
+            fontFamily: 'var(--cs-font)', fontSize: 15, fontWeight: 600, cursor: 'pointer',
+          }}
         >
           Back to home
         </button>
