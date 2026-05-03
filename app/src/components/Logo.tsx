@@ -12,7 +12,7 @@ export function LogoWordmark({ scale = 1, color = 'var(--cs-ink)', accent = 'var
   // The original 240-wide viewBox left ~72 units of dead space on the right,
   // causing an apparent left-offset when justifyContent:'center' was applied.
   return (
-    <svg viewBox="0 0 170 52" width={170 * scale} height={52 * scale} style={{ display: 'block' }}>
+    <svg viewBox="0 0 182 52" width={182 * scale} height={52 * scale} style={{ display: 'block' }}>
       <text x="0" y="38" fontFamily="Geist, system-ui" fontWeight="700" fontSize="38" fill={color} letterSpacing="-1.4">city</text>
       <text x="89" y="38" fontFamily="Geist, system-ui" fontWeight="700" fontSize="38" fill={color} letterSpacing="-1.4">send</text>
       <g transform="translate(77.5, 26)">
