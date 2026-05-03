@@ -442,7 +442,7 @@ export default function App() {
   }, [])
 
   // ── Payment completion ──────────────────────────────────────────────────────
-  const onPaymentComplete = useCallback(async () => {
+  const onPaymentComplete = useCallback(async (tip: number) => {
     const now       = new Date().toISOString()
     const orderId   = `CS-${Date.now().toString().slice(-5)}`
     const cityConf  = getCityConfig(state.selectedCityId, configsRef.current)
@@ -452,7 +452,7 @@ export default function App() {
       distKm,
       parcelSize: draft.parcel.size,
       fragile:    draft.parcel.fragile,
-      tip:        0,
+      tip,
     })
 
     const newDelivery: Delivery = {
@@ -556,7 +556,7 @@ export default function App() {
           />
         )
       case 'pay':
-        return <PaymentScreen go={go} state={state} onPaymentComplete={onPaymentComplete} />
+        return <PaymentScreen go={go} state={state} draft={draft} cityConfig={cityConfig} onPaymentComplete={onPaymentComplete} />
       case 'tracking':
         return <TrackingScreen go={go} draft={draft} cityConfig={cityConfig} orderId={trackingOrderId} />
       case 'history':

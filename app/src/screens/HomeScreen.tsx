@@ -159,10 +159,10 @@ export function HomeScreen({ go, state, user, cityConfig, configs, onCityChange 
     setTrackLoading(true)
     getCustomerOrders(user.id).then(orders => {
       if (cancelled) return
-      // Show last 7 days, non-cancelled, max 5 cards
+      // Show last 7 days, active orders only (exclude delivered + cancelled), max 5 cards
       const cutoff = Date.now() - 7 * 86_400_000
       const recent = orders
-        .filter(o => o.status !== 'cancelled' && new Date(o.createdAt).getTime() > cutoff)
+        .filter(o => o.status !== 'cancelled' && o.status !== 'delivered' && new Date(o.createdAt).getTime() > cutoff)
         .slice(0, 5)
       setTrackOrders(recent)
       setTrackLoading(false)
@@ -186,6 +186,7 @@ export function HomeScreen({ go, state, user, cityConfig, configs, onCityChange 
         // New order just arrived (e.g. created in another tab) — prepend if eligible
         if (
           updatedOrder.status !== 'cancelled' &&
+          updatedOrder.status !== 'delivered' &&
           new Date(updatedOrder.createdAt).getTime() > cutoff
         ) {
           return [updatedOrder, ...prev].slice(0, 5)
@@ -408,16 +409,23 @@ export function HomeScreen({ go, state, user, cityConfig, configs, onCityChange 
         </div>
         <div style={{ background: '#fff', borderRadius: 16, border: '1px solid var(--cs-slate-100)', overflow: 'hidden' }}>
           {state.savedAddresses.length === 0 && (
-            <div style={{ padding: '20px 16px', textAlign: 'center' }}>
-              <div style={{ fontSize: 13, color: 'var(--cs-slate-500)', lineHeight: 1.5 }}>
-                No saved places yet.{' '}
-                <button
-                  onClick={() => go('add-place')}
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--cs-accent)', fontWeight: 500, fontSize: 13, fontFamily: 'var(--cs-font)', padding: 0 }}
-                >
-                  Add your first →
-                </button>
+            <div style={{ padding: '24px 20px', textAlign: 'center' }}>
+              <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--cs-ink)', marginBottom: 6 }}>
+                No saved places yet
               </div>
+              <div style={{ fontSize: 13, color: 'var(--cs-slate-500)', lineHeight: 1.5, marginBottom: 14 }}>
+                Add your first pickup or drop-off location to make future deliveries faster.
+              </div>
+              <button
+                onClick={() => go('add-place')}
+                style={{
+                  background: 'var(--cs-ink)', color: '#fff', border: 'none', cursor: 'pointer',
+                  fontFamily: 'var(--cs-font)', fontSize: 14, fontWeight: 600,
+                  padding: '10px 22px', borderRadius: 10,
+                }}
+              >
+                Add a place
+              </button>
             </div>
           )}
 

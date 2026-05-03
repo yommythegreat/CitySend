@@ -71,15 +71,17 @@ export function PricingScreen({ go, draft, setDraft, cityConfig }: Props) {
     qst: `QST (${(cityConfig.taxRates.qst * 100).toFixed(2)}%)`,
   }
 
-  const lineItems: { label: string; value: number }[] = [
+  const TAX_TOOLTIP = 'Taxes are calculated based on your delivery city and applicable provincial/federal rates. Tip is not taxed.'
+
+  const lineItems: { label: string; value: number; isTax?: boolean }[] = [
     { label: 'Base delivery fee',      value: price.baseFee      },
     { label: 'Distance surcharge',     value: price.distanceFee  },
     { label: 'Size surcharge',         value: price.sizeFee      },
     { label: 'Fragile handling',       value: price.fragileFee   },
-    { label: taxLabels.gst,            value: price.gst          },
-    { label: taxLabels.pst,            value: price.pst          },
-    { label: taxLabels.hst,            value: price.hst          },
-    { label: taxLabels.qst,            value: price.qst          },
+    { label: taxLabels.gst,            value: price.gst,   isTax: true },
+    { label: taxLabels.pst,            value: price.pst,   isTax: true },
+    { label: taxLabels.hst,            value: price.hst,   isTax: true },
+    { label: taxLabels.qst,            value: price.qst,   isTax: true },
   ].filter(item => item.value > 0)
 
   return (
@@ -166,7 +168,7 @@ export function PricingScreen({ go, draft, setDraft, cityConfig }: Props) {
 
         {/* Price breakdown — only non-zero rows */}
         <div style={{ background: '#fff', borderRadius: 14, border: '1px solid var(--cs-slate-100)', padding: 16, marginBottom: 20 }}>
-          {lineItems.map(({ label, value }) => (
+          {lineItems.map(({ label, value, isTax }) => (
             <div
               key={label}
               style={{
@@ -174,7 +176,17 @@ export function PricingScreen({ go, draft, setDraft, cityConfig }: Props) {
                 padding: '6px 0', fontSize: 14, color: 'var(--cs-slate-700)',
               }}
             >
-              <div>{label}</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                {label}
+                {isTax && (
+                  <span
+                    title={TAX_TOOLTIP}
+                    style={{ fontSize: 12, color: 'var(--cs-slate-400)', cursor: 'help', lineHeight: 1 }}
+                  >
+                    ⓘ
+                  </span>
+                )}
+              </div>
               <div style={{ fontFamily: 'var(--cs-mono)' }}>{fmt(value)}</div>
             </div>
           ))}

@@ -12,14 +12,22 @@ interface FieldProps {
   onFocus?: () => void
   onBlur?: () => void
   maxLength?: number
+  /** When provided, border turns red to indicate a validation error */
+  error?: string
 }
 
-export function Field({ label, value, onChange, placeholder, icon, suffix, type = 'text', onFocus, onBlur, maxLength }: FieldProps) {
+export function Field({ label, value, onChange, placeholder, icon, suffix, type = 'text', onFocus, onBlur, maxLength, error }: FieldProps) {
   const [focused, setFocused] = useState(false)
   // Password visibility toggle — only active when type='password'
   const [showPw, setShowPw] = useState(false)
   const isPassword  = type === 'password'
   const actualType  = isPassword ? (showPw ? 'text' : 'password') : type
+
+  const borderColor = error
+    ? 'var(--cs-err)'
+    : focused
+      ? 'var(--cs-ink)'
+      : 'var(--cs-slate-200)'
 
   return (
     <label style={{ display: 'block' }}>
@@ -42,7 +50,7 @@ export function Field({ label, value, onChange, placeholder, icon, suffix, type 
         height: 52,
         padding: '0 14px 0 16px',
         background: '#fff',
-        border: `1.5px solid ${focused ? 'var(--cs-ink)' : 'var(--cs-slate-200)'}`,
+        border: `1.5px solid ${borderColor}`,
         borderRadius: 12,
         transition: 'border-color .15s',
       }}>
