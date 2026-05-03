@@ -259,28 +259,30 @@ export default function App() {
     // onAuthStateChange fires immediately with INITIAL_SESSION (existing session
     // or null), then for every future sign-in / sign-out / token-refresh.
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
+      (event, session) => {
         console.log('[Auth] state change:', event, session?.user?.email ?? 'no user')
 
         if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN') {
-          try {
-            if (session?.user) {
-              const authUser: AuthUser = {
-                id:    session.user.id,
-                email: session.user.email ?? '',
-                name:  session.user.user_metadata?.name
-                       ?? session.user.email?.split('@')[0]
-                       ?? 'User',
-              }
-              setUser(authUser)
-              // loadUserData can fail (network error, Supabase timeout, etc.).
-              // Always resolve authChecked so the app never stays blank.
-              await loadUserData(authUser)
+          if (session?.user) {
+            const authUser: AuthUser = {
+              id:    session.user.id,
+              email: session.user.email ?? '',
+              name:  session.user.user_metadata?.name
+                     ?? session.user.email?.split('@')[0]
+                     ?? 'User',
             }
-          } catch (err) {
-            console.error('[Auth] loadUserData failed during session restore', err)
-          } finally {
-            // Runs even if loadUserData throws — the app MUST render after this
+            // Unblock the app immediately — user is confirmed, render now.
+            // loadUserData fetches past orders and runs in the background;
+            // it does NOT gate rendering so a slow/failed DB query never
+            // causes a permanent blank screen.
+            setUser(authUser)
+            userRef.current = authUser
+            setAuthChecked(true)
+            loadUserData(authUser).catch(err =>
+              console.error('[Auth] loadUserData failed during session restore', err)
+            )
+          } else {
+            // No session — show the auth screen immediately.
             setAuthChecked(true)
           }
 
