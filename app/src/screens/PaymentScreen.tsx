@@ -3,14 +3,18 @@ import { Elements, CardElement, useStripe, useElements } from '@stripe/react-str
 import { Button } from '../components/Button'
 import { IconButton } from '../components/IconButton'
 import { Back, Lock, Card, Plus, Shield } from '../components/Icons'
-import { calcPrice, fmt } from '../utils/pricing'
+import { fmt } from '../utils/pricing'
+import { computeOrderPrice } from '../utils/serviceAvailability'
 import { stripePromise } from '../lib/stripe'
-import type { ScreenName, AppState } from '../types'
+import type { CityConfig } from '../config/cityConfig'
+import type { Draft, ScreenName, AppState } from '../types'
 
 interface Props {
   go: (screen: ScreenName) => void
   state: AppState
-  onPaymentComplete: () => void
+  draft: Draft
+  cityConfig: CityConfig
+  onPaymentComplete: (tip: number) => Promise<void>
 }
 
 // ── Card element styles matching CitySend design system ─────────────────────
@@ -29,19 +33,17 @@ const CARD_ELEMENT_OPTIONS = {
 
 // ── Inner form (needs stripe + elements context) ────────────────────────────
 function CheckoutForm({
-  clientSecret, tip, onSuccess, isMock
+  clientSecret, priceTotal, onSuccess, isMock
 }: {
   clientSecret: string | null
-  tip: number
-  onSuccess: () => void
+  priceTotal: number
+  onSuccess: () => Promise<void>
   isMock: boolean
 }) {
   const stripe   = useStripe()
   const elements = useElements()
-  const [error, setError]       = useState<string | null>(null)
+  const [error, setError]           = useState<string | null>(null)
   const [processing, setProcessing] = useState(false)
-
-  const price = calcPrice(tip)
 
   const handlePay = async () => {
     setError(null)
@@ -50,7 +52,7 @@ function CheckoutForm({
     if (isMock || !stripe || !elements) {
       setProcessing(true)
       await new Promise(r => setTimeout(r, 1400))
-      onSuccess()
+      await onSuccess()
       return
     }
 
@@ -70,7 +72,7 @@ function CheckoutForm({
       setError(stripeErr.message ?? 'Payment failed')
       setProcessing(false)
     } else if (paymentIntent?.status === 'succeeded') {
-      onSuccess()
+      await onSuccess()
     }
   }
 
@@ -125,7 +127,7 @@ function CheckoutForm({
           : <Lock color="#fff" size={16} />
         }
       >
-        {processing ? 'Processing…' : `Pay ${fmt(price.total)}`}
+        {processing ? 'Processing…' : `Pay ${fmt(priceTotal)}`}
       </Button>
       <div style={{ textAlign: 'center', fontSize: 11, color: 'var(--cs-slate-500)', marginTop: 10, fontFamily: 'var(--cs-mono)', letterSpacing: 0.5 }}>
         {isMock ? 'DEMO MODE — NOT A REAL CHARGE' : 'STRIPE TEST MODE — USE CARD 4242 4242 4242 4242'}
@@ -135,16 +137,37 @@ function CheckoutForm({
 }
 
 // ── Outer screen ────────────────────────────────────────────────────────────
-export function PaymentScreen({ go, state, onPaymentComplete }: Props) {
-  const [method, setMethod]       = useState<'apple' | 'card' | 'new'>('apple')
-  const [tip, setTip]             = useState(2)
+export function PaymentScreen({ go, state, draft, cityConfig, onPaymentComplete }: Props) {
+  const [method, setMethod]             = useState<'apple' | 'card' | 'new'>('apple')
+  const [tip, setTip]                   = useState(2)
+  const [customTipRaw, setCustomTipRaw] = useState('')
+  const [showCustom, setShowCustom]     = useState(false)
+  const [customTipErr, setCustomTipErr] = useState('')
   const [clientSecret, setClientSecret] = useState<string | null>(null)
-  const [isMock, setIsMock]       = useState(false)
+  const [isMock, setIsMock]             = useState(false)
   const [intentLoading, setIntentLoading] = useState(true)
 
-  const price = calcPrice(tip)
+  // ── Compute price using actual draft + cityConfig ──────────────────────────
+  const distKm = draft.route ? draft.route.distanceM / 1000 : 0
+  const price = computeOrderPrice({
+    cityConfig,
+    distKm,
+    parcelSize: draft.parcel.size,
+    fragile:    draft.parcel.fragile,
+    tip,
+  })
 
-  // Fetch payment intent on mount (or when tip changes)
+  // ── Tax tooltip label ──────────────────────────────────────────────────────
+  const taxTooltip = (() => {
+    const parts: string[] = []
+    if (price.gst > 0) parts.push(`GST ${(cityConfig.taxRates.gst * 100).toFixed(0)}%`)
+    if (price.pst > 0) parts.push(`PST ${(cityConfig.taxRates.pst * 100).toFixed(0)}%`)
+    if (price.hst > 0) parts.push(`HST ${(cityConfig.taxRates.hst * 100).toFixed(0)}%`)
+    if (price.qst > 0) parts.push(`QST ${(cityConfig.taxRates.qst * 100).toFixed(2)}%`)
+    return parts.length ? `Taxes: ${parts.join(' + ')} — applied to subtotal before tip.` : ''
+  })()
+
+  // Fetch payment intent on mount or when total changes
   useEffect(() => {
     setIntentLoading(true)
     fetch('/api/create-payment-intent', {
@@ -161,9 +184,34 @@ export function PaymentScreen({ go, state, onPaymentComplete }: Props) {
       .finally(() => setIntentLoading(false))
   }, [tip])
 
-  const handlePaymentComplete = () => {
-    onPaymentComplete()
+  const handlePaymentComplete = async () => {
+    console.log('[Payment] completing — tip:', tip, 'total:', price.total)
+    await onPaymentComplete(tip)
+    console.log('[Payment] order written — navigating to tracking')
     go('tracking')
+  }
+
+  // ── Custom tip handling ────────────────────────────────────────────────────
+  const applyCustomTip = () => {
+    const parsed = parseFloat(customTipRaw.replace(/[^0-9.]/g, ''))
+    if (isNaN(parsed) || parsed < 0) {
+      setCustomTipErr('Enter a valid amount.')
+      return
+    }
+    if (parsed > 100) {
+      setCustomTipErr('Tip cannot exceed $100.')
+      return
+    }
+    setCustomTipErr('')
+    setTip(Math.round(parsed * 100) / 100)
+    setShowCustom(false)
+  }
+
+  const selectPresetTip = (t: number) => {
+    setTip(t)
+    setShowCustom(false)
+    setCustomTipRaw('')
+    setCustomTipErr('')
   }
 
   const METHODS = [
@@ -171,6 +219,9 @@ export function PaymentScreen({ go, state, onPaymentComplete }: Props) {
     { v: 'card'  as const, l: '•••• 4242',  sub: 'Visa · default',   ic: <Card size={18} /> },
     { v: 'new'   as const, l: 'Add card',   sub: 'Credit or debit',  ic: <Plus size={18} /> },
   ]
+
+  const PRESET_TIPS = [0, 2, 3, 5]
+  const isCustomActive = showCustom || !PRESET_TIPS.includes(tip)
 
   return (
     <div className="cs-screen cs-enter-right">
@@ -190,7 +241,15 @@ export function PaymentScreen({ go, state, onPaymentComplete }: Props) {
           {fmt(price.total)}
         </div>
         <div style={{ fontSize: 13, color: 'var(--cs-slate-500)', marginTop: 6, fontFamily: 'var(--cs-mono)' }}>
-          {fmt(price.subtotal)} + {fmt(tip)} tip · CAD
+          {fmt(price.subtotalWithTax)} + {fmt(tip)} tip · CAD
+          {taxTooltip && (
+            <span
+              title={taxTooltip}
+              style={{ marginLeft: 6, cursor: 'help', opacity: 0.65, fontSize: 12 }}
+            >
+              ⓘ
+            </span>
+          )}
         </div>
       </div>
 
@@ -236,15 +295,15 @@ export function PaymentScreen({ go, state, onPaymentComplete }: Props) {
             Tip for your courier
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
-            {[0, 2, 3, 5].map((t) => (
+            {PRESET_TIPS.map((t) => (
               <button
                 key={t}
-                onClick={() => setTip(t)}
+                onClick={() => selectPresetTip(t)}
                 style={{
                   flex: 1, padding: '12px 0', cursor: 'pointer',
-                  background: tip === t ? 'var(--cs-ink)' : '#fff',
-                  color: tip === t ? '#fff' : 'var(--cs-ink)',
-                  border: `1.5px solid ${tip === t ? 'var(--cs-ink)' : 'var(--cs-slate-200)'}`,
+                  background: !isCustomActive && tip === t ? 'var(--cs-ink)' : '#fff',
+                  color: !isCustomActive && tip === t ? '#fff' : 'var(--cs-ink)',
+                  border: `1.5px solid ${!isCustomActive && tip === t ? 'var(--cs-ink)' : 'var(--cs-slate-200)'}`,
                   borderRadius: 12, fontFamily: 'var(--cs-font)', fontSize: 14, fontWeight: 500,
                   transition: 'all .15s',
                 }}
@@ -252,7 +311,70 @@ export function PaymentScreen({ go, state, onPaymentComplete }: Props) {
                 {t === 0 ? 'None' : `$${t}`}
               </button>
             ))}
+            {/* Custom tip button */}
+            <button
+              onClick={() => { setShowCustom(true); setCustomTipRaw(isCustomActive ? String(tip) : '') }}
+              style={{
+                flex: 1, padding: '12px 0', cursor: 'pointer',
+                background: isCustomActive ? 'var(--cs-ink)' : '#fff',
+                color: isCustomActive ? '#fff' : 'var(--cs-ink)',
+                border: `1.5px solid ${isCustomActive ? 'var(--cs-ink)' : 'var(--cs-slate-200)'}`,
+                borderRadius: 12, fontFamily: 'var(--cs-font)', fontSize: 14, fontWeight: 500,
+                transition: 'all .15s',
+              }}
+            >
+              {isCustomActive && !showCustom ? fmt(tip) : 'Custom'}
+            </button>
           </div>
+
+          {/* Custom tip input */}
+          {showCustom && (
+            <div style={{ marginTop: 10, display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+              <div style={{ flex: 1 }}>
+                <div style={{
+                  display: 'flex', alignItems: 'center', height: 48,
+                  border: `1.5px solid ${customTipErr ? 'var(--cs-err)' : 'var(--cs-ink)'}`,
+                  borderRadius: 12, overflow: 'hidden', background: '#fff',
+                }}>
+                  <span style={{ padding: '0 10px 0 14px', color: 'var(--cs-slate-500)', fontFamily: 'var(--cs-mono)', fontSize: 15 }}>$</span>
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="0.01"
+                    placeholder="0.00"
+                    value={customTipRaw}
+                    onChange={e => { setCustomTipRaw(e.target.value); setCustomTipErr('') }}
+                    onKeyDown={e => e.key === 'Enter' && applyCustomTip()}
+                    onBlur={applyCustomTip}
+                    autoFocus
+                    style={{
+                      flex: 1, border: 'none', outline: 'none',
+                      fontFamily: 'var(--cs-font)', fontSize: 16, color: 'var(--cs-ink)',
+                      background: 'transparent', minWidth: 0,
+                    }}
+                  />
+                </div>
+                {customTipErr && (
+                  <div style={{ fontSize: 12, color: 'var(--cs-err)', marginTop: 4, paddingLeft: 2 }}>
+                    {customTipErr}
+                  </div>
+                )}
+              </div>
+              <button
+                onClick={applyCustomTip}
+                style={{
+                  height: 48, padding: '0 16px',
+                  background: 'var(--cs-ink)', color: '#fff',
+                  border: 'none', borderRadius: 12, cursor: 'pointer',
+                  fontFamily: 'var(--cs-font)', fontSize: 14, fontWeight: 600,
+                  flexShrink: 0,
+                }}
+              >
+                Apply
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Stripe Elements wrapper */}
@@ -264,7 +386,7 @@ export function PaymentScreen({ go, state, onPaymentComplete }: Props) {
           <Elements stripe={stripePromise} options={clientSecret ? { clientSecret } : undefined}>
             <CheckoutForm
               clientSecret={clientSecret}
-              tip={tip}
+              priceTotal={price.total}
               onSuccess={handlePaymentComplete}
               isMock={isMock}
             />

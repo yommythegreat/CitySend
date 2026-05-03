@@ -7,14 +7,17 @@ interface AddressFieldProps {
   label?: string
   value: string
   onChange: (address: string, coords?: { lat: number; lng: number }) => void
+  onBlur?: () => void
   placeholder?: string
   icon?: ReactNode
   disabled?: boolean
+  /** Show red border when true */
+  error?: boolean
   /** Pass the active CityConfig to bias address suggestions to this city. */
   cityConfig?: CityConfig
 }
 
-export function AddressField({ label, value, onChange, placeholder, icon, disabled, cityConfig }: AddressFieldProps) {
+export function AddressField({ label, value, onChange, onBlur, placeholder, icon, disabled, error, cityConfig }: AddressFieldProps) {
   const [focused, setFocused]   = useState(false)
   const [open, setOpen]         = useState(false)
   const { suggestions, loading, search, clear } = useGeocoder(cityConfig)
@@ -62,7 +65,7 @@ export function AddressField({ label, value, onChange, placeholder, icon, disabl
         display: 'flex', alignItems: 'center', gap: 10,
         height: 52, padding: '0 16px',
         background: '#fff',
-        border: `1.5px solid ${focused ? 'var(--cs-ink)' : 'var(--cs-slate-200)'}`,
+        border: `1.5px solid ${error && !focused ? 'var(--cs-err)' : focused ? 'var(--cs-ink)' : 'var(--cs-slate-200)'}`,
         borderRadius: 12, transition: 'border-color .15s',
       }}>
         <div style={{ color: 'var(--cs-slate-500)', display: 'flex', flexShrink: 0 }}>
@@ -76,7 +79,7 @@ export function AddressField({ label, value, onChange, placeholder, icon, disabl
           onChange={(e) => handleInput(e.target.value)}
           placeholder={placeholder ?? 'Street address'}
           onFocus={() => { setFocused(true); if (value.length >= 3) { search(value); setOpen(true) } }}
-          onBlur={() => setTimeout(() => setFocused(false), 150)}
+          onBlur={() => setTimeout(() => { setFocused(false); onBlur?.() }, 150)}
           style={{
             flex: 1, border: 'none', outline: 'none', background: 'transparent',
             fontFamily: 'var(--cs-font)', fontSize: 16, color: 'var(--cs-ink)', minWidth: 0,

@@ -40,6 +40,11 @@ export function AuthScreen({ onAuth, go }: Props) {
   const [password,  setPass]      = useState('')
   const [error,     setError]     = useState<string | null>(null)
   const [loading,   setLoading]   = useState(false)
+
+  // Touched state — inline field errors only show after the field has been blurred
+  const [nameTouched,  setNameTouched]  = useState(false)
+  const [emailTouched, setEmailTouched] = useState(false)
+  const [passTouched,  setPassTouched]  = useState(false)
   /** true after signUp returns without a session (email confirmation required) */
   const [emailSent, setEmailSent] = useState(false)
 
@@ -182,7 +187,7 @@ export function AuthScreen({ onAuth, go }: Props) {
           {(['login', 'register'] as Tab[]).map((t) => (
             <button
               key={t}
-              onClick={() => { setTab(t); setError(null) }}
+              onClick={() => { setTab(t); setError(null); setNameTouched(false); setEmailTouched(false); setPassTouched(false) }}
               style={{
                 flex: 1, border: 'none', cursor: 'pointer', height: 36,
                 background: tab === t ? '#fff' : 'transparent',
@@ -200,29 +205,56 @@ export function AuthScreen({ onAuth, go }: Props) {
         {/* Form */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           {tab === 'register' && (
-            <Field
-              label="Full name"
-              value={name}
-              onChange={setName}
-              placeholder="Sasha Novak"
-              icon={<User size={18} />}
-            />
+            <div>
+              <Field
+                label="Full name"
+                value={name}
+                onChange={v => { setName(v); setError(null) }}
+                onBlur={() => setNameTouched(true)}
+                placeholder="Sasha Novak"
+                icon={<User size={18} />}
+                error={nameTouched && !name.trim() ? 'Enter your full name.' : undefined}
+              />
+              {nameTouched && !name.trim() && (
+                <div style={{ fontSize: 12, color: 'var(--cs-err)', marginTop: 4, paddingLeft: 2 }}>
+                  Enter your full name.
+                </div>
+              )}
+            </div>
           )}
-          <Field
-            label="Email"
-            value={email}
-            onChange={setEmail}
-            placeholder="you@example.com"
-            type="email"
-          />
-          <Field
-            label="Password"
-            value={password}
-            onChange={setPass}
-            placeholder="6+ characters"
-            type="password"
-            icon={<Lock size={18} />}
-          />
+          <div>
+            <Field
+              label="Email"
+              value={email}
+              onChange={v => { setEmail(v); setError(null) }}
+              onBlur={() => setEmailTouched(true)}
+              placeholder="you@example.com"
+              type="email"
+              error={emailTouched && email.trim().length <= 4 ? 'Enter a valid email address.' : undefined}
+            />
+            {emailTouched && email.trim().length <= 4 && (
+              <div style={{ fontSize: 12, color: 'var(--cs-err)', marginTop: 4, paddingLeft: 2 }}>
+                Enter a valid email address.
+              </div>
+            )}
+          </div>
+          <div>
+            <Field
+              label="Password"
+              value={password}
+              onChange={v => { setPass(v); setError(null) }}
+              onBlur={() => setPassTouched(true)}
+              placeholder="6+ characters"
+              type="password"
+              icon={<Lock size={18} />}
+              error={passTouched && password.trim().length < 6 ? 'Password must be at least 6 characters.' : undefined}
+            />
+            {passTouched && password.trim().length < 6 && (
+              <div style={{ fontSize: 12, color: 'var(--cs-err)', marginTop: 4, paddingLeft: 2 }}>
+                Password must be at least 6 characters.
+              </div>
+            )}
+          </div>
           {tab === 'login' && (
             <div style={{ textAlign: 'right', marginTop: -4 }}>
               <button

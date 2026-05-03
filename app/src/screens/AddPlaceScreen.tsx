@@ -21,27 +21,40 @@ function AddrIcon({ icon, size = 14 }: { icon: SavedAddress['icon']; size?: numb
   return <Pin size={size} />
 }
 
-const inputStyle: React.CSSProperties = {
-  width: '100%', padding: '12px 14px',
-  border: '1.5px solid var(--cs-slate-200)',
-  borderRadius: 10, fontSize: 15,
-  fontFamily: 'var(--cs-font)', outline: 'none',
-  boxSizing: 'border-box', color: 'var(--cs-ink)',
-  background: '#fff',
+function FieldError({ msg }: { msg?: string }) {
+  if (!msg) return null
+  return (
+    <div style={{ fontSize: 12, color: 'var(--cs-err)', marginTop: 4, paddingLeft: 2, lineHeight: 1.4 }}>
+      {msg}
+    </div>
+  )
 }
 
 export function AddPlaceScreen({ go, setState }: Props) {
-  const [label,   setLabel]   = useState('')
-  const [address, setAddress] = useState('')
-  const [icon,    setIcon]    = useState<SavedAddress['icon']>('pin')
-  const [err,     setErr]     = useState<string | null>(null)
-  const [saved,   setSaved]   = useState(false)
+  const [label,        setLabel]        = useState('')
+  const [address,      setAddress]      = useState('')
+  const [icon,         setIcon]         = useState<SavedAddress['icon']>('pin')
+  const [saved,        setSaved]        = useState(false)
+  const [labelTouched, setLabelTouched] = useState(false)
+  const [addrTouched,  setAddrTouched]  = useState(false)
 
-  const clearErr = () => setErr(null)
+  // Derived validation
+  const labelErr   = !label.trim()   ? 'Enter a label for this place.' : undefined
+  const addressErr = !address.trim() ? 'Enter a street address.'       : undefined
+  const isValid    = !labelErr && !addressErr
+
+  const inputStyle = (hasError: boolean): React.CSSProperties => ({
+    width: '100%', padding: '12px 14px',
+    border: `1.5px solid ${hasError ? 'var(--cs-err)' : 'var(--cs-slate-200)'}`,
+    borderRadius: 10, fontSize: 15,
+    fontFamily: 'var(--cs-font)', outline: 'none',
+    boxSizing: 'border-box', color: 'var(--cs-ink)',
+    background: '#fff',
+    transition: 'border-color .15s',
+  })
 
   const save = () => {
-    if (!label.trim())   { setErr('Enter a label for this place.'); return }
-    if (!address.trim()) { setErr('Enter a street address.'); return }
+    if (!isValid || saved) return
 
     setState(s => ({
       ...s,
@@ -52,7 +65,6 @@ export function AddPlaceScreen({ go, setState }: Props) {
     }))
 
     setSaved(true)
-    // Give user a moment to see the success state before navigating away
     setTimeout(() => go('home'), 1100)
   }
 
@@ -77,17 +89,6 @@ export function AddPlaceScreen({ go, setState }: Props) {
             }}>
               <Check size={16} color="var(--cs-ok)" />
               Place saved! Taking you home…
-            </div>
-          )}
-
-          {/* Error banner */}
-          {err && !saved && (
-            <div style={{
-              padding: '10px 14px', background: 'rgba(179,38,30,.08)',
-              borderRadius: 10, fontSize: 13, color: 'var(--cs-err)',
-              lineHeight: 1.4, marginBottom: 20,
-            }}>
-              {err}
             </div>
           )}
 
@@ -134,11 +135,13 @@ export function AddPlaceScreen({ go, setState }: Props) {
               </div>
               <input
                 value={label}
-                onChange={e => { setLabel(e.target.value); clearErr() }}
+                onChange={e => setLabel(e.target.value)}
+                onBlur={() => setLabelTouched(true)}
                 placeholder="e.g. Home, Studio, Mom's…"
-                style={inputStyle}
+                style={inputStyle(labelTouched && !!labelErr)}
                 autoComplete="off"
               />
+              {labelTouched && <FieldError msg={labelErr} />}
             </div>
 
             {/* Address */}
@@ -148,26 +151,33 @@ export function AddPlaceScreen({ go, setState }: Props) {
               </div>
               <input
                 value={address}
-                onChange={e => { setAddress(e.target.value); clearErr() }}
+                onChange={e => setAddress(e.target.value)}
+                onBlur={() => setAddrTouched(true)}
                 placeholder="123 Main St"
-                style={inputStyle}
+                style={inputStyle(addrTouched && !!addressErr)}
                 autoComplete="street-address"
               />
+              {addrTouched && <FieldError msg={addressErr} />}
             </div>
           </div>
 
           {/* Save */}
           <button
             onClick={save}
-            disabled={saved}
+            disabled={!isValid || saved}
             style={{
               width: '100%', marginTop: 16, padding: '15px 0',
               border: 'none', borderRadius: 14,
-              background: saved ? 'var(--cs-ok)' : 'var(--cs-ink)',
-              color: '#fff', fontFamily: 'var(--cs-font)',
+              background: saved
+                ? 'var(--cs-ok)'
+                : !isValid
+                  ? 'var(--cs-slate-150, #e8ebf0)'
+                  : 'var(--cs-ink)',
+              color: (!isValid && !saved) ? 'var(--cs-slate-400)' : '#fff',
+              fontFamily: 'var(--cs-font)',
               fontSize: 15, fontWeight: 600,
-              cursor: saved ? 'default' : 'pointer',
-              transition: 'background .2s',
+              cursor: (!isValid || saved) ? 'default' : 'pointer',
+              transition: 'background .2s, color .2s',
             }}
           >
             {saved ? '✓ Saved' : 'Save place'}
