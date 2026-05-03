@@ -161,10 +161,10 @@ export function AuthScreen({ onAuth, go }: Props) {
 
   return (
     <div className="cs-screen cs-screen--paper" style={{ justifyContent: 'center' }}>
-      <div style={{ padding: '0 28px 40px', display: 'flex', flexDirection: 'column', gap: 0 }}>
-        {/* Brand */}
-        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 32 }}>
-          <LogoWordmark scale={0.7} />
+      <div style={{ padding: '44px 28px 40px', display: 'flex', flexDirection: 'column', gap: 0 }}>
+        {/* Brand — centred, with safe-area top padding */}
+        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 28 }}>
+          <LogoWordmark scale={0.68} />
         </div>
 
         {/* Tagline */}

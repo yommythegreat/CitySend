@@ -6,7 +6,7 @@ import {
   Home as HomeIcon, Package, Pin, Chevron, ChevronDown, Plus, Check,
 } from '../components/Icons'
 import { getLiveCityName } from '../utils/serviceAvailability'
-import { getCustomerOrders, type CustomerOrder } from '../utils/orderStore'
+import { getCustomerOrders, subscribeToCustomerOrders, type CustomerOrder } from '../utils/orderStore'
 import type { CityConfig } from '../config/cityConfig'
 import type { AppState, AuthUser, CityId, NavOptions, ScreenName } from '../types'
 
@@ -152,7 +152,7 @@ export function HomeScreen({ go, state, user, cityConfig, configs, onCityChange 
   const [trackOrders,  setTrackOrders]  = useState<CustomerOrder[]>([])
   const [trackLoading, setTrackLoading] = useState(false)
 
-  // Load recent orders for Track Delivery section
+  // Load recent orders for Track Delivery section (initial fetch)
   useEffect(() => {
     if (!user || user.id === 'guest') return
     let cancelled = false
@@ -168,6 +168,33 @@ export function HomeScreen({ go, state, user, cityConfig, configs, onCityChange 
       setTrackLoading(false)
     }).catch(() => { if (!cancelled) setTrackLoading(false) })
     return () => { cancelled = true }
+  }, [user?.id])
+
+  // Realtime: keep order cards live so status changes from admin/driver
+  // reflect instantly without a full refresh.
+  useEffect(() => {
+    if (!user || user.id === 'guest') return
+    const cutoff = Date.now() - 7 * 86_400_000
+
+    const unsub = subscribeToCustomerOrders(user.id, (updatedOrder) => {
+      setTrackOrders(prev => {
+        const exists = prev.some(o => o.id === updatedOrder.id)
+        if (exists) {
+          // Update in place — preserve list order
+          return prev.map(o => o.id === updatedOrder.id ? updatedOrder : o)
+        }
+        // New order just arrived (e.g. created in another tab) — prepend if eligible
+        if (
+          updatedOrder.status !== 'cancelled' &&
+          new Date(updatedOrder.createdAt).getTime() > cutoff
+        ) {
+          return [updatedOrder, ...prev].slice(0, 5)
+        }
+        return prev
+      })
+    })
+
+    return unsub
   }, [user?.id])
 
   const hour     = new Date().getHours()
@@ -186,8 +213,8 @@ export function HomeScreen({ go, state, user, cityConfig, configs, onCityChange 
     <div className="cs-screen cs-screen--paper cs-enter-left">
 
       {/* ── Top bar ────────────────────────────────────────────────────────── */}
-      <div style={{ padding: '56px 20px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <LogoWordmark scale={0.55} />
+      <div style={{ padding: '52px 20px 10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', minHeight: 102 }}>
+        <LogoWordmark scale={0.58} />
         <div style={{ display: 'flex', gap: 8 }}>
           <IconButton onClick={() => go('notifications')} style={{ position: 'relative' }}>
             <Bell size={18} />
