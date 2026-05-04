@@ -169,7 +169,10 @@ export function PricingScreen({ go, draft, setDraft, cityConfig }: Props) {
 
         {/* Price breakdown — only non-zero rows */}
         <div style={{ background: '#fff', borderRadius: 14, border: '1px solid var(--cs-slate-100)', padding: 16, marginBottom: 20 }}>
-          {lineItems.map(({ label, value, isTax }) => (
+          {lineItems.map(({ label, value, isTax }, idx) => {
+            // Only the first tax row gets the ⓘ icon to avoid duplicate popovers
+            const isFirstTax = isTax && lineItems.findIndex(i => i.isTax) === idx
+            return (
             <div
               key={label}
               style={{
@@ -179,7 +182,7 @@ export function PricingScreen({ go, draft, setDraft, cityConfig }: Props) {
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: 5, position: 'relative' }}>
                 {label}
-                {isTax && (
+                {isFirstTax && (
                   <>
                     <button
                       onClick={() => setTaxTipOpen(o => !o)}
@@ -210,7 +213,8 @@ export function PricingScreen({ go, draft, setDraft, cityConfig }: Props) {
               </div>
               <div style={{ fontFamily: 'var(--cs-mono)' }}>{fmt(value)}</div>
             </div>
-          ))}
+            )
+          })}
           <div style={{
             borderTop: '1px solid var(--cs-slate-100)', marginTop: 10, paddingTop: 12,
             display: 'flex', justifyContent: 'space-between', fontSize: 16, fontWeight: 600,
