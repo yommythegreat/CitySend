@@ -143,6 +143,7 @@ export function PaymentScreen({ go, state, draft, cityConfig, onPaymentComplete 
   const [customTipRaw, setCustomTipRaw] = useState('')
   const [showCustom, setShowCustom]     = useState(false)
   const [customTipErr, setCustomTipErr] = useState('')
+  const [taxTipOpen, setTaxTipOpen]     = useState(false)
   const [clientSecret, setClientSecret] = useState<string | null>(null)
   const [isMock, setIsMock]             = useState(false)
   const [intentLoading, setIntentLoading] = useState(true)
@@ -240,15 +241,35 @@ export function PaymentScreen({ go, state, draft, cityConfig, onPaymentComplete 
         <div style={{ fontSize: 52, fontWeight: 600, letterSpacing: -2, color: 'var(--cs-ink)', marginTop: 4, lineHeight: 1 }}>
           {fmt(price.total)}
         </div>
-        <div style={{ fontSize: 13, color: 'var(--cs-slate-500)', marginTop: 6, fontFamily: 'var(--cs-mono)' }}>
-          {fmt(price.subtotalWithTax)} + {fmt(tip)} tip · CAD
+        <div style={{ fontSize: 13, color: 'var(--cs-slate-500)', marginTop: 6, fontFamily: 'var(--cs-mono)', position: 'relative', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          <span>{fmt(price.subtotalWithTax)} + {fmt(tip)} tip · CAD</span>
           {taxTooltip && (
-            <span
-              title={taxTooltip}
-              style={{ marginLeft: 6, cursor: 'help', opacity: 0.65, fontSize: 12 }}
-            >
-              ⓘ
-            </span>
+            <>
+              <button
+                onClick={() => setTaxTipOpen(o => !o)}
+                style={{
+                  background: 'none', border: 'none', padding: '0 2px',
+                  cursor: 'pointer', fontSize: 12,
+                  color: taxTipOpen ? 'var(--cs-ink)' : 'var(--cs-slate-400)',
+                  lineHeight: 1, display: 'flex', alignItems: 'center',
+                }}
+                aria-label="Tax info"
+              >
+                ⓘ
+              </button>
+              {taxTipOpen && (
+                <div style={{
+                  position: 'absolute', top: '100%', left: 0, zIndex: 20,
+                  marginTop: 6, width: 240,
+                  background: 'var(--cs-ink)', color: '#fff',
+                  fontSize: 12, lineHeight: 1.5,
+                  padding: '10px 12px', borderRadius: 10,
+                  boxShadow: '0 8px 24px -8px rgba(11,18,32,.35)',
+                }}>
+                  {taxTooltip}
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>

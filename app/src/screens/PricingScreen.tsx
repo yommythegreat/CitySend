@@ -17,8 +17,9 @@ interface Props {
 }
 
 export function PricingScreen({ go, draft, setDraft, cityConfig }: Props) {
-  const [routeInfo, setRouteInfo] = useState<RouteInfo | null>(draft.route ?? null)
-  const [loading,   setLoading]   = useState(!draft.route)
+  const [routeInfo,    setRouteInfo]    = useState<RouteInfo | null>(draft.route ?? null)
+  const [loading,      setLoading]      = useState(!draft.route)
+  const [taxTipOpen,   setTaxTipOpen]   = useState(false)
 
   const pickupAddr  = draft.pickup.address  || '134 Princess St, Exchange District'
   const dropoffAddr = draft.dropoff.address || '88 Osborne St, Osborne Village'
@@ -176,15 +177,35 @@ export function PricingScreen({ go, draft, setDraft, cityConfig }: Props) {
                 padding: '6px 0', fontSize: 14, color: 'var(--cs-slate-700)',
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 5, position: 'relative' }}>
                 {label}
                 {isTax && (
-                  <span
-                    title={TAX_TOOLTIP}
-                    style={{ fontSize: 12, color: 'var(--cs-slate-400)', cursor: 'help', lineHeight: 1 }}
-                  >
-                    ⓘ
-                  </span>
+                  <>
+                    <button
+                      onClick={() => setTaxTipOpen(o => !o)}
+                      style={{
+                        background: 'none', border: 'none', padding: '0 2px',
+                        cursor: 'pointer', fontSize: 12,
+                        color: taxTipOpen ? 'var(--cs-ink)' : 'var(--cs-slate-400)',
+                        lineHeight: 1, display: 'flex', alignItems: 'center',
+                      }}
+                      aria-label="Tax info"
+                    >
+                      ⓘ
+                    </button>
+                    {taxTipOpen && (
+                      <div style={{
+                        position: 'absolute', top: '100%', left: 0, zIndex: 20,
+                        marginTop: 6, width: 240,
+                        background: 'var(--cs-ink)', color: '#fff',
+                        fontSize: 12, lineHeight: 1.5,
+                        padding: '10px 12px', borderRadius: 10,
+                        boxShadow: '0 8px 24px -8px rgba(11,18,32,.35)',
+                      }}>
+                        {TAX_TOOLTIP}
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
               <div style={{ fontFamily: 'var(--cs-mono)' }}>{fmt(value)}</div>
