@@ -38,18 +38,28 @@ export interface DriverAuth {
   completedOrders: number
 }
 
+// ── Job Offer State ──────────────────────────────────────────────────────────
+
+export interface JobOffer {
+  order: Order
+  showModal: boolean
+  timeRemaining: number  // countdown seconds (starts at 15)
+}
+
 // ── State ─────────────────────────────────────────────────────────────────────
 
 interface DriverState {
-  auth:     DriverAuth | null
-  orders:   Order[]
-  substeps: Record<string, DeliverySubstep>
+  auth:      DriverAuth | null
+  orders:    Order[]
+  substeps:  Record<string, DeliverySubstep>
+  jobOffer:  JobOffer | null
 }
 
 const initialState: DriverState = {
   auth:     loadAuth(),
   orders:   [],
   substeps: {},
+  jobOffer: null,
 }
 
 function loadAuth(): DriverAuth | null {
@@ -62,13 +72,16 @@ function loadAuth(): DriverAuth | null {
 // ── Actions ───────────────────────────────────────────────────────────────────
 
 type Action =
-  | { type: 'LOGIN';            auth: DriverAuth }
+  | { type: 'LOGIN';               auth: DriverAuth }
   | { type: 'LOGOUT' }
-  | { type: 'SET_SUBSTEP';      orderId: string; substep: DeliverySubstep }
-  | { type: 'UPDATE_STATUS';    orderId: string; status: OrderStatus }
-  | { type: 'ADD_NOTE';         orderId: string; note: AdminNote }
-  | { type: '_HYDRATE_ORDERS';  orders: Order[] }
-  | { type: '_UPSERT_ORDER';    order: Order }
+  | { type: 'SET_SUBSTEP';         orderId: string; substep: DeliverySubstep }
+  | { type: 'UPDATE_STATUS';       orderId: string; status: OrderStatus }
+  | { type: 'ADD_NOTE';            orderId: string; note: AdminNote }
+  | { type: '_HYDRATE_ORDERS';     orders: Order[] }
+  | { type: '_UPSERT_ORDER';       order: Order }
+  | { type: 'SHOW_JOB_OFFER';      order: Order }
+  | { type: 'HIDE_JOB_OFFER' }
+  | { type: 'TICK_JOB_OFFER_TIMER' }
 
 // ── Reducer ───────────────────────────────────────────────────────────────────
 
@@ -108,13 +121,49 @@ function reducer(state: DriverState, action: Action): DriverState {
 
     case '_UPSERT_ORDER': {
       const exists = state.orders.some(o => o.id === action.order.id)
+      const newOrders = exists
+        ? state.orders.map(o => o.id === action.order.id ? action.order : o)
+        : [...state.orders, action.order]
+
+      // Auto-show job offer if new order is assigned to this driver
+      let newJobOffer = state.jobOffer
+      if (!newJobOffer && action.order.status === 'assigned' &&
+          action.order.assignedDriverId === state.auth?.driverId) {
+        newJobOffer = {
+          order: action.order,
+          showModal: true,
+          timeRemaining: 15,
+        }
+      }
+
+      return { ...state, orders: newOrders, jobOffer: newJobOffer }
+    }
+
+    case 'SHOW_JOB_OFFER':
       return {
         ...state,
-        orders: exists
-          ? state.orders.map(o => o.id === action.order.id ? action.order : o)
-          : [...state.orders, action.order],
+        jobOffer: {
+          order: action.order,
+          showModal: true,
+          timeRemaining: 15,
+        },
       }
-    }
+
+    case 'HIDE_JOB_OFFER':
+      return { ...state, jobOffer: null }
+
+    case 'TICK_JOB_OFFER_TIMER':
+      if (!state.jobOffer) return state
+      if (state.jobOffer.timeRemaining <= 1) {
+        return { ...state, jobOffer: null }
+      }
+      return {
+        ...state,
+        jobOffer: {
+          ...state.jobOffer,
+          timeRemaining: state.jobOffer.timeRemaining - 1,
+        },
+      }
 
     default: return state
   }
@@ -128,6 +177,7 @@ interface DriverContextValue {
   myOrders:        Order[]
   activeOrders:    Order[]
   completedOrders: Order[]
+  jobOffer:        JobOffer | null  // Current job offer (if any)
 }
 
 const DriverContext = createContext<DriverContextValue | null>(null)
@@ -282,6 +332,15 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
     }
   }, [])
 
+  // Job offer countdown timer
+  useEffect(() => {
+    if (!state.jobOffer?.showModal) return
+    const interval = setInterval(() => {
+      baseDispatch({ type: 'TICK_JOB_OFFER_TIMER' })
+    }, 1000)
+    return () => clearInterval(interval)
+  }, [state.jobOffer?.showModal])
+
   const myOrders = state.auth
     ? state.orders
         .filter(o => o.assignedDriverId === state.auth!.driverId)
@@ -292,7 +351,14 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
   const completedOrders = myOrders.filter(o => o.status === 'delivered' || o.status === 'cancelled')
 
   return (
-    <DriverContext.Provider value={{ state, dispatch, myOrders, activeOrders, completedOrders }}>
+    <DriverContext.Provider value={{
+      state,
+      dispatch,
+      myOrders,
+      activeOrders,
+      completedOrders,
+      jobOffer: state.jobOffer,
+    }}>
       {children}
     </DriverContext.Provider>
   )

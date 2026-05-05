@@ -4,7 +4,9 @@ import { LoginScreen }            from './screens/LoginScreen'
 import { DashboardScreen }        from './screens/DashboardScreen'
 import { DeliveryScreen }         from './screens/DeliveryScreen'
 import { ProofOfDeliveryScreen }  from './screens/ProofOfDeliveryScreen'
+import { EarningsScreen }         from './screens/EarningsScreen'
 import { HistoryScreen }          from './screens/HistoryScreen'
+import { JobOfferModal }          from './components/JobOfferModal'
 
 // ── Screen types ──────────────────────────────────────────────────────────────
 
@@ -12,69 +14,84 @@ type Screen =
   | { name: 'dashboard' }
   | { name: 'delivery';  orderId: string }
   | { name: 'proof';     orderId: string }
+  | { name: 'earnings';  orderId: string }
   | { name: 'history' }
 
 // ── Inner app (needs DriverProvider) ─────────────────────────────────────────
 
 function DriverApp() {
-  const { state, dispatch } = useDriver()
+  const { state, dispatch, jobOffer } = useDriver()
   const [screen, setScreen] = useState<Screen>({ name: 'dashboard' })
 
   if (!state.auth) return <LoginScreen />
 
   const handleLogout = async () => {
-    // Dispatch LOGOUT immediately for instant UI feedback (shows LoginScreen)
     dispatch({ type: 'LOGOUT' })
     setScreen({ name: 'dashboard' })
-    // Then call Supabase signOut so the server-side session is invalidated
-    // and onAuthStateChange SIGNED_OUT fires (handled in DriverProvider)
     await signOutDriver()
   }
 
-  // ── Topbar ──────────────────────────────────────────────────────────────────
+  // ── Job offer handlers ───────────────────────────────────────────────────
+
+  const handleAcceptOffer = () => {
+    if (!jobOffer) return
+    const orderId = jobOffer.order.id
+    dispatch({ type: 'HIDE_JOB_OFFER' })
+    dispatch({ type: 'SET_SUBSTEP', orderId, substep: 'accepted' })
+    setScreen({ name: 'delivery', orderId })
+  }
+
+  const handleDeclineOffer = () => {
+    dispatch({ type: 'HIDE_JOB_OFFER' })
+  }
+
+  const handleOfferTimeout = () => {
+    dispatch({ type: 'HIDE_JOB_OFFER' })
+  }
+
+  // ── Topbar (only for history screen now — delivery is fullscreen) ─────────
 
   const renderTopBar = () => {
     if (screen.name === 'dashboard') {
+      // Dashboard has its own header; show sign-out as floating button
       return (
-        <div className="d-topbar">
-          <div className="d-topbar-title">🚗 CitySend Driver</div>
+        <div style={{
+          position: 'fixed', top: 16, right: 16, zIndex: 100,
+        }}>
           <button
             onClick={handleLogout}
             style={{
-              padding: '6px 12px', border: '1px solid var(--d-border)',
-              borderRadius: 8, background: 'transparent',
-              color: 'var(--d-muted)', fontSize: 13, cursor: 'pointer',
+              padding: '8px 14px', border: '1px solid rgba(255,255,255,0.25)',
+              borderRadius: 10, background: 'rgba(255,255,255,0.15)',
+              color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer',
+              backdropFilter: 'blur(4px)',
             }}
-          >Sign out</button>
-        </div>
-      )
-    }
-
-    if (screen.name === 'delivery') {
-      const order = state.orders.find(o => o.id === screen.orderId)
-      return (
-        <div className="d-topbar">
-          <button className="d-topbar-back" onClick={() => setScreen({ name: 'dashboard' })}>‹</button>
-          <div className="d-topbar-title">{order?.id ?? 'Delivery'}</div>
-          <div style={{ fontSize: 11, color: 'var(--d-muted)' }}>{order?.distanceKm} km</div>
-        </div>
-      )
-    }
-
-    if (screen.name === 'proof') {
-      return (
-        <div className="d-topbar">
-          <button className="d-topbar-back" onClick={() => setScreen({ name: 'delivery', orderId: (screen as { name: 'proof'; orderId: string }).orderId })}>‹</button>
-          <div className="d-topbar-title">Proof of Delivery</div>
+          >
+            Sign out
+          </button>
         </div>
       )
     }
 
     if (screen.name === 'history') {
       return (
-        <div className="d-topbar">
-          <button className="d-topbar-back" onClick={() => setScreen({ name: 'dashboard' })}>‹</button>
-          <div className="d-topbar-title">Delivery History</div>
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 14,
+          padding: '52px 16px 12px',
+          background: '#1a1a1a',
+          color: '#fff',
+          flexShrink: 0,
+        }}>
+          <button
+            onClick={() => setScreen({ name: 'dashboard' })}
+            style={{
+              width: 40, height: 40, borderRadius: '50%',
+              background: 'rgba(255,255,255,0.1)', border: 'none',
+              color: '#fff', fontSize: 20, cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}
+          >‹</button>
+          <div style={{ fontSize: 18, fontWeight: 700 }}>Delivery History</div>
         </div>
       )
     }
@@ -82,7 +99,7 @@ function DriverApp() {
     return null
   }
 
-  // ── Screen renderer ─────────────────────────────────────────────────────────
+  // ── Screen renderer ──────────────────────────────────────────────────────
 
   const renderScreen = () => {
     switch (screen.name) {
@@ -108,12 +125,23 @@ function DriverApp() {
           <ProofOfDeliveryScreen
             orderId={screen.orderId}
             onBack={() => setScreen({ name: 'delivery', orderId: screen.orderId })}
-            onConfirmed={() => {
-              // Show delivery screen in "done" state briefly, then go home
-              setScreen({ name: 'delivery', orderId: screen.orderId })
-            }}
+            onConfirmed={() => setScreen({ name: 'earnings', orderId: screen.orderId })}
           />
         )
+
+      case 'earnings': {
+        const order = state.orders.find(o => o.id === screen.orderId)
+        if (!order) {
+          setScreen({ name: 'dashboard' })
+          return null
+        }
+        return (
+          <EarningsScreen
+            order={order}
+            onContinue={() => setScreen({ name: 'dashboard' })}
+          />
+        )
+      }
 
       case 'history':
         return (
@@ -124,10 +152,23 @@ function DriverApp() {
     }
   }
 
+  // ── Shells that are fullscreen don't need d-shell wrapper ─────────────────
+  const isFullscreen = screen.name === 'delivery' || screen.name === 'earnings'
+
   return (
-    <div className="d-shell">
+    <div className={isFullscreen ? undefined : 'd-shell'}>
       {renderTopBar()}
       {renderScreen()}
+
+      {/* ── Global job offer modal (shows on any screen) ────────────────── */}
+      {jobOffer?.showModal && (
+        <JobOfferModal
+          order={jobOffer.order}
+          onAccept={handleAcceptOffer}
+          onDecline={handleDeclineOffer}
+          onTimeout={handleOfferTimeout}
+        />
+      )}
     </div>
   )
 }
