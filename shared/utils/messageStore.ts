@@ -27,10 +27,19 @@ export async function sendMessage(
   msg: Omit<Message, 'id' | 'isRead' | 'createdAt'>,
 ): Promise<void> {
   const now = new Date().toISOString()
-  const id  = `msg-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
-  const full: Message = { ...msg, id, isRead: false, createdAt: now }
+
+  console.log('[messageStore] sendMessage payload', {
+    orderId:      msg.orderId,
+    senderId:     msg.senderId,
+    senderRole:   msg.senderRole,
+    receiverId:   msg.receiverId,
+    receiverRole: msg.receiverRole,
+    isSupabaseConfigured,
+  })
 
   if (!isSupabaseConfigured) {
+    const id  = `msg-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
+    const full: Message = { ...msg, id, isRead: false, createdAt: now }
     const all = readAllSync()
     const val = JSON.stringify([full, ...all])
     localStorage.setItem(MESSAGES_KEY, val)
@@ -40,8 +49,10 @@ export async function sendMessage(
     return
   }
 
+  // Do NOT pass `id` — let gen_random_uuid() handle it.
+  // Passing a non-UUID string (e.g. 'msg-XXXXX') into the uuid column causes
+  // a PostgreSQL type error that silently blocks every insert.
   const { error } = await supabase.from('messages').insert({
-    id,
     order_id:      msg.orderId,
     sender_id:     msg.senderId,
     sender_role:   msg.senderRole,
@@ -51,16 +62,26 @@ export async function sendMessage(
     is_read:       false,
     created_at:    now,
   })
-  if (error) console.error('[messageStore] sendMessage error', error)
+
+  if (error) {
+    console.error('[messageStore] sendMessage ERROR', error)
+    throw error
+  }
+
+  console.log('[messageStore] sendMessage OK')
 }
 
 // ── Fetch ─────────────────────────────────────────────────────────────────────
 
 export async function getMessages(orderId: string): Promise<Message[]> {
+  console.log('[messageStore] getMessages orderId=', orderId, 'supabase=', isSupabaseConfigured)
+
   if (!isSupabaseConfigured) {
-    return readAllSync()
+    const msgs = readAllSync()
       .filter(m => m.orderId === orderId)
       .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+    console.log('[messageStore] getMessages localStorage result', msgs.length, 'messages')
+    return msgs
   }
 
   const { data, error } = await supabase
@@ -69,8 +90,14 @@ export async function getMessages(orderId: string): Promise<Message[]> {
     .eq('order_id', orderId)
     .order('created_at', { ascending: true })
 
-  if (error) { console.error('[messageStore] getMessages error', error); return [] }
-  return (data ?? []).map(rowToMessage)
+  if (error) {
+    console.error('[messageStore] getMessages ERROR', error)
+    throw error
+  }
+
+  const msgs = (data ?? []).map(rowToMessage)
+  console.log('[messageStore] getMessages Supabase result', msgs.length, 'messages', data)
+  return msgs
 }
 
 // ── Mark read ─────────────────────────────────────────────────────────────────
@@ -87,12 +114,14 @@ export async function markMessagesRead(orderId: string, receiverId: string): Pro
     return
   }
 
-  await supabase
+  const { error } = await supabase
     .from('messages')
     .update({ is_read: true })
     .eq('order_id', orderId)
     .eq('receiver_id', receiverId)
     .eq('is_read', false)
+
+  if (error) console.error('[messageStore] markMessagesRead ERROR', error)
 }
 
 // ── Realtime ──────────────────────────────────────────────────────────────────
@@ -101,6 +130,8 @@ export function subscribeToMessages(
   orderId: string,
   onUpdate: (messages: Message[]) => void,
 ): () => void {
+  console.log('[messageStore] subscribeToMessages orderId=', orderId, 'supabase=', isSupabaseConfigured)
+
   if (!isSupabaseConfigured) {
     const handler = (e: StorageEvent) => {
       if (e.key !== MESSAGES_KEY || !e.newValue) return
@@ -122,21 +153,24 @@ export function subscribeToMessages(
     .on(
       'postgres_changes' as any,
       { event: 'INSERT', schema: 'public', table: 'messages', filter: `order_id=eq.${orderId}` },
-      async () => {
-        // Re-fetch all on any new insert so ordering and read state are always fresh
-        const msgs = await getMessages(orderId)
-        onUpdate(msgs)
+      async (payload: any) => {
+        console.log('[messageStore] realtime INSERT received', payload)
+        const msgs = await getMessages(orderId).catch(() => null)
+        if (msgs) onUpdate(msgs)
       },
     )
     .on(
       'postgres_changes' as any,
       { event: 'UPDATE', schema: 'public', table: 'messages', filter: `order_id=eq.${orderId}` },
-      async () => {
-        const msgs = await getMessages(orderId)
-        onUpdate(msgs)
+      async (payload: any) => {
+        console.log('[messageStore] realtime UPDATE received', payload)
+        const msgs = await getMessages(orderId).catch(() => null)
+        if (msgs) onUpdate(msgs)
       },
     )
-    .subscribe()
+    .subscribe((status) => {
+      console.log('[messageStore] channel status', status)
+    })
 
   return () => { supabase.removeChannel(channel) }
 }

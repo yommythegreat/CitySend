@@ -74,17 +74,20 @@ function ChatPanel({
   order,
   myId,
   messages,
+  fetchError,
   onRefresh,
   onClose,
 }: {
-  order:      CustomerOrder
-  myId:       string
-  messages:   Message[]
-  onRefresh:  () => Promise<void>
-  onClose:    () => void
+  order:       CustomerOrder
+  myId:        string
+  messages:    Message[]
+  fetchError:  string | null
+  onRefresh:   () => Promise<void>
+  onClose:     () => void
 }) {
-  const [inputText, setInputText] = useState('')
-  const [sending,   setSending]   = useState(false)
+  const [inputText,  setInputText]  = useState('')
+  const [sending,    setSending]    = useState(false)
+  const [sendError,  setSendError]  = useState<string | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
 
   const isTerminal = order.status === 'delivered' || order.status === 'cancelled'
@@ -100,17 +103,24 @@ function ChatPanel({
     const text = inputText.trim()
     if (!text || !order.assignedDriverId || sending) return
     setSending(true)
+    setSendError(null)
     setInputText('')
-    await sendMessage({
-      orderId:      order.id,
-      senderId:     myId,
-      senderRole:   'customer',
-      receiverId:   order.assignedDriverId,
-      receiverRole: 'driver',
-      messageText:  text,
-    })
-    // Re-fetch immediately — don't wait for subscription/realtime
-    await onRefresh()
+    try {
+      await sendMessage({
+        orderId:      order.id,
+        senderId:     myId,
+        senderRole:   'customer',
+        receiverId:   order.assignedDriverId,
+        receiverRole: 'driver',
+        messageText:  text,
+      })
+      // Re-fetch immediately — don't rely on realtime alone
+      await onRefresh()
+    } catch (err: any) {
+      setSendError(err?.message ?? 'Failed to send message')
+      // Restore text so user can retry
+      setInputText(text)
+    }
     setSending(false)
   }
 
@@ -142,7 +152,16 @@ function ChatPanel({
 
       {/* Messages */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '16px 16px 8px', scrollbarWidth: 'none' }}>
-        {messages.length === 0 ? (
+        {fetchError ? (
+          <div style={{ textAlign: 'center', padding: '40px 16px', color: '#c94a1b', fontSize: 13, lineHeight: 1.5 }}>
+            <div style={{ fontWeight: 600, marginBottom: 6 }}>Could not load messages</div>
+            <div style={{ fontFamily: 'var(--cs-mono)', fontSize: 11, opacity: 0.7 }}>{fetchError}</div>
+            <button
+              onClick={onRefresh}
+              style={{ marginTop: 14, padding: '8px 18px', border: '1.5px solid var(--cs-slate-200)', borderRadius: 10, background: '#fff', fontSize: 13, cursor: 'pointer' }}
+            >Retry</button>
+          </div>
+        ) : messages.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--cs-slate-400)', fontSize: 14 }}>
             No messages yet.
           </div>
@@ -189,6 +208,11 @@ function ChatPanel({
         padding: '10px 16px 36px', background: '#fff',
         borderTop: '1px solid var(--cs-slate-100)', flexShrink: 0,
       }}>
+        {sendError && (
+          <div style={{ fontSize: 12, color: '#c94a1b', marginBottom: 8, padding: '6px 10px', background: '#fff5f5', borderRadius: 8 }}>
+            {sendError}
+          </div>
+        )}
         {canChat ? (
           <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end' }}>
             <textarea
@@ -251,6 +275,7 @@ export function TrackingScreen({ go, draft, cityConfig, orderId, user }: Props) 
   const [chatOpen,    setChatOpen]    = useState(false)
   const [unreadCount, setUnreadCount] = useState(0)
   const [messages,    setMessages]    = useState<Message[]>([])
+  const [fetchError,  setFetchError]  = useState<string | null>(null)
 
   const mapContainerRef = useRef<HTMLDivElement>(null)
   const mapRef          = useRef<L.Map | null>(null)
@@ -288,31 +313,54 @@ export function TrackingScreen({ go, draft, cityConfig, orderId, user }: Props) 
     if (!orderId) return
     const myId = user?.id ?? ''
 
+    console.log('[TrackingScreen] setting up message subscription, orderId=', orderId, 'myId=', myId)
+
     const applyMsgs = (msgs: Message[]) => {
       setMessages(msgs)
+      setFetchError(null)
       setUnreadCount(msgs.filter(m => m.receiverId === myId && !m.isRead).length)
     }
 
-    getMessages(orderId).then(applyMsgs)
+    getMessages(orderId)
+      .then(applyMsgs)
+      .catch(err => {
+        console.error('[TrackingScreen] initial getMessages failed', err)
+        setFetchError(String(err?.message ?? err))
+      })
+
     return subscribeToMessages(orderId, applyMsgs)
   }, [orderId, user?.id])
 
   // Fresh fetch + mark-read every time the chat panel opens
   useEffect(() => {
     if (!chatOpen || !orderId) return
-    getMessages(orderId).then(msgs => {
-      setMessages(msgs)
-      setUnreadCount(0)
-      if (user?.id) markMessagesRead(orderId, user.id).catch(() => {})
-    })
+    console.log('[TrackingScreen] chat opened, re-fetching messages for orderId=', orderId)
+    getMessages(orderId)
+      .then(msgs => {
+        setMessages(msgs)
+        setFetchError(null)
+        setUnreadCount(0)
+        if (user?.id) markMessagesRead(orderId, user.id).catch(() => {})
+      })
+      .catch(err => {
+        console.error('[TrackingScreen] getMessages on chat-open failed', err)
+        setFetchError(String(err?.message ?? err))
+      })
   }, [chatOpen, orderId, user?.id])
 
   // Callback passed to ChatPanel: re-fetch after every send
   const refreshMessages = async () => {
     if (!orderId) return
-    const msgs = await getMessages(orderId)
-    setMessages(msgs)
-    if (user?.id) markMessagesRead(orderId, user.id).catch(() => {})
+    console.log('[TrackingScreen] refreshMessages, orderId=', orderId)
+    try {
+      const msgs = await getMessages(orderId)
+      setMessages(msgs)
+      setFetchError(null)
+      if (user?.id) markMessagesRead(orderId, user.id).catch(() => {})
+    } catch (err) {
+      console.error('[TrackingScreen] refreshMessages failed', err)
+      setFetchError(String((err as any)?.message ?? err))
+    }
   }
 
   // ── Resolve addresses → route ─────────────────────────────────────────────
@@ -663,6 +711,7 @@ export function TrackingScreen({ go, draft, cityConfig, orderId, user }: Props) 
           order={order}
           myId={myId}
           messages={messages}
+          fetchError={fetchError}
           onRefresh={refreshMessages}
           onClose={() => setChatOpen(false)}
         />
