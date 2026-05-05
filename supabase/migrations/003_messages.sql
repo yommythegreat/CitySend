@@ -1,5 +1,7 @@
 -- ── Messages table ────────────────────────────────────────────────────────────
 -- In-app chat between customer and assigned driver, visible to admin.
+-- Table must be in the realtime publication for postgres_changes subscriptions.
+alter publication supabase_realtime add table public.messages;
 
 create table if not exists public.messages (
   id            uuid        primary key default gen_random_uuid(),

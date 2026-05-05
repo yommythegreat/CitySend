@@ -74,12 +74,14 @@ function ChatPanel({
   order,
   myId,
   messages,
+  onRefresh,
   onClose,
 }: {
-  order:    CustomerOrder
-  myId:     string
-  messages: Message[]
-  onClose:  () => void
+  order:      CustomerOrder
+  myId:       string
+  messages:   Message[]
+  onRefresh:  () => Promise<void>
+  onClose:    () => void
 }) {
   const [inputText, setInputText] = useState('')
   const [sending,   setSending]   = useState(false)
@@ -107,6 +109,8 @@ function ChatPanel({
       receiverRole: 'driver',
       messageText:  text,
     })
+    // Re-fetch immediately — don't wait for subscription/realtime
+    await onRefresh()
     setSending(false)
   }
 
@@ -302,6 +306,14 @@ export function TrackingScreen({ go, draft, cityConfig, orderId, user }: Props) 
       if (user?.id) markMessagesRead(orderId, user.id).catch(() => {})
     })
   }, [chatOpen, orderId, user?.id])
+
+  // Callback passed to ChatPanel: re-fetch after every send
+  const refreshMessages = async () => {
+    if (!orderId) return
+    const msgs = await getMessages(orderId)
+    setMessages(msgs)
+    if (user?.id) markMessagesRead(orderId, user.id).catch(() => {})
+  }
 
   // ── Resolve addresses → route ─────────────────────────────────────────────
   useEffect(() => {
@@ -651,6 +663,7 @@ export function TrackingScreen({ go, draft, cityConfig, orderId, user }: Props) 
           order={order}
           myId={myId}
           messages={messages}
+          onRefresh={refreshMessages}
           onClose={() => setChatOpen(false)}
         />
       )}

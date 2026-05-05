@@ -146,6 +146,9 @@ function ChatPanel({
       receiverRole: 'customer',
       messageText:  text,
     })
+    // Re-fetch immediately — don't rely on realtime alone
+    const refreshed = await getMessages(order.id)
+    setMessages(refreshed)
     setSending(false)
   }
 
