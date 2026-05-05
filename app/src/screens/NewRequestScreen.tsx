@@ -237,9 +237,19 @@ function DropoffStep({
   )
 }
 
+const PROHIBITED_ITEMS_TEXT =
+  'I confirm this package does not contain illegal items, contraband, hazardous materials, weapons, cash, or any prohibited/restricted goods.'
+
 // ── Parcel step ───────────────────────────────────────────────────────────────
 
-function ParcelStep({ draft, setDraft }: { draft: Draft; setDraft: (d: Draft) => void }) {
+function ParcelStep({
+  draft, setDraft, declarationTouched, onDeclarationTouch,
+}: {
+  draft: Draft
+  setDraft: (d: Draft) => void
+  declarationTouched: boolean
+  onDeclarationTouch: () => void
+}) {
   const SIZES = [
     { v: 's' as const, l: 'Small',  d: 'Envelope, keys, documents' },
     { v: 'm' as const, l: 'Medium', d: 'Shoebox — up to 10 lb' },
@@ -313,6 +323,61 @@ function ParcelStep({ draft, setDraft }: { draft: Draft; setDraft: (d: Draft) =>
           <div style={{ fontSize: 12, color: 'var(--cs-slate-500)' }}>Handled with extra care</div>
         </div>
       </button>
+
+      {/* ── Prohibited items declaration ─────────────────────────────────── */}
+      <div>
+        <button
+          onClick={() => {
+            onDeclarationTouch()
+            setDraft({
+              ...draft,
+              parcel: {
+                ...draft.parcel,
+                prohibitedItemsDeclarationAccepted: !draft.parcel.prohibitedItemsDeclarationAccepted,
+                prohibitedItemsDeclarationAcceptedAt: !draft.parcel.prohibitedItemsDeclarationAccepted
+                  ? new Date().toISOString()
+                  : undefined,
+              },
+            })
+          }}
+          style={{
+            display: 'flex', alignItems: 'flex-start', gap: 12, padding: 14,
+            background: draft.parcel.prohibitedItemsDeclarationAccepted
+              ? 'rgba(22,107,58,.04)' : '#fff',
+            border: `1.5px solid ${
+              declarationTouched && !draft.parcel.prohibitedItemsDeclarationAccepted
+                ? 'var(--cs-err)'
+                : draft.parcel.prohibitedItemsDeclarationAccepted
+                  ? '#167842'
+                  : 'var(--cs-slate-200)'
+            }`,
+            borderRadius: 12, cursor: 'pointer', textAlign: 'left',
+            fontFamily: 'var(--cs-font)', width: '100%',
+            transition: 'border-color .15s, background .15s',
+          }}
+        >
+          {/* Custom checkbox */}
+          <div style={{
+            width: 20, height: 20, borderRadius: 5, flexShrink: 0, marginTop: 1,
+            border: `2px solid ${draft.parcel.prohibitedItemsDeclarationAccepted ? '#167842' : 'var(--cs-slate-300)'}`,
+            background: draft.parcel.prohibitedItemsDeclarationAccepted ? '#167842' : '#fff',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            transition: 'background .15s, border-color .15s',
+          }}>
+            {draft.parcel.prohibitedItemsDeclarationAccepted && (
+              <svg width="11" height="9" viewBox="0 0 11 9" fill="none">
+                <path d="M1 4L4 7.5L10 1" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            )}
+          </div>
+          <div style={{ flex: 1, fontSize: 13, color: 'var(--cs-ink)', lineHeight: 1.5 }}>
+            {PROHIBITED_ITEMS_TEXT}
+          </div>
+        </button>
+        {declarationTouched && !draft.parcel.prohibitedItemsDeclarationAccepted && (
+          <FieldError msg="You must confirm the package does not contain prohibited items before continuing." />
+        )}
+      </div>
     </div>
   )
 }
@@ -325,8 +390,9 @@ export function NewRequestScreen({ step, go, state, draft, setDraft, cityConfig 
   const valid   = isStepValid(step, draft)
 
   // Per-step touched state — errors only show after the user leaves a field
-  const [pickupTouched,  setPickupTouched]  = useState<PickupTouched>({})
-  const [dropoffTouched, setDropoffTouched] = useState<DropoffTouched>({})
+  const [pickupTouched,       setPickupTouched]       = useState<PickupTouched>({})
+  const [dropoffTouched,      setDropoffTouched]      = useState<DropoffTouched>({})
+  const [declarationTouched,  setDeclarationTouched]  = useState(false)
 
   const touchPickup  = (field: keyof PickupErrors)  => setPickupTouched(t => ({ ...t, [field]: true }))
   const touchDropoff = (field: keyof DropoffErrors) => setDropoffTouched(t => ({ ...t, [field]: true }))
@@ -345,6 +411,7 @@ export function NewRequestScreen({ step, go, state, draft, setDraft, cityConfig 
     // Clear touched state so returning to a step feels fresh
     setPickupTouched({})
     setDropoffTouched({})
+    setDeclarationTouched(false)
     if (stepIdx === 0) go('home')
     else go(`new-${stepIdx}` as ScreenName)
   }
@@ -389,7 +456,13 @@ export function NewRequestScreen({ step, go, state, draft, setDraft, cityConfig 
             onTouch={touchDropoff}
           />
         )}
-        {stepIdx === 2 && <ParcelStep draft={draft} setDraft={setDraft} />}
+        {stepIdx === 2 && (
+          <ParcelStep
+            draft={draft} setDraft={setDraft}
+            declarationTouched={declarationTouched}
+            onDeclarationTouch={() => setDeclarationTouched(true)}
+          />
+        )}
         <div style={{ height: 20 }} />
       </div>
 

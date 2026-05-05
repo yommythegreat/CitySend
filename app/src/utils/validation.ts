@@ -42,7 +42,7 @@ export function isDropoffValid(d: Draft): boolean {
 }
 
 export function isParcelValid(d: Draft): boolean {
-  return d.parcel.size !== undefined
+  return d.parcel.size !== undefined && d.parcel.prohibitedItemsDeclarationAccepted === true
 }
 
 export function isStepValid(step: 'new-1' | 'new-2' | 'new-3', d: Draft): boolean {

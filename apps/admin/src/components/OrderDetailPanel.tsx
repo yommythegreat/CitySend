@@ -194,6 +194,18 @@ export function OrderDetailPanel({ orderId, onClose }: Props) {
             <Row label="Fragile"     value={order.parcel.fragile ? 'Yes' : 'No'} />
             <Row label="Distance"    value={`${order.distanceKm} km`} />
             <Row label="City"        value={order.cityId.charAt(0).toUpperCase() + order.cityId.slice(1)} />
+            <Row
+              label="Prohibited items"
+              value={
+                order.parcel.prohibitedItemsDeclarationAccepted
+                  ? <span style={{ color: 'var(--a-ok)', fontWeight: 500 }}>
+                      ✓ Declared {order.parcel.prohibitedItemsDeclarationAcceptedAt
+                        ? `· ${fmtDateTime(order.parcel.prohibitedItemsDeclarationAcceptedAt)}`
+                        : ''}
+                    </span>
+                  : <span style={{ color: 'var(--a-warn, #c94a1b)', fontWeight: 500 }}>Not declared</span>
+              }
+            />
           </Section>
 
           {/* Driver */}

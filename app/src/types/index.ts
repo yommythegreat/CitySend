@@ -68,6 +68,8 @@ export interface ParcelDraft {
   size: 's' | 'm' | 'l'
   desc: string
   fragile: boolean
+  prohibitedItemsDeclarationAccepted: boolean
+  prohibitedItemsDeclarationAcceptedAt?: string
 }
 
 export interface RouteInfo {

@@ -56,6 +56,8 @@ export interface ParcelInfo {
   size: 's' | 'm' | 'l'
   desc: string
   fragile: boolean
+  prohibitedItemsDeclarationAccepted?: boolean
+  prohibitedItemsDeclarationAcceptedAt?: string
 }
 
 export interface PriceBreakdown {

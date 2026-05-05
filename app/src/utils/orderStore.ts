@@ -15,7 +15,7 @@ export interface CustomerOrder {
   customerName: string
   pickup:  { name: string; phone: string; address: string; unit?: string; note?: string }
   dropoff: { name: string; phone: string; address: string; unit?: string; note?: string }
-  parcel:  { size: 's' | 'm' | 'l'; desc: string; fragile: boolean }
+  parcel:  { size: 's' | 'm' | 'l'; desc: string; fragile: boolean; prohibitedItemsDeclarationAccepted?: boolean; prohibitedItemsDeclarationAcceptedAt?: string }
   status:  'new' | 'assigned' | 'picked_up' | 'in_transit' | 'delivered' | 'cancelled'
   assignedDriverId?:   string
   assignedDriverName?: string
