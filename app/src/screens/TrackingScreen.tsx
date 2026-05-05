@@ -90,9 +90,10 @@ function ChatPanel({
   const [sendError,  setSendError]  = useState<string | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
 
-  const isTerminal = order.status === 'delivered' || order.status === 'cancelled'
-  const canChat    = !!order.assignedDriverId && !isTerminal
-  const driverName = order.assignedDriverName ?? 'Driver'
+  const isTerminal  = order.status === 'delivered' || order.status === 'cancelled'
+  const isAuthed    = !!myId && myId !== 'guest'
+  const canChat     = !!order.assignedDriverId && !isTerminal && isAuthed
+  const driverName  = order.assignedDriverName ?? 'Driver'
 
   // Scroll to bottom on new messages
   useEffect(() => {
@@ -248,7 +249,11 @@ function ChatPanel({
             textAlign: 'center', padding: '10px 0',
             fontSize: 13, color: 'var(--cs-slate-400)',
           }}>
-            {isTerminal ? 'Chat is closed for completed orders.' : 'Chat available once a driver is assigned.'}
+            {isTerminal
+              ? 'Chat is closed for completed orders.'
+              : !isAuthed
+                ? 'Sign in to message your driver.'
+                : 'Chat available once a driver is assigned.'}
           </div>
         )}
       </div>

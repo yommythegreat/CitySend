@@ -25,7 +25,9 @@ alter publication supabase_realtime add table public.messages;
 
 alter table public.messages enable row level security;
 
--- Customer: read all messages on their own orders
+-- Customer: read messages they own, sent, or received.
+-- The OR on sender/receiver handles orders placed before login
+-- (where customer_id = 'guest' but the user is now authenticated).
 create policy "customer_read_own_order_messages"
   on public.messages for select
   using (
@@ -34,18 +36,21 @@ create policy "customer_read_own_order_messages"
       where orders.id = messages.order_id
         and orders.customer_id = auth.uid()::text
     )
+    or sender_id   = auth.uid()::text
+    or receiver_id = auth.uid()::text
   );
 
--- Customer: send messages on their own orders
+-- Customer: send messages — identity verified via auth.uid(), order must exist.
+-- Does not require orders.customer_id match so orders placed before login still work.
 create policy "customer_send_message"
   on public.messages for insert
   with check (
     sender_role = 'customer'
+    and auth.uid() is not null
     and sender_id = auth.uid()::text
     and exists (
       select 1 from public.orders
       where orders.id = messages.order_id
-        and orders.customer_id = auth.uid()::text
     )
   );
 
