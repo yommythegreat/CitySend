@@ -284,26 +284,23 @@ export function TrackingScreen({ go, draft, cityConfig, orderId, user }: Props) 
     if (!orderId) return
     const myId = user?.id ?? ''
 
-    const applyMsgs = (msgs: Message[], open: boolean) => {
+    const applyMsgs = (msgs: Message[]) => {
       setMessages(msgs)
-      const unread = msgs.filter(m => m.receiverId === myId && !m.isRead).length
-      setUnreadCount(unread)
-      // Auto-mark read when panel is open
-      if (open && myId) markMessagesRead(orderId, myId).catch(() => {})
+      setUnreadCount(msgs.filter(m => m.receiverId === myId && !m.isRead).length)
     }
 
-    getMessages(orderId).then(msgs => applyMsgs(msgs, chatOpen))
-
-    const unsub = subscribeToMessages(orderId, (msgs) => applyMsgs(msgs, chatOpen))
-    return unsub
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    getMessages(orderId).then(applyMsgs)
+    return subscribeToMessages(orderId, applyMsgs)
   }, [orderId, user?.id])
 
-  // Mark existing messages read when the chat panel opens
+  // Fresh fetch + mark-read every time the chat panel opens
   useEffect(() => {
-    if (!chatOpen || !orderId || !user?.id) return
-    markMessagesRead(orderId, user.id).catch(() => {})
-    setUnreadCount(0)
+    if (!chatOpen || !orderId) return
+    getMessages(orderId).then(msgs => {
+      setMessages(msgs)
+      setUnreadCount(0)
+      if (user?.id) markMessagesRead(orderId, user.id).catch(() => {})
+    })
   }, [chatOpen, orderId, user?.id])
 
   // ── Resolve addresses → route ─────────────────────────────────────────────
