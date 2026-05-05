@@ -8,7 +8,7 @@ import { Arrow, Back, User, Phone, Home as HomeIcon, Package, Pin, Repeat } from
 import { formatPhone, sanitizeText } from '../utils/format'
 import { isStepValid, getPickupErrors, getDropoffErrors, type PickupErrors, type DropoffErrors } from '../utils/validation'
 import type { CityConfig } from '../config/cityConfig'
-import type { Draft, AppState, ScreenName, NavOptions } from '../types'
+import type { Draft, AppState, ScreenName, NavOptions, AuthUser, SavedAddress } from '../types'
 
 interface Props {
   step: 'new-1' | 'new-2' | 'new-3'
@@ -17,6 +17,7 @@ interface Props {
   draft: Draft
   setDraft: (d: Draft) => void
   cityConfig: CityConfig
+  user?: AuthUser | null
 }
 
 const STEP_IDX: Record<string, number> = { 'new-1': 0, 'new-2': 1, 'new-3': 2 }
@@ -52,13 +53,117 @@ function FieldError({ msg }: { msg?: string }) {
   )
 }
 
+// ── Saved place icon ──────────────────────────────────────────────────────────
+
+function PlaceIcon({ icon, size = 14 }: { icon: SavedAddress['icon']; size?: number }) {
+  if (icon === 'home')    return <HomeIcon size={size} />
+  if (icon === 'package') return <Package size={size} />
+  return <Pin size={size} />
+}
+
+// ── SavedPlacesPicker ─────────────────────────────────────────────────────────
+
+function SavedPlacesPicker({
+  places,
+  selectedAddress,
+  isLoggedIn,
+  onSelect,
+}: {
+  places: SavedAddress[]
+  selectedAddress: string
+  isLoggedIn: boolean
+  onSelect: (place: SavedAddress) => void
+}) {
+  // Only render for authenticated users
+  if (!isLoggedIn) return null
+
+  return (
+    <div>
+      <div style={{
+        fontSize: 12, fontFamily: 'var(--cs-mono)', color: 'var(--cs-slate-500)',
+        letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 8,
+      }}>
+        Saved places
+      </div>
+
+      {places.length === 0 ? (
+        // ── Empty state ────────────────────────────────────────────────────────
+        <div style={{
+          padding: '12px 14px',
+          background: 'var(--cs-slate-50, #f8f9fb)',
+          borderRadius: 10,
+          border: '1px solid var(--cs-slate-100)',
+        }}>
+          <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--cs-slate-600)' }}>
+            No saved places yet
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--cs-slate-400)', marginTop: 2, lineHeight: 1.4 }}>
+            You can add places from Home or Settings.
+          </div>
+        </div>
+      ) : (
+        // ── Horizontal scroll row ──────────────────────────────────────────────
+        <div style={{
+          display: 'flex', gap: 8,
+          overflowX: 'auto', paddingBottom: 4,
+          scrollbarWidth: 'none',
+          // Negative margin + padding so card shadows aren't clipped
+          marginLeft: -2, paddingLeft: 2,
+          marginRight: -2, paddingRight: 2,
+        }}>
+          {places.map((place, i) => {
+            const active = selectedAddress === place.address
+            return (
+              <button
+                key={i}
+                onClick={() => onSelect(place)}
+                style={{
+                  flexShrink: 0,
+                  display: 'flex', flexDirection: 'column', alignItems: 'flex-start',
+                  gap: 3,
+                  padding: '10px 12px',
+                  minWidth: 110, maxWidth: 150,
+                  border: `1.5px solid ${active ? 'var(--cs-ink)' : 'var(--cs-slate-200)'}`,
+                  background: active ? 'var(--cs-ink)' : '#fff',
+                  color: active ? '#fff' : 'var(--cs-ink)',
+                  borderRadius: 12,
+                  cursor: 'pointer',
+                  fontFamily: 'var(--cs-font)',
+                  textAlign: 'left',
+                  transition: 'border-color .15s, background .15s',
+                  boxShadow: active ? 'none' : '0 1px 3px rgba(0,0,0,.06)',
+                }}
+              >
+                {/* Icon + label row */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <PlaceIcon icon={place.icon} size={13} />
+                  <span style={{ fontSize: 13, fontWeight: 600 }}>{place.label}</span>
+                </div>
+                {/* Address preview */}
+                <div style={{
+                  fontSize: 11,
+                  color: active ? 'rgba(255,255,255,.75)' : 'var(--cs-slate-500)',
+                  whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                  maxWidth: 130,
+                }}>
+                  {place.address}
+                </div>
+              </button>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Pickup step ───────────────────────────────────────────────────────────────
 
 type PickupTouched = Partial<Record<keyof PickupErrors, boolean>>
 type DropoffTouched = Partial<Record<keyof DropoffErrors, boolean>>
 
 function PickupStep({
-  state, draft, setDraft, cityConfig, errors, touched, onTouch,
+  state, draft, setDraft, cityConfig, errors, touched, onTouch, isLoggedIn,
 }: {
   state: AppState
   draft: Draft
@@ -67,6 +172,7 @@ function PickupStep({
   errors: PickupErrors
   touched: PickupTouched
   onTouch: (field: keyof PickupErrors) => void
+  isLoggedIn: boolean
 }) {
   // Show error only when field is touched
   const e = {
@@ -75,8 +181,32 @@ function PickupStep({
     phone:   touched.phone   ? errors.phone   : undefined,
   }
 
+  const handleSelectSavedPlace = (place: SavedAddress) => {
+    setDraft({
+      ...draft,
+      pickup: {
+        ...draft.pickup,
+        address: place.address,
+        unit:    place.unit  ?? draft.pickup.unit,
+        name:    place.name  ?? draft.pickup.name,
+        phone:   place.phone ?? draft.pickup.phone,
+        // Clear stale geocoords — AddressField will re-resolve them
+        lat: undefined,
+        lng: undefined,
+      },
+    })
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      {/* Saved places picker */}
+      <SavedPlacesPicker
+        places={state.savedAddresses}
+        selectedAddress={draft.pickup.address}
+        isLoggedIn={isLoggedIn}
+        onSelect={handleSelectSavedPlace}
+      />
+
       <div>
         <AddressField
           label="Pickup address"
@@ -123,22 +253,6 @@ function PickupStep({
         />
         <FieldError msg={e.phone} />
       </div>
-
-      <div style={{ fontSize: 12, fontFamily: 'var(--cs-mono)', color: 'var(--cs-slate-500)', letterSpacing: 0.8, textTransform: 'uppercase', marginTop: 6 }}>
-        Saved places
-      </div>
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        {state.savedAddresses.map((a, i) => (
-          <button
-            key={i}
-            onClick={() => setDraft({ ...draft, pickup: { ...draft.pickup, address: a.address, unit: '', lat: undefined, lng: undefined } })}
-            style={chipStyle(draft.pickup.address === a.address)}
-          >
-            {a.icon === 'home' ? <HomeIcon size={14} /> : a.icon === 'package' ? <Package size={14} /> : <Pin size={14} />}
-            {a.label}
-          </button>
-        ))}
-      </div>
     </div>
   )
 }
@@ -146,7 +260,7 @@ function PickupStep({
 // ── Drop-off step ─────────────────────────────────────────────────────────────
 
 function DropoffStep({
-  state, draft, setDraft, cityConfig, errors, touched, onTouch,
+  state, draft, setDraft, cityConfig, errors, touched, onTouch, isLoggedIn,
 }: {
   state: AppState
   draft: Draft
@@ -155,11 +269,27 @@ function DropoffStep({
   errors: DropoffErrors
   touched: DropoffTouched
   onTouch: (field: keyof DropoffErrors) => void
+  isLoggedIn: boolean
 }) {
   const e = {
     name:    touched.name    ? errors.name    : undefined,
     phone:   touched.phone   ? errors.phone   : undefined,
     address: touched.address ? errors.address : undefined,
+  }
+
+  const handleSelectSavedPlace = (place: SavedAddress) => {
+    setDraft({
+      ...draft,
+      dropoff: {
+        ...draft.dropoff,
+        address: place.address,
+        // Only fill receiver fields if the saved place has them
+        name:  place.name  ? place.name  : draft.dropoff.name,
+        phone: place.phone ? place.phone : draft.dropoff.phone,
+        lat: undefined,
+        lng: undefined,
+      },
+    })
   }
 
   return (
@@ -209,6 +339,14 @@ function DropoffStep({
         value={draft.dropoff.note}
         placeholder="Leave at the front desk"
         onChange={(v) => setDraft({ ...draft, dropoff: { ...draft.dropoff, note: sanitizeText(v) } })}
+      />
+
+      {/* Saved places picker */}
+      <SavedPlacesPicker
+        places={state.savedAddresses}
+        selectedAddress={draft.dropoff.address}
+        isLoggedIn={isLoggedIn}
+        onSelect={handleSelectSavedPlace}
       />
 
       {/* Recent recipients chips */}
@@ -384,10 +522,13 @@ function ParcelStep({
 
 // ── Main screen ───────────────────────────────────────────────────────────────
 
-export function NewRequestScreen({ step, go, state, draft, setDraft, cityConfig }: Props) {
+export function NewRequestScreen({ step, go, state, draft, setDraft, cityConfig, user }: Props) {
   const stepIdx = STEP_IDX[step]
   const isLast  = stepIdx === 2
   const valid   = isStepValid(step, draft)
+
+  // Treat guest (unauthenticated) as not logged in for saved-places purposes
+  const isLoggedIn = !!(user && user.id !== 'guest')
 
   // Per-step touched state — errors only show after the user leaves a field
   const [pickupTouched,       setPickupTouched]       = useState<PickupTouched>({})
@@ -445,6 +586,7 @@ export function NewRequestScreen({ step, go, state, draft, setDraft, cityConfig 
             errors={rawPickupErrors}
             touched={pickupTouched}
             onTouch={touchPickup}
+            isLoggedIn={isLoggedIn}
           />
         )}
         {stepIdx === 1 && (
@@ -454,6 +596,7 @@ export function NewRequestScreen({ step, go, state, draft, setDraft, cityConfig 
             errors={rawDropoffErrors}
             touched={dropoffTouched}
             onTouch={touchDropoff}
+            isLoggedIn={isLoggedIn}
           />
         )}
         {stepIdx === 2 && (

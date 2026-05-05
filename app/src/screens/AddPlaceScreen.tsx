@@ -30,15 +30,23 @@ function FieldError({ msg }: { msg?: string }) {
   )
 }
 
+const sectionLabel: React.CSSProperties = {
+  fontSize: 11, fontFamily: 'var(--cs-mono)', color: 'var(--cs-slate-500)',
+  letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 8,
+}
+
 export function AddPlaceScreen({ go, setState }: Props) {
   const [label,        setLabel]        = useState('')
   const [address,      setAddress]      = useState('')
+  const [unit,         setUnit]         = useState('')
+  const [contactName,  setContactName]  = useState('')
+  const [phone,        setPhone]        = useState('')
   const [icon,         setIcon]         = useState<SavedAddress['icon']>('pin')
   const [saved,        setSaved]        = useState(false)
   const [labelTouched, setLabelTouched] = useState(false)
   const [addrTouched,  setAddrTouched]  = useState(false)
 
-  // Derived validation
+  // Derived validation (only label + address are required)
   const labelErr   = !label.trim()   ? 'Enter a label for this place.' : undefined
   const addressErr = !address.trim() ? 'Enter a street address.'       : undefined
   const isValid    = !labelErr && !addressErr
@@ -56,12 +64,18 @@ export function AddPlaceScreen({ go, setState }: Props) {
   const save = () => {
     if (!isValid || saved) return
 
+    const newPlace: SavedAddress = {
+      label:   label.trim(),
+      address: address.trim(),
+      icon,
+      ...(unit.trim()        && { unit:  unit.trim() }),
+      ...(contactName.trim() && { name:  contactName.trim() }),
+      ...(phone.trim()       && { phone: phone.trim() }),
+    }
+
     setState(s => ({
       ...s,
-      savedAddresses: [
-        ...s.savedAddresses,
-        { label: label.trim(), address: address.trim(), icon },
-      ],
+      savedAddresses: [...s.savedAddresses, newPlace],
     }))
 
     setSaved(true)
@@ -101,9 +115,7 @@ export function AddPlaceScreen({ go, setState }: Props) {
 
             {/* Type picker */}
             <div>
-              <div style={{ fontSize: 11, fontFamily: 'var(--cs-mono)', color: 'var(--cs-slate-500)', letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 8 }}>
-                Type
-              </div>
+              <div style={sectionLabel}>Type</div>
               <div style={{ display: 'flex', gap: 8 }}>
                 {ADDR_ICONS.map(ic => (
                   <button
@@ -130,9 +142,7 @@ export function AddPlaceScreen({ go, setState }: Props) {
 
             {/* Label */}
             <div>
-              <div style={{ fontSize: 11, fontFamily: 'var(--cs-mono)', color: 'var(--cs-slate-500)', letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 8 }}>
-                Label
-              </div>
+              <div style={sectionLabel}>Label</div>
               <input
                 value={label}
                 onChange={e => setLabel(e.target.value)}
@@ -146,9 +156,7 @@ export function AddPlaceScreen({ go, setState }: Props) {
 
             {/* Address */}
             <div>
-              <div style={{ fontSize: 11, fontFamily: 'var(--cs-mono)', color: 'var(--cs-slate-500)', letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 8 }}>
-                Address
-              </div>
+              <div style={sectionLabel}>Address</div>
               <input
                 value={address}
                 onChange={e => setAddress(e.target.value)}
@@ -158,6 +166,54 @@ export function AddPlaceScreen({ go, setState }: Props) {
                 autoComplete="street-address"
               />
               {addrTouched && <FieldError msg={addressErr} />}
+            </div>
+
+            {/* Unit (optional) */}
+            <div>
+              <div style={sectionLabel}>Unit / buzzer <span style={{ opacity: .5 }}>(optional)</span></div>
+              <input
+                value={unit}
+                onChange={e => setUnit(e.target.value)}
+                placeholder="Apt 4B"
+                style={inputStyle(false)}
+                autoComplete="address-line2"
+              />
+            </div>
+
+            {/* ── Contact details (optional) ───────────────────────────────── */}
+            <div style={{
+              borderTop: '1px solid var(--cs-slate-100)',
+              paddingTop: 14,
+              display: 'flex', flexDirection: 'column', gap: 14,
+            }}>
+              <div style={{ fontSize: 12, color: 'var(--cs-slate-500)', lineHeight: 1.4 }}>
+                Add a contact for this place so it auto-fills when you select it during booking.
+              </div>
+
+              {/* Contact name */}
+              <div>
+                <div style={sectionLabel}>Contact name <span style={{ opacity: .5 }}>(optional)</span></div>
+                <input
+                  value={contactName}
+                  onChange={e => setContactName(e.target.value)}
+                  placeholder="Full name"
+                  style={inputStyle(false)}
+                  autoComplete="name"
+                />
+              </div>
+
+              {/* Phone */}
+              <div>
+                <div style={sectionLabel}>Phone <span style={{ opacity: .5 }}>(optional)</span></div>
+                <input
+                  value={phone}
+                  onChange={e => setPhone(e.target.value)}
+                  placeholder="204 555 0100"
+                  style={inputStyle(false)}
+                  type="tel"
+                  autoComplete="tel"
+                />
+              </div>
             </div>
           </div>
 

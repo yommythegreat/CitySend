@@ -550,6 +550,7 @@ export default function App() {
             draft={draft}
             setDraft={setDraft}
             cityConfig={cityConfig}
+            user={user}
           />
         )
       case 'pricing':

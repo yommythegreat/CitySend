@@ -31,9 +31,13 @@ export type ScreenName =
   | 'city-blocked'
 
 export interface SavedAddress {
-  label: string
+  label:   string
   address: string
-  icon: 'home' | 'package' | 'pin'
+  icon:    'home' | 'package' | 'pin'
+  /** Optional extra fields captured when saving the place */
+  unit?:   string
+  name?:   string
+  phone?:  string
 }
 
 export interface Delivery {
