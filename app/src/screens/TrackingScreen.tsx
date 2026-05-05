@@ -67,43 +67,27 @@ function fmtTime(iso: string): string {
 }
 
 // ── Chat panel ────────────────────────────────────────────────────────────────
+// Pure display component — all message state lives in TrackingScreen so there
+// is only ever ONE Supabase realtime channel per orderId.
 
 function ChatPanel({
   order,
   myId,
-  myRole,
+  messages,
   onClose,
 }: {
-  order: CustomerOrder
-  myId: string
-  myRole: 'customer'
-  onClose: () => void
+  order:    CustomerOrder
+  myId:     string
+  messages: Message[]
+  onClose:  () => void
 }) {
-  const [messages,    setMessages]    = useState<Message[]>([])
-  const [inputText,   setInputText]   = useState('')
-  const [sending,     setSending]     = useState(false)
+  const [inputText, setInputText] = useState('')
+  const [sending,   setSending]   = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
 
   const isTerminal = order.status === 'delivered' || order.status === 'cancelled'
   const canChat    = !!order.assignedDriverId && !isTerminal
   const driverName = order.assignedDriverName ?? 'Driver'
-
-  // Initial load
-  useEffect(() => {
-    getMessages(order.id).then(msgs => {
-      setMessages(msgs)
-      markMessagesRead(order.id, myId).catch(() => {})
-    })
-  }, [order.id, myId])
-
-  // Realtime
-  useEffect(() => {
-    const unsub = subscribeToMessages(order.id, (msgs) => {
-      setMessages(msgs)
-      markMessagesRead(order.id, myId).catch(() => {})
-    })
-    return unsub
-  }, [order.id, myId])
 
   // Scroll to bottom on new messages
   useEffect(() => {
@@ -262,6 +246,7 @@ export function TrackingScreen({ go, draft, cityConfig, orderId, user }: Props) 
   // ── Chat state ───────────────────────────────────────────────────────────────
   const [chatOpen,    setChatOpen]    = useState(false)
   const [unreadCount, setUnreadCount] = useState(0)
+  const [messages,    setMessages]    = useState<Message[]>([])
 
   const mapContainerRef = useRef<HTMLDivElement>(null)
   const mapRef          = useRef<L.Map | null>(null)
@@ -294,20 +279,32 @@ export function TrackingScreen({ go, draft, cityConfig, orderId, user }: Props) 
     return unsub
   }, [orderId])
 
-  // ── Unread badge — poll messages when order has driver assigned ───────────────
+  // ── Single message subscription — drives both the chat panel and unread badge ──
   useEffect(() => {
-    if (!orderId || !user?.id) return
-    const myId = user.id
-    const unsub = subscribeToMessages(orderId, (msgs) => {
+    if (!orderId) return
+    const myId = user?.id ?? ''
+
+    const applyMsgs = (msgs: Message[], open: boolean) => {
+      setMessages(msgs)
       const unread = msgs.filter(m => m.receiverId === myId && !m.isRead).length
       setUnreadCount(unread)
-    })
-    // Initial load
-    getMessages(orderId).then(msgs => {
-      setUnreadCount(msgs.filter(m => m.receiverId === myId && !m.isRead).length)
-    })
+      // Auto-mark read when panel is open
+      if (open && myId) markMessagesRead(orderId, myId).catch(() => {})
+    }
+
+    getMessages(orderId).then(msgs => applyMsgs(msgs, chatOpen))
+
+    const unsub = subscribeToMessages(orderId, (msgs) => applyMsgs(msgs, chatOpen))
     return unsub
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orderId, user?.id])
+
+  // Mark existing messages read when the chat panel opens
+  useEffect(() => {
+    if (!chatOpen || !orderId || !user?.id) return
+    markMessagesRead(orderId, user.id).catch(() => {})
+    setUnreadCount(0)
+  }, [chatOpen, orderId, user?.id])
 
   // ── Resolve addresses → route ─────────────────────────────────────────────
   useEffect(() => {
@@ -656,7 +653,7 @@ export function TrackingScreen({ go, draft, cityConfig, orderId, user }: Props) 
         <ChatPanel
           order={order}
           myId={myId}
-          myRole="customer"
+          messages={messages}
           onClose={() => setChatOpen(false)}
         />
       )}
