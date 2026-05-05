@@ -5,7 +5,7 @@ import { IconButton } from '../components/IconButton'
 import { Back, Check, Phone, Send, Star } from '../components/Icons'
 import { geocodeOnce, fetchRoute } from '../hooks/useGeocoder'
 import { getOrderById, subscribeToOrderById, type CustomerOrder } from '../utils/orderStore'
-import { getMessages, sendMessage, subscribeToMessages, markMessagesRead, type Message } from '../../../shared/utils/messageStore'
+import { getMessages, sendMessage, subscribeToMessages, markMessagesRead, type Message } from '../utils/messageStore'
 import type { CityConfig } from '../config/cityConfig'
 import type { AuthUser, Draft, NavOptions, RouteInfo, ScreenName } from '../types'
 
