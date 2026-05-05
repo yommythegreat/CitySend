@@ -1,10 +1,11 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { OrderStatusBadge } from './StatusBadge'
 import { AssignDriverModal } from './AssignDriverModal'
 import { useAdminStore } from '../store/AdminContext'
-import { fmt, fmtDateTime, parcelSizeLabel } from '@shared/utils/format'
+import { fmt, fmtDateTime, fmtTime, parcelSizeLabel } from '@shared/utils/format'
 import { NEXT_STATUSES, ORDER_STATUS_LABELS } from '@shared/types'
 import type { OrderStatus } from '@shared/types'
+import { getMessages, subscribeToMessages, type Message } from '@shared/utils/messageStore'
 
 interface Props {
   orderId: string
@@ -43,8 +44,16 @@ export function OrderDetailPanel({ orderId, onClose }: Props) {
   const [showCancel, setShowCancel]     = useState(false)
   const [cancelReason, setCancelReason] = useState('')
   const [noteText, setNoteText]         = useState('')
+  const [messages, setMessages]         = useState<Message[]>([])
 
   const order = state.orders.find(o => o.id === orderId)
+
+  useEffect(() => {
+    if (!orderId) return
+    getMessages(orderId).then(setMessages)
+    return subscribeToMessages(orderId, setMessages)
+  }, [orderId])
+
   if (!order) return null
 
   const receipt = state.receipts.find(r => r.orderId === orderId)
@@ -298,6 +307,44 @@ export function OrderDetailPanel({ orderId, onClose }: Props) {
                     background: 'var(--a-sidebar)', color: '#fff', fontSize: 12, fontWeight: 500,
                   }}
                 >Add</button>
+              </div>
+            )}
+          </Section>
+
+          {/* Messages thread */}
+          <Section title="Messages">
+            {messages.length === 0 ? (
+              <div style={{ fontSize: 13, color: 'var(--a-muted)' }}>No messages for this order.</div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {messages.map(m => {
+                  const isCustomer = m.senderRole === 'customer'
+                  return (
+                    <div key={m.id} style={{ display: 'flex', flexDirection: 'column', alignItems: isCustomer ? 'flex-start' : 'flex-end' }}>
+                      <div style={{
+                        maxWidth: '85%', padding: '8px 11px',
+                        background: isCustomer ? 'var(--a-bg)' : 'var(--a-accent)',
+                        color: isCustomer ? 'var(--a-ink2)' : '#fff',
+                        borderRadius: isCustomer ? '10px 10px 10px 3px' : '10px 10px 3px 10px',
+                        border: isCustomer ? '1px solid var(--a-border)' : 'none',
+                        fontSize: 13, lineHeight: 1.45,
+                      }}>
+                        {m.messageText}
+                      </div>
+                      <div style={{ fontSize: 10, color: 'var(--a-muted)', marginTop: 3, display: 'flex', gap: 6, alignItems: 'center' }}>
+                        <span style={{
+                          textTransform: 'uppercase', letterSpacing: 0.4, fontWeight: 600,
+                          fontSize: 9,
+                          color: isCustomer ? 'var(--a-accent)' : 'var(--a-ok)',
+                        }}>
+                          {isCustomer ? 'Customer' : 'Driver'}
+                        </span>
+                        · {fmtTime(m.createdAt)}
+                        {m.isRead && <span style={{ color: 'var(--a-ok)' }}>· Read</span>}
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
             )}
           </Section>

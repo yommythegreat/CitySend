@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { useDriver } from '../store/DriverContext'
 import type { DeliverySubstep } from '../store/DriverContext'
 import { OrderStatusPill } from '../components/StatusPill'
@@ -6,6 +6,11 @@ import { Toast } from '../components/Toast'
 import type { Order } from '@shared/types'
 import { addIncident, newIncidentId } from '@shared/utils/incidentStore'
 import { pushNotification } from '@shared/utils/notificationStore'
+import {
+  getMessages, sendMessage, subscribeToMessages, markMessagesRead,
+  type Message,
+} from '@shared/utils/messageStore'
+import { fmtTime } from '@shared/utils/format'
 
 interface Props {
   orderId: string
@@ -98,6 +103,168 @@ function ReportIssueSheet({
   )
 }
 
+// ── ChatPanel ─────────────────────────────────────────────────────────────────
+
+function ChatPanel({
+  order, myId, onClose,
+}: { order: Order; myId: string; onClose: () => void }) {
+  const [messages,  setMessages]  = useState<Message[]>([])
+  const [inputText, setInputText] = useState('')
+  const [sending,   setSending]   = useState(false)
+  const bottomRef = useRef<HTMLDivElement>(null)
+
+  const customerId  = order.customerId
+  const isTerminal  = order.status === 'delivered' || order.status === 'cancelled'
+
+  // Load + subscribe
+  useEffect(() => {
+    getMessages(order.id).then(setMessages)
+    const unsub = subscribeToMessages(order.id, setMessages)
+    return unsub
+  }, [order.id])
+
+  // Mark read when panel opens
+  useEffect(() => {
+    if (myId) markMessagesRead(order.id, myId)
+  }, [order.id, myId, messages])
+
+  // Scroll to bottom on new messages
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages])
+
+  const handleSend = async () => {
+    const text = inputText.trim()
+    if (!text || !customerId || isTerminal) return
+    setSending(true)
+    setInputText('')
+    await sendMessage({
+      orderId:      order.id,
+      senderId:     myId,
+      senderRole:   'driver',
+      receiverId:   customerId,
+      receiverRole: 'customer',
+      messageText:  text,
+    })
+    setSending(false)
+  }
+
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 50,
+      background: 'var(--d-surface, #f5f6f8)',
+      display: 'flex', flexDirection: 'column',
+    }}>
+      {/* Header */}
+      <div style={{
+        padding: '12px 16px', background: 'var(--d-accent, #2563eb)',
+        display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0,
+        paddingTop: 'max(12px, env(safe-area-inset-top))',
+      }}>
+        <button
+          onClick={onClose}
+          style={{
+            width: 36, height: 36, borderRadius: '50%',
+            border: 'none', background: 'rgba(255,255,255,0.15)',
+            color: '#fff', fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center',
+            cursor: 'pointer',
+          }}
+        >←</button>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 15, fontWeight: 700, color: '#fff' }}>
+            {order.pickup.name}
+          </div>
+          <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.75)', marginTop: 1 }}>
+            {order.id} · {isTerminal ? 'Delivery closed' : 'Customer'}
+          </div>
+        </div>
+      </div>
+
+      {/* Messages */}
+      <div style={{ flex: 1, overflowY: 'auto', padding: '16px 12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {messages.length === 0 && (
+          <div style={{ textAlign: 'center', color: 'var(--d-muted)', fontSize: 13, marginTop: 40 }}>
+            No messages yet. Say hello!
+          </div>
+        )}
+        {messages.map(m => {
+          const isMine = m.senderId === myId
+          const isRead = m.isRead
+          return (
+            <div key={m.id} style={{ display: 'flex', justifyContent: isMine ? 'flex-end' : 'flex-start' }}>
+              <div style={{
+                maxWidth: '78%', padding: '9px 13px',
+                background: isMine ? 'var(--d-accent, #2563eb)' : '#fff',
+                color: isMine ? '#fff' : 'var(--d-ink, #1a1d23)',
+                borderRadius: isMine ? '14px 14px 4px 14px' : '14px 14px 14px 4px',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+                fontSize: 14, lineHeight: 1.45,
+              }}>
+                {m.messageText}
+                <div style={{
+                  fontSize: 10, marginTop: 4, opacity: 0.7,
+                  display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 3,
+                }}>
+                  {fmtTime(m.createdAt)}
+                  {isMine && (
+                    <span style={{ color: isRead ? '#4ade80' : 'inherit', fontSize: 11 }}>
+                      {isRead ? '✓✓' : '✓'}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+          )
+        })}
+        <div ref={bottomRef} />
+      </div>
+
+      {/* Input */}
+      {isTerminal ? (
+        <div style={{
+          padding: '14px 16px', background: '#fff', borderTop: '1px solid var(--d-border, #e8ebf0)',
+          textAlign: 'center', fontSize: 13, color: 'var(--d-muted)',
+          paddingBottom: 'max(14px, env(safe-area-inset-bottom))',
+        }}>
+          Messaging is closed for this delivery.
+        </div>
+      ) : (
+        <div style={{
+          padding: '10px 12px', background: '#fff',
+          borderTop: '1px solid var(--d-border, #e8ebf0)',
+          display: 'flex', gap: 8, alignItems: 'flex-end',
+          paddingBottom: 'max(10px, env(safe-area-inset-bottom))',
+        }}>
+          <textarea
+            value={inputText}
+            onChange={e => setInputText(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend() } }}
+            placeholder="Message customer…"
+            rows={1}
+            style={{
+              flex: 1, resize: 'none', border: '1.5px solid var(--d-border, #e8ebf0)',
+              borderRadius: 20, padding: '9px 14px', fontSize: 14,
+              outline: 'none', fontFamily: 'inherit', lineHeight: 1.4,
+              background: 'var(--d-surface, #f5f6f8)',
+            }}
+          />
+          <button
+            onClick={handleSend}
+            disabled={!inputText.trim() || sending}
+            style={{
+              width: 40, height: 40, borderRadius: '50%', border: 'none',
+              background: inputText.trim() ? 'var(--d-accent, #2563eb)' : 'var(--d-border, #e8ebf0)',
+              color: inputText.trim() ? '#fff' : 'var(--d-muted)',
+              fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              cursor: inputText.trim() ? 'pointer' : 'default', flexShrink: 0,
+            }}
+          >↑</button>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Main screen ───────────────────────────────────────────────────────────────
 
 export function DeliveryScreen({ orderId, onBack, onComplete }: Props) {
@@ -105,8 +272,23 @@ export function DeliveryScreen({ orderId, onBack, onComplete }: Props) {
   const [showIssue,  setShowIssue]  = useState(false)
   const [toast,      setToast]      = useState('')
   const [confirming, setConfirming] = useState(false)
+  const [chatOpen,   setChatOpen]   = useState(false)
+  const [unreadCount, setUnreadCount] = useState(0)
+
+  const myId = state.auth?.driverId ?? ''
 
   const order = state.orders.find(o => o.id === orderId)
+
+  // Track unread messages from customer
+  useEffect(() => {
+    if (!order || !myId) return
+    const updateUnread = (msgs: Message[]) => {
+      setUnreadCount(msgs.filter(m => m.receiverId === myId && !m.isRead).length)
+    }
+    getMessages(order.id).then(updateUnread)
+    return subscribeToMessages(order.id, updateUnread)
+  }, [order?.id, myId])
+
   if (!order) return (
     <div className="d-scroll" style={{ padding: 24, textAlign: 'center', color: 'var(--d-muted)' }}>
       Order not found.
@@ -272,6 +454,36 @@ export function DeliveryScreen({ orderId, onBack, onComplete }: Props) {
                 <OrderStatusPill status={order.status} />
               </div>
             </div>
+
+            {/* Chat button */}
+            {!isDelivered && order.customerId && (
+              <div className="d-card-section" style={{ padding: '10px 16px', borderTop: '1px solid var(--d-border, #e8ebf0)' }}>
+                <button
+                  onClick={() => setChatOpen(true)}
+                  style={{
+                    width: '100%', padding: '10px 14px',
+                    background: 'var(--d-accent-lt, #eff6ff)',
+                    border: '1.5px solid var(--d-accent, #2563eb)',
+                    borderRadius: 10, cursor: 'pointer',
+                    fontSize: 14, fontWeight: 600, color: 'var(--d-accent, #2563eb)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                    position: 'relative',
+                  }}
+                >
+                  💬 Message Customer
+                  {unreadCount > 0 && (
+                    <span style={{
+                      position: 'absolute', top: 8, right: 12,
+                      minWidth: 18, height: 18, borderRadius: 9,
+                      background: '#f97316', color: '#fff',
+                      fontSize: 11, fontWeight: 700,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      padding: '0 4px',
+                    }}>{unreadCount}</span>
+                  )}
+                </button>
+              </div>
+            )}
 
             {/* Fragile warning */}
             {order.parcel.fragile && (
@@ -439,6 +651,11 @@ export function DeliveryScreen({ orderId, onBack, onComplete }: Props) {
 
       {/* Toast */}
       {toast && <div className="d-toast">{toast}</div>}
+
+      {/* Chat panel */}
+      {chatOpen && order && myId && (
+        <ChatPanel order={order} myId={myId} onClose={() => setChatOpen(false)} />
+      )}
 
       <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
     </>

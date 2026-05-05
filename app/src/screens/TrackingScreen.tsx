@@ -5,14 +5,16 @@ import { IconButton } from '../components/IconButton'
 import { Back, Check, Phone, Send, Star } from '../components/Icons'
 import { geocodeOnce, fetchRoute } from '../hooks/useGeocoder'
 import { getOrderById, subscribeToOrderById, type CustomerOrder } from '../utils/orderStore'
+import { getMessages, sendMessage, subscribeToMessages, markMessagesRead, type Message } from '../../../shared/utils/messageStore'
 import type { CityConfig } from '../config/cityConfig'
-import type { Draft, NavOptions, RouteInfo, ScreenName } from '../types'
+import type { AuthUser, Draft, NavOptions, RouteInfo, ScreenName } from '../types'
 
 interface Props {
   go:         (screen: ScreenName, opts?: NavOptions) => void
   draft:      Draft
   cityConfig: CityConfig
   orderId?:   string
+  user?:      AuthUser | null
 }
 
 // ── Status helpers ────────────────────────────────────────────────────────────
@@ -60,9 +62,191 @@ function getInitials(name: string): string {
   return name.split(' ').map(p => p[0] ?? '').join('').toUpperCase().slice(0, 2)
 }
 
+function fmtTime(iso: string): string {
+  return new Date(iso).toLocaleTimeString('en-CA', { hour: 'numeric', minute: '2-digit' })
+}
+
+// ── Chat panel ────────────────────────────────────────────────────────────────
+
+function ChatPanel({
+  order,
+  myId,
+  myRole,
+  onClose,
+}: {
+  order: CustomerOrder
+  myId: string
+  myRole: 'customer'
+  onClose: () => void
+}) {
+  const [messages,    setMessages]    = useState<Message[]>([])
+  const [inputText,   setInputText]   = useState('')
+  const [sending,     setSending]     = useState(false)
+  const bottomRef = useRef<HTMLDivElement>(null)
+
+  const isTerminal = order.status === 'delivered' || order.status === 'cancelled'
+  const canChat    = !!order.assignedDriverId && !isTerminal
+  const driverName = order.assignedDriverName ?? 'Driver'
+
+  // Initial load
+  useEffect(() => {
+    getMessages(order.id).then(msgs => {
+      setMessages(msgs)
+      markMessagesRead(order.id, myId).catch(() => {})
+    })
+  }, [order.id, myId])
+
+  // Realtime
+  useEffect(() => {
+    const unsub = subscribeToMessages(order.id, (msgs) => {
+      setMessages(msgs)
+      markMessagesRead(order.id, myId).catch(() => {})
+    })
+    return unsub
+  }, [order.id, myId])
+
+  // Scroll to bottom on new messages
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages.length])
+
+  const handleSend = async () => {
+    const text = inputText.trim()
+    if (!text || !order.assignedDriverId || sending) return
+    setSending(true)
+    setInputText('')
+    await sendMessage({
+      orderId:      order.id,
+      senderId:     myId,
+      senderRole:   'customer',
+      receiverId:   order.assignedDriverId,
+      receiverRole: 'driver',
+      messageText:  text,
+    })
+    setSending(false)
+  }
+
+  return (
+    <div style={{
+      position: 'absolute', inset: 0, zIndex: 30,
+      display: 'flex', flexDirection: 'column',
+      background: 'var(--cs-paper)',
+    }}>
+      {/* Header */}
+      <div style={{
+        padding: '56px 16px 14px', display: 'flex', alignItems: 'center', gap: 12,
+        background: '#fff', borderBottom: '1px solid var(--cs-slate-100)', flexShrink: 0,
+      }}>
+        <IconButton onClick={onClose}><Back /></IconButton>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--cs-ink)', letterSpacing: -0.2 }}>
+            {driverName}
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--cs-slate-500)', marginTop: 1 }}>
+            {isTerminal
+              ? 'Order closed — read-only'
+              : !order.assignedDriverId
+                ? 'Driver not yet assigned'
+                : 'CitySend Courier · ' + order.id}
+          </div>
+        </div>
+      </div>
+
+      {/* Messages */}
+      <div style={{ flex: 1, overflowY: 'auto', padding: '16px 16px 8px', scrollbarWidth: 'none' }}>
+        {messages.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--cs-slate-400)', fontSize: 14 }}>
+            No messages yet.
+          </div>
+        ) : (
+          messages.map(msg => {
+            const isMine = msg.senderId === myId
+            return (
+              <div key={msg.id} style={{
+                display: 'flex', flexDirection: 'column',
+                alignItems: isMine ? 'flex-end' : 'flex-start',
+                marginBottom: 10,
+              }}>
+                <div style={{
+                  maxWidth: '78%', padding: '10px 14px',
+                  background: isMine ? 'var(--cs-ink)' : '#fff',
+                  color: isMine ? '#fff' : 'var(--cs-ink)',
+                  borderRadius: isMine ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
+                  fontSize: 14, lineHeight: 1.45,
+                  boxShadow: '0 1px 3px rgba(11,18,32,.08)',
+                }}>
+                  {msg.messageText}
+                </div>
+                <div style={{
+                  fontSize: 11, color: 'var(--cs-slate-400)',
+                  marginTop: 3, fontFamily: 'var(--cs-mono)',
+                  display: 'flex', alignItems: 'center', gap: 4,
+                }}>
+                  {fmtTime(msg.createdAt)}
+                  {isMine && (
+                    <span style={{ color: msg.isRead ? 'var(--cs-ok)' : 'var(--cs-slate-300)' }}>
+                      {msg.isRead ? '✓✓' : '✓'}
+                    </span>
+                  )}
+                </div>
+              </div>
+            )
+          })
+        )}
+        <div ref={bottomRef} />
+      </div>
+
+      {/* Input */}
+      <div style={{
+        padding: '10px 16px 36px', background: '#fff',
+        borderTop: '1px solid var(--cs-slate-100)', flexShrink: 0,
+      }}>
+        {canChat ? (
+          <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end' }}>
+            <textarea
+              value={inputText}
+              onChange={e => setInputText(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend() } }}
+              placeholder="Message your driver…"
+              rows={1}
+              style={{
+                flex: 1, padding: '12px 14px',
+                border: '1.5px solid var(--cs-slate-200)', borderRadius: 14,
+                fontFamily: 'var(--cs-font)', fontSize: 15, color: 'var(--cs-ink)',
+                background: '#fff', outline: 'none', resize: 'none',
+                lineHeight: 1.4, maxHeight: 100, overflowY: 'auto',
+              }}
+            />
+            <button
+              onClick={handleSend}
+              disabled={!inputText.trim() || sending}
+              style={{
+                width: 44, height: 44, borderRadius: 22, border: 'none',
+                background: inputText.trim() ? 'var(--cs-ink)' : 'var(--cs-slate-200)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                cursor: inputText.trim() ? 'pointer' : 'default', flexShrink: 0,
+                transition: 'background .15s',
+              }}
+            >
+              <Send size={18} color={inputText.trim() ? '#fff' : 'var(--cs-slate-400)'} />
+            </button>
+          </div>
+        ) : (
+          <div style={{
+            textAlign: 'center', padding: '10px 0',
+            fontSize: 13, color: 'var(--cs-slate-400)',
+          }}>
+            {isTerminal ? 'Chat is closed for completed orders.' : 'Chat available once a driver is assigned.'}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ── TrackingScreen ────────────────────────────────────────────────────────────
 
-export function TrackingScreen({ go, draft, cityConfig, orderId }: Props) {
+export function TrackingScreen({ go, draft, cityConfig, orderId, user }: Props) {
   const DEFAULT_CENTER: [number, number] = cityConfig.mapCenter
 
   // ── Order state ─────────────────────────────────────────────────────────────
@@ -71,10 +255,13 @@ export function TrackingScreen({ go, draft, cityConfig, orderId }: Props) {
 
   // ── Map / route state ────────────────────────────────────────────────────────
   const [routeInfo, setRouteInfo] = useState<RouteInfo | null>(
-    // Only use draft.route when there's no orderId (came straight from payment flow)
     orderId ? null : (draft.route ?? null),
   )
   const [mapReady, setMapReady] = useState(false)
+
+  // ── Chat state ───────────────────────────────────────────────────────────────
+  const [chatOpen,    setChatOpen]    = useState(false)
+  const [unreadCount, setUnreadCount] = useState(0)
 
   const mapContainerRef = useRef<HTMLDivElement>(null)
   const mapRef          = useRef<L.Map | null>(null)
@@ -98,7 +285,7 @@ export function TrackingScreen({ go, draft, cityConfig, orderId }: Props) {
     return () => { cancelled = true }
   }, [orderId])
 
-  // ── Realtime subscription ────────────────────────────────────────────────────
+  // ── Realtime order subscription ──────────────────────────────────────────────
   useEffect(() => {
     if (!orderId) return
     const unsub = subscribeToOrderById(orderId, (updated) => {
@@ -107,16 +294,29 @@ export function TrackingScreen({ go, draft, cityConfig, orderId }: Props) {
     return unsub
   }, [orderId])
 
+  // ── Unread badge — poll messages when order has driver assigned ───────────────
+  useEffect(() => {
+    if (!orderId || !user?.id) return
+    const myId = user.id
+    const unsub = subscribeToMessages(orderId, (msgs) => {
+      const unread = msgs.filter(m => m.receiverId === myId && !m.isRead).length
+      setUnreadCount(unread)
+    })
+    // Initial load
+    getMessages(orderId).then(msgs => {
+      setUnreadCount(msgs.filter(m => m.receiverId === myId && !m.isRead).length)
+    })
+    return unsub
+  }, [orderId, user?.id])
+
   // ── Resolve addresses → route ─────────────────────────────────────────────
-  // Runs when orderId is given: wait for order; otherwise use draft immediately.
   useEffect(() => {
     if (routeInfo) return
-    if (orderId && orderLoading) return  // wait for order to finish loading
-    if (orderId && !orderLoading && !order) return  // order not found — skip route calc
+    if (orderId && orderLoading) return
+    if (orderId && !orderLoading && !order) return
 
     let cancelled = false
     ;(async () => {
-      // Prefer order addresses; fall back to draft
       const puAddr  = order?.pickup.address  || draft.pickup.address  || ''
       const doAddr  = order?.dropoff.address || draft.dropoff.address || ''
 
@@ -218,7 +418,11 @@ export function TrackingScreen({ go, draft, cityConfig, orderId }: Props) {
   const pickupAddr  = order?.pickup.address  || draft.pickup.address  || '—'
   const dropoffAddr = order?.dropoff.address || draft.dropoff.address || '—'
 
-  // ── Empty state (no order and no meaningful draft) ────────────────────────────
+  const myId = user?.id ?? order?.customerId ?? 'guest'
+  // Chat available when driver is assigned (even after delivery for read-only view)
+  const chatAvailable = !!order?.assignedDriverId
+
+  // ── Empty state ───────────────────────────────────────────────────────────────
   if (!orderId && !draft.pickup.address && !draft.dropoff.address) {
     return (
       <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: 'var(--cs-paper)', padding: 32, gap: 16 }}>
@@ -239,16 +443,11 @@ export function TrackingScreen({ go, draft, cityConfig, orderId }: Props) {
     )
   }
 
-  // ── Order not found (orderId given but fetch completed with no result) ─────────
-  // Only shown after loading finishes — while loading the spinner covers this.
+  // ── Order not found ───────────────────────────────────────────────────────────
   if (orderId && !orderLoading && !order) {
     return (
       <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: 'var(--cs-paper)', padding: 32, gap: 16 }}>
-        <div style={{
-          width: 64, height: 64, borderRadius: 32,
-          background: 'var(--cs-slate-100)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-        }}>
+        <div style={{ width: 64, height: 64, borderRadius: 32, background: 'var(--cs-slate-100)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <Send size={26} color="var(--cs-slate-400)" />
         </div>
         <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--cs-ink)', textAlign: 'center', letterSpacing: -0.4 }}>
@@ -257,22 +456,14 @@ export function TrackingScreen({ go, draft, cityConfig, orderId }: Props) {
         <div style={{ fontSize: 14, color: 'var(--cs-slate-500)', textAlign: 'center', lineHeight: 1.55, maxWidth: 268 }}>
           We couldn't find this delivery. The link may be incorrect, or the order may have been removed.
         </div>
-        <div style={{
-          padding: '10px 14px', background: 'var(--cs-slate-100)',
-          borderRadius: 10, display: 'flex', alignItems: 'center', gap: 6,
-        }}>
+        <div style={{ padding: '10px 14px', background: 'var(--cs-slate-100)', borderRadius: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
           <span style={{ fontFamily: 'var(--cs-mono)', fontSize: 12, color: 'var(--cs-slate-500)', letterSpacing: 0.4 }}>
             {orderId}
           </span>
         </div>
         <button
           onClick={() => go('home')}
-          style={{
-            marginTop: 4, padding: '13px 32px',
-            background: 'var(--cs-ink)', color: '#fff',
-            border: 'none', borderRadius: 14,
-            fontFamily: 'var(--cs-font)', fontSize: 15, fontWeight: 600, cursor: 'pointer',
-          }}
+          style={{ marginTop: 4, padding: '13px 32px', background: 'var(--cs-ink)', color: '#fff', border: 'none', borderRadius: 14, fontFamily: 'var(--cs-font)', fontSize: 15, fontWeight: 600, cursor: 'pointer' }}
         >
           Back to home
         </button>
@@ -351,7 +542,7 @@ export function TrackingScreen({ go, draft, cityConfig, orderId }: Props) {
           <div style={{ width: 36, height: 4, borderRadius: 2, background: 'var(--cs-slate-200)' }} />
         </div>
 
-        {/* ── Cancelled state ─────────────────────────────────────────────── */}
+        {/* Cancelled state */}
         {status === 'cancelled' ? (
           <div style={{ padding: '16px 20px 0' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 16, background: '#FFF5F5', borderRadius: 16 }}>
@@ -413,7 +604,25 @@ export function TrackingScreen({ go, draft, cityConfig, orderId }: Props) {
                 {status !== 'new' && (
                   <>
                     <button style={circleBtnSt('var(--cs-slate-100)')}><Phone size={16} /></button>
-                    <button style={circleBtnSt('var(--cs-ink)', '#fff')}><Send size={16} color="#fff" /></button>
+                    {/* Chat button with unread badge */}
+                    <button
+                      onClick={() => setChatOpen(true)}
+                      disabled={!chatAvailable}
+                      style={{
+                        ...circleBtnSt(chatAvailable ? 'var(--cs-ink)' : 'var(--cs-slate-100)', chatAvailable ? '#fff' : 'var(--cs-slate-400)'),
+                        position: 'relative',
+                      }}
+                    >
+                      <Send size={16} color={chatAvailable ? '#fff' : 'var(--cs-slate-400)'} />
+                      {unreadCount > 0 && (
+                        <span style={{
+                          position: 'absolute', top: 6, right: 6,
+                          width: 8, height: 8, borderRadius: 4,
+                          background: 'var(--cs-accent)',
+                          border: '1.5px solid var(--cs-ink)',
+                        }} />
+                      )}
+                    </button>
                   </>
                 )}
               </div>
@@ -441,6 +650,16 @@ export function TrackingScreen({ go, draft, cityConfig, orderId }: Props) {
           </>
         )}
       </div>
+
+      {/* Chat overlay */}
+      {chatOpen && order && (
+        <ChatPanel
+          order={order}
+          myId={myId}
+          myRole="customer"
+          onClose={() => setChatOpen(false)}
+        />
+      )}
     </div>
   )
 }

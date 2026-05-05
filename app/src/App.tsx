@@ -564,7 +564,7 @@ export default function App() {
       case 'pay':
         return <PaymentScreen go={go} state={state} draft={draft} cityConfig={cityConfig} onPaymentComplete={onPaymentComplete} />
       case 'tracking':
-        return <TrackingScreen go={go} draft={draft} cityConfig={cityConfig} orderId={trackingOrderId} />
+        return <TrackingScreen go={go} draft={draft} cityConfig={cityConfig} orderId={trackingOrderId} user={user} />
       case 'history':
         return <HistoryScreen go={go} state={state} />
       case 'billing':
