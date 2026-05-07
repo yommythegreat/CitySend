@@ -13,6 +13,7 @@ export type CityId =
   | 'montreal'
 
 export type ScreenName =
+  | 'landing'
   | 'auth'
   | 'forgot-password'
   | 'home'

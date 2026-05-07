@@ -98,15 +98,55 @@ export function DashboardScreen({ onSelectOrder, onGoHistory, onGoEarnings }: Pr
 
   if (!auth) return null
 
-  // ── Simulate incoming job: pick an unassigned order and assign it ─────────
+  // ── Simulate incoming job: pick a real order or synthesise a mock one ────
   const handleSimulate = () => {
-    // Find an order assigned to this driver that isn't yet accepted as a substep
-    const newJob = activeOrders.find(o => o.status === 'assigned' && !state.substeps[o.id])
-    if (newJob) {
-      dispatch({ type: 'SHOW_JOB_OFFER', order: newJob })
-    } else {
-      alert('No assignable jobs in queue.\nAssign an order to this driver from the Admin panel first.')
+    // Prefer a real assigned order for this driver
+    const realJob = activeOrders.find(o => o.status === 'assigned' && !state.substeps[o.id])
+    if (realJob) {
+      dispatch({ type: 'SHOW_JOB_OFFER', order: realJob })
+      return
     }
+    // Fall back to a mock order so the UI flow can always be demoed
+    const zeroPriceBreakdown: import('@shared/types').PriceBreakdown = {
+      baseFee: 5.99, distanceFee: 6.30, sizeFee: 0, fragileFee: 1.50,
+      subtotalPreTax: 13.79, gst: 0.69, pst: 0, hst: 0, qst: 0,
+      totalTax: 0.69, subtotalWithTax: 14.48, tip: 2.00, total: 16.48,
+    }
+    const mock: import('@shared/types').Order = {
+      id:               `CS-DEMO-${Date.now().toString().slice(-4)}`,
+      status:           'assigned',
+      customerId:       'demo-customer',
+      customerName:     'Jordan Lee',
+      assignedDriverId: auth?.driverId ?? 'd0',
+      assignedDriverName: auth?.name ?? 'Demo Driver',
+      cityId:           'winnipeg',
+      createdAt:        new Date().toISOString(),
+      updatedAt:        new Date().toISOString(),
+      distanceKm:       4.2,
+      priceBreakdown:   zeroPriceBreakdown,
+      pickup: {
+        name:    'Sasha Novak',
+        phone:   '204 555 0198',
+        address: '134 Princess St, Exchange District',
+        unit:    '',
+        note:    'Buzz 302',
+      },
+      dropoff: {
+        name:    'Jordan Lee',
+        phone:   '204 555 0771',
+        address: '88 Isabel St, St. Boniface',
+        unit:    'Apt 4',
+        note:    'Leave at front desk if no answer.',
+      },
+      parcel: {
+        size:    'm',
+        desc:    'Birthday cake — chocolate',
+        fragile: true,
+        prohibitedItemsDeclarationAccepted: true,
+      },
+      notes: [],
+    }
+    dispatch({ type: 'SHOW_JOB_OFFER', order: mock })
   }
 
   return (

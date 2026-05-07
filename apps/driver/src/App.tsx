@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { DriverProvider, useDriver, signOutDriver } from './store/DriverContext'
 import { LoginScreen }            from './screens/LoginScreen'
 import { DashboardScreen }        from './screens/DashboardScreen'
@@ -12,16 +12,81 @@ import { JobOfferModal }          from './components/JobOfferModal'
 
 type Screen =
   | { name: 'dashboard' }
-  | { name: 'delivery';  orderId: string }
+  | { name: 'delivery';  orderId: string; chatOpen?: boolean }
   | { name: 'proof';     orderId: string }
   | { name: 'earnings';  orderId: string }
   | { name: 'history' }
+
+// ── Hash-based routing ────────────────────────────────────────────────────────
+// Format: #screen[/orderId[/sub]]
+// Examples:
+//   #dashboard
+//   #delivery/CS-1234
+//   #delivery/CS-1234/messages   ← opens chat immediately
+//   #proof/CS-1234
+//   #earnings/CS-1234
+//   #history
+
+function parseHash(): Screen {
+  const hash  = window.location.hash.replace(/^#\/?/, '')  // strip leading #/
+  if (!hash)  return { name: 'dashboard' }
+  const parts = hash.split('/')
+  const [seg0, seg1, seg2] = parts
+  switch (seg0) {
+    case 'delivery':
+      if (!seg1) return { name: 'dashboard' }
+      return { name: 'delivery', orderId: decodeURIComponent(seg1), chatOpen: seg2 === 'messages' }
+    case 'proof':
+      if (!seg1) return { name: 'dashboard' }
+      return { name: 'proof', orderId: decodeURIComponent(seg1) }
+    case 'earnings':
+      if (!seg1) return { name: 'dashboard' }
+      return { name: 'earnings', orderId: decodeURIComponent(seg1) }
+    case 'history':
+      return { name: 'history' }
+    default:
+      return { name: 'dashboard' }
+  }
+}
+
+function screenToHash(screen: Screen): string {
+  switch (screen.name) {
+    case 'delivery':
+      return screen.chatOpen
+        ? `delivery/${encodeURIComponent(screen.orderId)}/messages`
+        : `delivery/${encodeURIComponent(screen.orderId)}`
+    case 'proof':    return `proof/${encodeURIComponent(screen.orderId)}`
+    case 'earnings': return `earnings/${encodeURIComponent(screen.orderId)}`
+    case 'history':  return 'history'
+    default:         return 'dashboard'
+  }
+}
 
 // ── Inner app (needs DriverProvider) ─────────────────────────────────────────
 
 function DriverApp() {
   const { state, dispatch, jobOffer } = useDriver()
-  const [screen, setScreen] = useState<Screen>({ name: 'dashboard' })
+
+  // Restore screen from hash on first load; default to dashboard
+  const [screen, setScreen] = useState<Screen>(() => parseHash())
+
+  // Keep URL hash in sync with screen state
+  useEffect(() => {
+    const hash = screenToHash(screen)
+    if (window.location.hash !== `#${hash}`) {
+      window.history.replaceState(null, '', `#${hash}`)
+    }
+  }, [screen])
+
+  // Handle browser back/forward navigation
+  useEffect(() => {
+    const onPopState = () => {
+      const next = parseHash()
+      setScreen(next)
+    }
+    window.addEventListener('popstate', onPopState)
+    return () => window.removeEventListener('popstate', onPopState)
+  }, [])
 
   if (!state.auth) return <LoginScreen />
 
@@ -31,6 +96,12 @@ function DriverApp() {
     await signOutDriver()
   }
 
+  // Navigate helper — pushes a new history entry so back button works
+  const navigateTo = (next: Screen) => {
+    setScreen(next)
+    window.history.pushState(null, '', `#${screenToHash(next)}`)
+  }
+
   // ── Job offer handlers ───────────────────────────────────────────────────
 
   const handleAcceptOffer = () => {
@@ -38,7 +109,7 @@ function DriverApp() {
     const orderId = jobOffer.order.id
     dispatch({ type: 'HIDE_JOB_OFFER' })
     dispatch({ type: 'SET_SUBSTEP', orderId, substep: 'accepted' })
-    setScreen({ name: 'delivery', orderId })
+    navigateTo({ name: 'delivery', orderId })
   }
 
   const handleDeclineOffer = () => {
@@ -49,15 +120,12 @@ function DriverApp() {
     dispatch({ type: 'HIDE_JOB_OFFER' })
   }
 
-  // ── Topbar (only for history screen now — delivery is fullscreen) ─────────
+  // ── Topbar (dashboard + history only — delivery/earnings are fullscreen) ──
 
   const renderTopBar = () => {
     if (screen.name === 'dashboard') {
-      // Dashboard has its own header; show sign-out as floating button
       return (
-        <div style={{
-          position: 'fixed', top: 16, right: 16, zIndex: 100,
-        }}>
+        <div style={{ position: 'fixed', top: 16, right: 16, zIndex: 100 }}>
           <button
             onClick={handleLogout}
             style={{
@@ -78,12 +146,10 @@ function DriverApp() {
         <div style={{
           display: 'flex', alignItems: 'center', gap: 14,
           padding: '52px 16px 12px',
-          background: '#1a1a1a',
-          color: '#fff',
-          flexShrink: 0,
+          background: '#1a1a1a', color: '#fff', flexShrink: 0,
         }}>
           <button
-            onClick={() => setScreen({ name: 'dashboard' })}
+            onClick={() => navigateTo({ name: 'dashboard' })}
             style={{
               width: 40, height: 40, borderRadius: '50%',
               background: 'rgba(255,255,255,0.1)', border: 'none',
@@ -106,8 +172,8 @@ function DriverApp() {
       case 'dashboard':
         return (
           <DashboardScreen
-            onSelectOrder={orderId => setScreen({ name: 'delivery', orderId })}
-            onGoHistory={() => setScreen({ name: 'history' })}
+            onSelectOrder={orderId => navigateTo({ name: 'delivery', orderId })}
+            onGoHistory={() => navigateTo({ name: 'history' })}
           />
         )
 
@@ -115,8 +181,9 @@ function DriverApp() {
         return (
           <DeliveryScreen
             orderId={screen.orderId}
-            onBack={() => setScreen({ name: 'dashboard' })}
-            onComplete={orderId => setScreen({ name: 'proof', orderId })}
+            initialChatOpen={screen.chatOpen}
+            onBack={() => navigateTo({ name: 'dashboard' })}
+            onComplete={orderId => navigateTo({ name: 'proof', orderId })}
           />
         )
 
@@ -124,21 +191,25 @@ function DriverApp() {
         return (
           <ProofOfDeliveryScreen
             orderId={screen.orderId}
-            onBack={() => setScreen({ name: 'delivery', orderId: screen.orderId })}
-            onConfirmed={() => setScreen({ name: 'earnings', orderId: screen.orderId })}
+            onBack={() => navigateTo({ name: 'delivery', orderId: screen.orderId })}
+            onConfirmed={() => navigateTo({ name: 'earnings', orderId: screen.orderId })}
           />
         )
 
       case 'earnings': {
         const order = state.orders.find(o => o.id === screen.orderId)
         if (!order) {
-          setScreen({ name: 'dashboard' })
-          return null
+          // Orders may not be loaded yet — wait rather than redirect
+          return (
+            <div style={{ padding: 40, textAlign: 'center', color: 'var(--d-muted)' }}>
+              Loading…
+            </div>
+          )
         }
         return (
           <EarningsScreen
             order={order}
-            onContinue={() => setScreen({ name: 'dashboard' })}
+            onContinue={() => navigateTo({ name: 'dashboard' })}
           />
         )
       }
@@ -146,13 +217,12 @@ function DriverApp() {
       case 'history':
         return (
           <HistoryScreen
-            onSelectOrder={orderId => setScreen({ name: 'delivery', orderId })}
+            onSelectOrder={orderId => navigateTo({ name: 'delivery', orderId })}
           />
         )
     }
   }
 
-  // ── Shells that are fullscreen don't need d-shell wrapper ─────────────────
   const isFullscreen = screen.name === 'delivery' || screen.name === 'earnings'
 
   return (

@@ -262,7 +262,7 @@ export function HomeScreen({ go, state, user, cityConfig, configs, onCityChange 
 
         <div style={{ fontSize: 34, fontWeight: 600, letterSpacing: -1.2, lineHeight: 1.05, marginTop: 4, color: 'var(--cs-ink)' }}>
           {cityIsLive
-            ? <>Across town,<br />before lunch.</>
+            ? <>Across town,<br />before dawn.</>
             : <>Coming soon<br />to {cityConfig.cityName}.</>
           }
         </div>

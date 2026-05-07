@@ -9,6 +9,7 @@ import { BillingScreen }       from './screens/BillingScreen'
 import { NotificationsScreen } from './screens/NotificationsScreen'
 import { AuthScreen }          from './screens/AuthScreen'
 import { ForgotPasswordScreen } from './screens/ForgotPasswordScreen'
+import { LandingScreen }        from './screens/LandingScreen'
 import { ProfileScreen }       from './screens/ProfileScreen'
 import { SettingsScreen }      from './screens/SettingsScreen'
 import { AddPlaceScreen }      from './screens/AddPlaceScreen'
@@ -625,14 +626,17 @@ export default function App() {
   // ── Auth guard ──────────────────────────────────────────────────────────────
   if (!authChecked) return null
 
-  if (!user) return (
-    <div className="cs-shell">
-      {screen === 'forgot-password'
-        ? <ForgotPasswordScreen go={go} />
-        : <AuthScreen onAuth={handleAuth} go={go} />
-      }
-    </div>
-  )
+  if (!user) {
+    // Dedicated auth screens stay inside the phone shell
+    if (screen === 'forgot-password') {
+      return <div className="cs-shell"><ForgotPasswordScreen go={go} /></div>
+    }
+    if (screen === 'auth') {
+      return <div className="cs-shell"><AuthScreen onAuth={handleAuth} go={go} /></div>
+    }
+    // Default: show the full-width marketing landing page
+    return <LandingScreen go={go} />
+  }
 
   return (
     <div className="cs-shell">

@@ -75,15 +75,19 @@ function ChatPanel({
   myId,
   messages,
   fetchError,
+  callNotice,
   onRefresh,
   onClose,
+  onDismissCallNotice,
 }: {
-  order:       CustomerOrder
-  myId:        string
-  messages:    Message[]
-  fetchError:  string | null
-  onRefresh:   () => Promise<void>
-  onClose:     () => void
+  order:                CustomerOrder
+  myId:                 string
+  messages:             Message[]
+  fetchError:           string | null
+  callNotice?:          boolean
+  onRefresh:            () => Promise<void>
+  onClose:              () => void
+  onDismissCallNotice?: () => void
 }) {
   const [inputText,  setInputText]  = useState('')
   const [sending,    setSending]    = useState(false)
@@ -150,6 +154,24 @@ function ChatPanel({
           </div>
         </div>
       </div>
+
+      {/* Call-not-available notice */}
+      {callNotice && (
+        <div style={{
+          padding: '10px 16px', background: '#fff7ed',
+          borderBottom: '1px solid #fed7aa', display: 'flex', alignItems: 'flex-start', gap: 10,
+          flexShrink: 0,
+        }}>
+          <span style={{ fontSize: 16, flexShrink: 0 }}>📵</span>
+          <div style={{ flex: 1, fontSize: 13, color: '#92400e', lineHeight: 1.45 }}>
+            <strong>Calling is not available yet.</strong> Please message the driver instead.
+          </div>
+          <button
+            onClick={onDismissCallNotice}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#92400e', fontSize: 16, lineHeight: 1, flexShrink: 0 }}
+          >×</button>
+        </div>
+      )}
 
       {/* Messages */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '16px 16px 8px', scrollbarWidth: 'none' }}>
@@ -277,10 +299,11 @@ export function TrackingScreen({ go, draft, cityConfig, orderId, user }: Props) 
   const [mapReady, setMapReady] = useState(false)
 
   // ── Chat state ───────────────────────────────────────────────────────────────
-  const [chatOpen,    setChatOpen]    = useState(false)
-  const [unreadCount, setUnreadCount] = useState(0)
-  const [messages,    setMessages]    = useState<Message[]>([])
-  const [fetchError,  setFetchError]  = useState<string | null>(null)
+  const [chatOpen,       setChatOpen]       = useState(false)
+  const [callNotice,     setCallNotice]     = useState(false)   // "calling not available" notice
+  const [unreadCount,    setUnreadCount]    = useState(0)
+  const [messages,       setMessages]       = useState<Message[]>([])
+  const [fetchError,     setFetchError]     = useState<string | null>(null)
 
   const mapContainerRef = useRef<HTMLDivElement>(null)
   const mapRef          = useRef<L.Map | null>(null)
@@ -661,28 +684,45 @@ export function TrackingScreen({ go, draft, cityConfig, orderId, user }: Props) 
                   </div>
                 </div>
                 {status !== 'new' && (
-                  <>
-                    <button style={circleBtnSt('var(--cs-slate-100)')}><Phone size={16} /></button>
-                    {/* Chat button with unread badge */}
+                  <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+                    {/* Call Driver — redirects to messaging with notice */}
+                    <button
+                      onClick={() => { setCallNotice(true); setChatOpen(true) }}
+                      style={{
+                        display: 'flex', flexDirection: 'column', alignItems: 'center',
+                        gap: 3, padding: '7px 10px',
+                        background: 'var(--cs-slate-100)', border: 'none', borderRadius: 12,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <Phone size={15} />
+                      <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--cs-slate-600)' }}>Call Driver</span>
+                    </button>
+
+                    {/* Message Driver */}
                     <button
                       onClick={() => setChatOpen(true)}
                       disabled={!chatAvailable}
                       style={{
-                        ...circleBtnSt(chatAvailable ? 'var(--cs-ink)' : 'var(--cs-slate-100)', chatAvailable ? '#fff' : 'var(--cs-slate-400)'),
-                        position: 'relative',
+                        display: 'flex', flexDirection: 'column', alignItems: 'center',
+                        gap: 3, padding: '7px 10px', position: 'relative',
+                        background: chatAvailable ? 'var(--cs-ink)' : 'var(--cs-slate-100)',
+                        border: 'none', borderRadius: 12,
+                        cursor: chatAvailable ? 'pointer' : 'default',
                       }}
                     >
-                      <Send size={16} color={chatAvailable ? '#fff' : 'var(--cs-slate-400)'} />
+                      <Send size={15} color={chatAvailable ? '#fff' : 'var(--cs-slate-400)'} />
+                      <span style={{ fontSize: 10, fontWeight: 600, color: chatAvailable ? '#fff' : 'var(--cs-slate-400)' }}>Message Driver</span>
                       {unreadCount > 0 && (
                         <span style={{
-                          position: 'absolute', top: 6, right: 6,
+                          position: 'absolute', top: 4, right: 4,
                           width: 8, height: 8, borderRadius: 4,
                           background: 'var(--cs-accent)',
                           border: '1.5px solid var(--cs-ink)',
                         }} />
                       )}
                     </button>
-                  </>
+                  </div>
                 )}
               </div>
             </div>
@@ -717,8 +757,10 @@ export function TrackingScreen({ go, draft, cityConfig, orderId, user }: Props) 
           myId={myId}
           messages={messages}
           fetchError={fetchError}
+          callNotice={callNotice}
           onRefresh={refreshMessages}
-          onClose={() => setChatOpen(false)}
+          onClose={() => { setChatOpen(false); setCallNotice(false) }}
+          onDismissCallNotice={() => setCallNotice(false)}
         />
       )}
     </div>

@@ -139,15 +139,19 @@ function reducer(state: DriverState, action: Action): DriverState {
       return { ...state, orders: newOrders, jobOffer: newJobOffer }
     }
 
-    case 'SHOW_JOB_OFFER':
+    case 'SHOW_JOB_OFFER': {
+      // Also upsert the order into state.orders so DeliveryScreen can find it
+      const exists = state.orders.some(o => o.id === action.order.id)
       return {
         ...state,
+        orders: exists ? state.orders : [...state.orders, action.order],
         jobOffer: {
           order: action.order,
           showModal: true,
           timeRemaining: 15,
         },
       }
+    }
 
     case 'HIDE_JOB_OFFER':
       return { ...state, jobOffer: null }

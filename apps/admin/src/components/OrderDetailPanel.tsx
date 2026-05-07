@@ -1,11 +1,11 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { OrderStatusBadge } from './StatusBadge'
 import { AssignDriverModal } from './AssignDriverModal'
 import { useAdminStore } from '../store/AdminContext'
 import { fmt, fmtDateTime, fmtTime, parcelSizeLabel } from '@shared/utils/format'
 import { NEXT_STATUSES, ORDER_STATUS_LABELS } from '@shared/types'
 import type { OrderStatus } from '@shared/types'
-import { getMessages, subscribeToMessages, type Message } from '@shared/utils/messageStore'
+import { getMessages, sendMessage, subscribeToMessages, type Message } from '@shared/utils/messageStore'
 
 interface Props {
   orderId: string
@@ -45,6 +45,9 @@ export function OrderDetailPanel({ orderId, onClose }: Props) {
   const [cancelReason, setCancelReason] = useState('')
   const [noteText, setNoteText]         = useState('')
   const [messages, setMessages]         = useState<Message[]>([])
+  const [adminReplyText, setAdminReplyText] = useState('')
+  const [replySending, setReplySending]     = useState(false)
+  const messagesEndRef = useRef<HTMLDivElement>(null)
 
   const order = state.orders.find(o => o.id === orderId)
 
@@ -69,6 +72,31 @@ export function OrderDetailPanel({ orderId, onClose }: Props) {
     dispatch({ type: 'CANCEL_ORDER', orderId, reason: cancelReason.trim() })
     setShowCancel(false)
     setCancelReason('')
+  }
+
+  const handleAdminSend = async () => {
+    const text = adminReplyText.trim()
+    if (!text || replySending) return
+    // Determine receiver: prefer driver if assigned, otherwise customer
+    const receiverId   = order.assignedDriverId ?? order.customerId
+    const receiverRole: Message['receiverRole'] = order.assignedDriverId ? 'driver' : 'customer'
+    setReplySending(true)
+    try {
+      await sendMessage({
+        orderId:      order.id,
+        senderId:     'admin',
+        senderRole:   'admin',
+        receiverId,
+        receiverRole,
+        messageText:  text,
+      })
+      setAdminReplyText('')
+      setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100)
+    } catch (err) {
+      console.error('[AdminPanel] send failed', err)
+    } finally {
+      setReplySending(false)
+    }
   }
 
   const handleAddNote = () => {
@@ -312,20 +340,38 @@ export function OrderDetailPanel({ orderId, onClose }: Props) {
           </Section>
 
           {/* Messages thread */}
-          <Section title="Messages">
+          <Section title={`Messages${messages.length > 0 ? ` (${messages.length})` : ''}`}>
             {messages.length === 0 ? (
-              <div style={{ fontSize: 13, color: 'var(--a-muted)' }}>No messages for this order.</div>
+              <div style={{ fontSize: 13, color: 'var(--a-muted)', marginBottom: 12 }}>No messages for this order.</div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 14 }}>
                 {messages.map(m => {
+                  const isAdmin    = m.senderRole === 'admin'
                   const isCustomer = m.senderRole === 'customer'
+                  // align: admin → right (purple), customer → left (grey), driver → right-ish (green)
+                  const alignRight = isAdmin || !isCustomer
+                  const bubbleBg = isAdmin
+                    ? 'var(--a-sidebar)'
+                    : isCustomer
+                    ? 'var(--a-bg)'
+                    : 'var(--a-ok, #16a34a)'
+                  const bubbleColor = isCustomer ? 'var(--a-ink2)' : '#fff'
+                  const borderRadius = alignRight
+                    ? '10px 10px 3px 10px'
+                    : '10px 10px 10px 3px'
+                  const roleLabel = isAdmin ? 'Admin' : isCustomer ? 'Customer' : 'Driver'
+                  const roleLabelColor = isAdmin
+                    ? 'var(--a-sidebar)'
+                    : isCustomer
+                    ? 'var(--a-accent)'
+                    : 'var(--a-ok)'
                   return (
-                    <div key={m.id} style={{ display: 'flex', flexDirection: 'column', alignItems: isCustomer ? 'flex-start' : 'flex-end' }}>
+                    <div key={m.id} style={{ display: 'flex', flexDirection: 'column', alignItems: alignRight ? 'flex-end' : 'flex-start' }}>
                       <div style={{
                         maxWidth: '85%', padding: '8px 11px',
-                        background: isCustomer ? 'var(--a-bg)' : 'var(--a-accent)',
-                        color: isCustomer ? 'var(--a-ink2)' : '#fff',
-                        borderRadius: isCustomer ? '10px 10px 10px 3px' : '10px 10px 3px 10px',
+                        background: bubbleBg,
+                        color: bubbleColor,
+                        borderRadius,
                         border: isCustomer ? '1px solid var(--a-border)' : 'none',
                         fontSize: 13, lineHeight: 1.45,
                       }}>
@@ -334,10 +380,9 @@ export function OrderDetailPanel({ orderId, onClose }: Props) {
                       <div style={{ fontSize: 10, color: 'var(--a-muted)', marginTop: 3, display: 'flex', gap: 6, alignItems: 'center' }}>
                         <span style={{
                           textTransform: 'uppercase', letterSpacing: 0.4, fontWeight: 600,
-                          fontSize: 9,
-                          color: isCustomer ? 'var(--a-accent)' : 'var(--a-ok)',
+                          fontSize: 9, color: roleLabelColor,
                         }}>
-                          {isCustomer ? 'Customer' : 'Driver'}
+                          {roleLabel}
                         </span>
                         · {fmtTime(m.createdAt)}
                         {m.isRead && <span style={{ color: 'var(--a-ok)' }}>· Read</span>}
@@ -345,8 +390,36 @@ export function OrderDetailPanel({ orderId, onClose }: Props) {
                     </div>
                   )
                 })}
+                <div ref={messagesEndRef} />
               </div>
             )}
+
+            {/* Admin reply input */}
+            <div style={{ display: 'flex', gap: 8, marginTop: messages.length > 0 ? 0 : 4 }}>
+              <input
+                value={adminReplyText}
+                onChange={e => setAdminReplyText(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleAdminSend() } }}
+                placeholder="Reply as admin…"
+                disabled={replySending}
+                style={{
+                  flex: 1, padding: '7px 10px', border: '1.5px solid var(--a-border)',
+                  borderRadius: 6, fontSize: 13, outline: 'none', background: '#fff',
+                  opacity: replySending ? 0.6 : 1,
+                }}
+              />
+              <button
+                onClick={handleAdminSend}
+                disabled={!adminReplyText.trim() || replySending}
+                style={{
+                  padding: '7px 14px', border: 'none', borderRadius: 6,
+                  background: adminReplyText.trim() && !replySending ? 'var(--a-sidebar)' : 'var(--a-border)',
+                  color: adminReplyText.trim() && !replySending ? '#fff' : 'var(--a-muted)',
+                  fontSize: 12, fontWeight: 600, transition: 'background 0.15s',
+                  cursor: adminReplyText.trim() && !replySending ? 'pointer' : 'default',
+                }}
+              >{replySending ? '…' : 'Send'}</button>
+            </div>
           </Section>
 
           {/* Timestamps */}

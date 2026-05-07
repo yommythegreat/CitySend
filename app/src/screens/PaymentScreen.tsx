@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js'
 import { Button } from '../components/Button'
 import { IconButton } from '../components/IconButton'
-import { Back, Lock, Card, Plus, Shield } from '../components/Icons'
+import { Back, Lock, Card, Plus } from '../components/Icons'
 import { fmt } from '../utils/pricing'
 import { computeOrderPrice } from '../utils/serviceAvailability'
 import { stripePromise } from '../lib/stripe'
@@ -104,17 +104,6 @@ function CheckoutForm({
             {error}
           </div>
         )}
-      </div>
-
-      {/* Shield */}
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: 10, padding: 14,
-        background: 'rgba(22,107,58,.06)', borderRadius: 12, marginBottom: 16,
-      }}>
-        <Shield size={16} color="var(--cs-ok)" />
-        <div style={{ fontSize: 13, color: 'var(--cs-ok)', lineHeight: 1.4 }}>
-          Protected by CitySend Shield · $500 coverage on every delivery
-        </div>
       </div>
 
       {/* Pay button */}
