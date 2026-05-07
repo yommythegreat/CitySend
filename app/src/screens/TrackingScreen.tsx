@@ -62,6 +62,14 @@ function getInitials(name: string): string {
   return name.split(' ').map(p => p[0] ?? '').join('').toUpperCase().slice(0, 2)
 }
 
+/** "Demo Driver" → "Demo D."  |  "Armen Yousefian" → "Armen Y."  |  single word unchanged */
+function abbreviateName(name: string): string {
+  const parts = name.trim().split(/\s+/)
+  if (parts.length <= 1) return name
+  const lastInitial = (parts[parts.length - 1][0] ?? '').toUpperCase()
+  return lastInitial ? `${parts[0]} ${lastInitial}.` : parts[0]
+}
+
 function fmtTime(iso: string): string {
   return new Date(iso).toLocaleTimeString('en-CA', { hour: 'numeric', minute: '2-digit' })
 }
@@ -97,7 +105,7 @@ function ChatPanel({
   const isTerminal  = order.status === 'delivered' || order.status === 'cancelled'
   const isAuthed    = !!myId && myId !== 'guest'
   const canChat     = !!order.assignedDriverId && !isTerminal && isAuthed
-  const driverName  = order.assignedDriverName ?? 'Driver'
+  const driverName  = order.assignedDriverName ? abbreviateName(order.assignedDriverName) : 'Driver'
 
   // Scroll to bottom on new messages
   useEffect(() => {
@@ -494,8 +502,10 @@ export function TrackingScreen({ go, draft, cityConfig, orderId, user }: Props) 
   const distKm    = routeInfo ? (routeInfo.distanceM / 1000).toFixed(1) : '—'
   const etaMins   = routeInfo ? Math.max(2, Math.round(routeInfo.durationS / 60 * (1 - progressRef.current))) : null
 
-  const driverName     = order?.assignedDriverName ?? (status === 'new' ? 'Matching…' : 'CitySend Courier')
-  const driverInitials = (order?.assignedDriverName) ? getInitials(order.assignedDriverName) : '?'
+  const driverName     = order?.assignedDriverName
+    ? abbreviateName(order.assignedDriverName)
+    : (status === 'new' ? 'Matching…' : 'CitySend Courier')
+  const driverInitials = order?.assignedDriverName ? getInitials(order.assignedDriverName) : '?'
 
   const pickupAddr  = order?.pickup.address  || draft.pickup.address  || '—'
   const dropoffAddr = order?.dropoff.address || draft.dropoff.address || '—'
@@ -677,48 +687,38 @@ export function TrackingScreen({ go, draft, cityConfig, orderId, user }: Props) 
                   {status === 'new' ? '…' : driverInitials}
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--cs-ink)', letterSpacing: -0.2 }}>{driverName}</div>
-                  <div style={{ fontSize: 13, color: 'var(--cs-slate-500)', display: 'flex', alignItems: 'center', gap: 5, marginTop: 2 }}>
-                    {status !== 'new' && <><Star size={12} color="var(--cs-accent)" fill="currentColor" />5.0 · </>}
-                    CitySend Courier
+                  <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--cs-ink)', letterSpacing: -0.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {driverName}
+                  </div>
+                  <div style={{ fontSize: 12, color: 'var(--cs-slate-500)', marginTop: 2, display: 'flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}>
+                    {status !== 'new' && <Star size={11} color="var(--cs-accent)" fill="var(--cs-accent)" />}
+                    {status !== 'new' ? '5.0 · CitySend Courier' : 'CitySend Courier'}
                   </div>
                 </div>
                 {status !== 'new' && (
-                  <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
-                    {/* Call Driver — redirects to messaging with notice */}
+                  <div style={{ display: 'flex', gap: 8, flexShrink: 0, alignItems: 'center' }}>
+                    {/* Phone — compact circle, redirects to messaging with notice */}
                     <button
                       onClick={() => { setCallNotice(true); setChatOpen(true) }}
-                      style={{
-                        display: 'flex', flexDirection: 'column', alignItems: 'center',
-                        gap: 3, padding: '7px 10px',
-                        background: 'var(--cs-slate-100)', border: 'none', borderRadius: 12,
-                        cursor: 'pointer',
-                      }}
+                      style={circleBtnSt('var(--cs-slate-100)')}
+                      aria-label="Call driver"
                     >
-                      <Phone size={15} />
-                      <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--cs-slate-600)' }}>Call Driver</span>
+                      <Phone size={17} />
                     </button>
 
-                    {/* Message Driver */}
+                    {/* Message — compact circle */}
                     <button
                       onClick={() => setChatOpen(true)}
                       disabled={!chatAvailable}
-                      style={{
-                        display: 'flex', flexDirection: 'column', alignItems: 'center',
-                        gap: 3, padding: '7px 10px', position: 'relative',
-                        background: chatAvailable ? 'var(--cs-ink)' : 'var(--cs-slate-100)',
-                        border: 'none', borderRadius: 12,
-                        cursor: chatAvailable ? 'pointer' : 'default',
-                      }}
+                      style={{ ...circleBtnSt(chatAvailable ? 'var(--cs-ink)' : 'var(--cs-slate-100)'), position: 'relative' }}
+                      aria-label="Message driver"
                     >
-                      <Send size={15} color={chatAvailable ? '#fff' : 'var(--cs-slate-400)'} />
-                      <span style={{ fontSize: 10, fontWeight: 600, color: chatAvailable ? '#fff' : 'var(--cs-slate-400)' }}>Message Driver</span>
+                      <Send size={17} color={chatAvailable ? '#fff' : 'var(--cs-slate-400)'} />
                       {unreadCount > 0 && (
                         <span style={{
-                          position: 'absolute', top: 4, right: 4,
-                          width: 8, height: 8, borderRadius: 4,
-                          background: 'var(--cs-accent)',
-                          border: '1.5px solid var(--cs-ink)',
+                          position: 'absolute', top: 2, right: 2,
+                          width: 9, height: 9, borderRadius: 5,
+                          background: 'var(--cs-accent)', border: '1.5px solid #fff',
                         }} />
                       )}
                     </button>
