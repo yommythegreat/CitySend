@@ -7,7 +7,6 @@ import type { AppState, AuthUser, CityId, PaymentMethod, SavedAddress, ScreenNam
 
 interface Props {
   go: (screen: ScreenName) => void
-  onLogout: () => void | Promise<void>
   state: AppState
   setState: React.Dispatch<React.SetStateAction<AppState>>
   onCityChange: (cityId: CityId) => void
@@ -508,7 +507,7 @@ function CityPanel({
 
 // ── Main settings screen ───────────────────────────────────────────────────
 
-export function SettingsScreen({ go, onLogout, state, setState, onCityChange, configs, user }: Props) {
+export function SettingsScreen({ go, state, setState, onCityChange, configs, user }: Props) {
   const [panel, setPanel] = useState<Panel>('main')
   const [notifDelivery, setNotifDelivery] = useState(true)
   const [notifPromos,   setNotifPromos]   = useState(false)
@@ -567,11 +566,7 @@ export function SettingsScreen({ go, onLogout, state, setState, onCityChange, co
               </div>
             ))}
 
-            <div style={{ background: '#fff', borderRadius: 16, border: '1px solid var(--cs-slate-100)', overflow: 'hidden', marginBottom: 8, marginTop: 16 }}>
-              <RowBtn label="Exit guest mode" danger onClick={onLogout} />
-            </div>
-
-            <div style={{ textAlign: 'center', marginTop: 16, marginBottom: 24 }}>
+            <div style={{ textAlign: 'center', marginTop: 20, marginBottom: 24 }}>
               <div style={{ fontSize: 11, color: 'var(--cs-slate-400)', fontFamily: 'var(--cs-mono)', letterSpacing: 0.8 }}>CITYSEND v1.1.0 · citysend.ca</div>
             </div>
           </div>
@@ -647,10 +642,6 @@ export function SettingsScreen({ go, onLogout, state, setState, onCityChange, co
             <RowBtn label="Change password" onClick={() => setPanel('security')} />
             <Divider />
             <RowBtn label="Two-factor authentication" sub="Not enabled" onClick={() => {}} />
-          </div>
-
-          <div style={{ background: '#fff', borderRadius: 16, border: '1px solid var(--cs-slate-100)', overflow: 'hidden', marginBottom: 8 }}>
-            <RowBtn label="Log out" danger onClick={onLogout} />
           </div>
 
           <div style={{ textAlign: 'center', marginTop: 16, marginBottom: 24 }}>

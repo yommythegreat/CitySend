@@ -597,12 +597,11 @@ export default function App() {
       case 'notifications':
         return <NotificationsScreen go={go} user={user} notifVersion={notifVersion} />
       case 'profile':
-        return <ProfileScreen go={go} user={user!} state={state} />
+        return <ProfileScreen go={go} user={user!} state={state} onLogout={handleLogout} />
       case 'settings':
         return (
           <SettingsScreen
             go={go}
-            onLogout={handleLogout}
             state={state}
             setState={setState}
             onCityChange={handleCityChange}
