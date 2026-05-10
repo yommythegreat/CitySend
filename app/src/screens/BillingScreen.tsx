@@ -1,11 +1,13 @@
 import React, { useState } from 'react'
 import { IconButton } from '../components/IconButton'
 import { Back, Card, Receipt } from '../components/Icons'
-import type { AppState, PaymentMethod, ScreenName } from '../types'
+import { GuestPrompt } from '../components/GuestPrompt'
+import type { AppState, AuthUser, PaymentMethod, ScreenName } from '../types'
 
 interface Props {
   go: (screen: ScreenName) => void
   state: AppState
+  user: AuthUser | null
 }
 
 const BRAND_LABELS: Record<PaymentMethod['brand'], string> = {
@@ -138,8 +140,26 @@ function ReceiptView({ deliveryId, date, recipientName, total, cardLabel, onBack
 
 // ── Billing list ──────────────────────────────────────────────────────────────
 
-export function BillingScreen({ go, state }: Props) {
+export function BillingScreen({ go, state, user }: Props) {
   const [openId, setOpenId] = useState<string | null>(null)
+
+  // Guests have no billing history — show a signup gate
+  if (user?.id === 'guest') {
+    return (
+      <div className="cs-screen cs-enter-right" style={{ position: 'relative' }}>
+        <div style={{ padding: '56px 20px 0', display: 'flex', alignItems: 'center', gap: 14, flexShrink: 0 }}>
+          <IconButton onClick={() => go('settings')}><Back /></IconButton>
+          <div style={{ flex: 1, fontSize: 17, fontWeight: 600, letterSpacing: -0.3 }}>Billing history</div>
+        </div>
+        <GuestPrompt
+          go={go}
+          title="Your receipts, always here."
+          message="Create a free CitySend account to view past receipts, download invoices, and track every delivery you've sent."
+          onDismiss={() => go('settings')}
+        />
+      </div>
+    )
+  }
 
   // Only show deliveries that have a financial record (non-canceled)
   const receipts = state.pastDeliveries.filter(d => d.status !== 'canceled')

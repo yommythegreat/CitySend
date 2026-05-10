@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react'
 import { Tag } from '../components/Tag'
 import { IconButton } from '../components/IconButton'
 import { Back, Check, Truck, User, Receipt, Sparkle } from '../components/Icons'
+import { GuestPrompt } from '../components/GuestPrompt'
 import {
   fetchCustomerNotifs, markNotifRead, markAllNotifsRead,
   type CustomerNotif, type NotifEvent,
@@ -89,6 +90,24 @@ function groupByDay(notifs: CustomerNotif[]): { day: string; items: CustomerNoti
 export function NotificationsScreen({ go, user, notifVersion }: Props) {
   const [liveNotifs, setLiveNotifs] = useState<CustomerNotif[]>([])
   const [tick,       setTick]       = useState(0)
+
+  // Guests have no notifications history — show gate immediately before effects run
+  if (user?.id === 'guest') {
+    return (
+      <div className="cs-screen cs-enter-up" style={{ position: 'relative' }}>
+        <div style={{ padding: '56px 20px 0', display: 'flex', alignItems: 'center', gap: 14, flexShrink: 0 }}>
+          <IconButton onClick={() => go('home')}><Back /></IconButton>
+          <div style={{ flex: 1, fontSize: 17, fontWeight: 600, letterSpacing: -0.3 }}>Notifications</div>
+        </div>
+        <GuestPrompt
+          go={go}
+          title="Stay in the loop."
+          message="Create a free CitySend account to get delivery updates, driver notifications, and receipts straight to your inbox."
+          onDismiss={() => go('home')}
+        />
+      </div>
+    )
+  }
 
   // Load live notifications from the store (async: Supabase or localStorage)
   useEffect(() => {

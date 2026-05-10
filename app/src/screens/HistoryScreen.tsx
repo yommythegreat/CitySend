@@ -3,11 +3,13 @@ import { Segment } from '../components/Segment'
 import { Tag } from '../components/Tag'
 import { IconButton } from '../components/IconButton'
 import { Back, Check, Truck, Repeat, Search, X } from '../components/Icons'
-import type { AppState, ScreenName, NavOptions, Delivery } from '../types'
+import { GuestPrompt } from '../components/GuestPrompt'
+import type { AppState, AuthUser, ScreenName, NavOptions, Delivery } from '../types'
 
 interface Props {
   go: (screen: ScreenName, opts?: NavOptions) => void
   state: AppState
+  user: AuthUser | null
 }
 
 function statusTone(s: Delivery['status']): 'ok' | 'ink' | 'neutral' {
@@ -39,7 +41,24 @@ function matchesSearch(d: Delivery, q: string): boolean {
   )
 }
 
-export function HistoryScreen({ go, state }: Props) {
+export function HistoryScreen({ go, state, user }: Props) {
+  // Guests have no delivery history — show a signup prompt instead
+  if (user?.id === 'guest') {
+    return (
+      <div className="cs-screen cs-enter-up" style={{ position: 'relative' }}>
+        <div style={{ padding: '56px 20px 0', display: 'flex', alignItems: 'center', gap: 14, flexShrink: 0 }}>
+          <IconButton onClick={() => go('home')}><Back /></IconButton>
+          <div style={{ flex: 1, fontSize: 17, fontWeight: 600, letterSpacing: -0.3 }}>History</div>
+        </div>
+        <GuestPrompt
+          go={go}
+          title="Keep your delivery history in one place."
+          message="Create a free CitySend account to view receipts, track past deliveries, and reorder with one tap."
+          onDismiss={() => go('home')}
+        />
+      </div>
+    )
+  }
   const [tab,        setTab]        = useState('all')
   const [searchOpen, setSearchOpen] = useState(false)
   const [query,      setQuery]      = useState('')

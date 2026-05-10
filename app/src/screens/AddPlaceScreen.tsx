@@ -1,11 +1,13 @@
 import React, { useState } from 'react'
 import { IconButton } from '../components/IconButton'
 import { Back, Home as HomeIcon, Package, Pin, Check } from '../components/Icons'
-import type { AppState, SavedAddress, ScreenName } from '../types'
+import { GuestPrompt } from '../components/GuestPrompt'
+import type { AppState, AuthUser, SavedAddress, ScreenName } from '../types'
 
 interface Props {
   go: (screen: ScreenName) => void
   setState: React.Dispatch<React.SetStateAction<AppState>>
+  user: AuthUser | null
 }
 
 const ADDR_ICONS: SavedAddress['icon'][] = ['home', 'package', 'pin']
@@ -35,7 +37,24 @@ const sectionLabel: React.CSSProperties = {
   letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 8,
 }
 
-export function AddPlaceScreen({ go, setState }: Props) {
+export function AddPlaceScreen({ go, setState, user }: Props) {
+  // Guests cannot save places — gate immediately
+  if (user?.id === 'guest') {
+    return (
+      <div className="cs-screen cs-enter-right" style={{ position: 'relative' }}>
+        <div style={{ padding: '56px 20px 0', display: 'flex', alignItems: 'center', gap: 14, flexShrink: 0 }}>
+          <IconButton onClick={() => go('home')}><Back /></IconButton>
+          <div style={{ flex: 1, fontSize: 17, fontWeight: 600, letterSpacing: -0.3 }}>Save a place</div>
+        </div>
+        <GuestPrompt
+          go={go}
+          title="Your future self will thank you."
+          message="Create a free CitySend account to save Home, Work, and your other frequent stops — one tap to autofill on your next send."
+          onDismiss={() => go('home')}
+        />
+      </div>
+    )
+  }
   const [label,        setLabel]        = useState('')
   const [address,      setAddress]      = useState('')
   const [unit,         setUnit]         = useState('')

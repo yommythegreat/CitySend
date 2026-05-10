@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { IconButton } from '../components/IconButton'
-import { Back, Check, Phone, Send, Star } from '../components/Icons'
+import { Back, Check, Phone, Send, Star, X } from '../components/Icons'
 import { geocodeOnce, fetchRoute } from '../hooks/useGeocoder'
 import { getOrderById, subscribeToOrderById, type CustomerOrder } from '../utils/orderStore'
 import { getMessages, sendMessage, subscribeToMessages, markMessagesRead, type Message } from '../utils/messageStore'
@@ -312,6 +312,7 @@ export function TrackingScreen({ go, draft, cityConfig, orderId, user }: Props) 
   const [unreadCount,    setUnreadCount]    = useState(0)
   const [messages,       setMessages]       = useState<Message[]>([])
   const [fetchError,     setFetchError]     = useState<string | null>(null)
+  const [guestBannerDismissed, setGuestBannerDismissed] = useState(false)
 
   const mapContainerRef = useRef<HTMLDivElement>(null)
   const mapRef          = useRef<L.Map | null>(null)
@@ -511,6 +512,7 @@ export function TrackingScreen({ go, draft, cityConfig, orderId, user }: Props) 
   const dropoffAddr = order?.dropoff.address || draft.dropoff.address || '—'
 
   const myId = user?.id ?? order?.customerId ?? 'guest'
+  const isAuthed = !!myId && myId !== 'guest'
   // Chat available when driver is assigned (even after delivery for read-only view)
   const chatAvailable = !!order?.assignedDriverId
 
@@ -746,6 +748,35 @@ export function TrackingScreen({ go, draft, cityConfig, orderId, user }: Props) 
                 </div>
               )}
             </div>
+
+            {/* Guest signup nudge — dismissible, non-blocking */}
+            {!isAuthed && !guestBannerDismissed && (
+              <div style={{
+                margin: '12px 20px 0',
+                padding: '11px 14px',
+                background: 'rgba(201,74,27,.06)',
+                borderRadius: 12,
+                border: '1px solid rgba(201,74,27,.15)',
+                display: 'flex', alignItems: 'center', gap: 10,
+              }}>
+                <div style={{ flex: 1 }}>
+                  <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--cs-ink)' }}>Save this for next time. </span>
+                  <button
+                    onClick={() => go('auth')}
+                    style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontSize: 13, fontWeight: 600, color: 'var(--cs-accent)', fontFamily: 'var(--cs-font)' }}
+                  >
+                    Create account →
+                  </button>
+                </div>
+                <button
+                  onClick={() => setGuestBannerDismissed(true)}
+                  aria-label="Dismiss"
+                  style={{ background: 'none', border: 'none', padding: 4, cursor: 'pointer', display: 'flex', flexShrink: 0 }}
+                >
+                  <X size={13} color="var(--cs-slate-400)" />
+                </button>
+              </div>
+            )}
           </>
         )}
       </div>

@@ -3,7 +3,7 @@ import { IconButton } from '../components/IconButton'
 import { Back, Bell, Card, Home as HomeIcon, Lock, Chevron, Check, Plus, X, Pin, Package } from '../components/Icons'
 import { getAllCities } from '../utils/serviceAvailability'
 import type { CityConfig } from '../config/cityConfig'
-import type { AppState, CityId, PaymentMethod, SavedAddress, ScreenName } from '../types'
+import type { AppState, AuthUser, CityId, PaymentMethod, SavedAddress, ScreenName } from '../types'
 
 interface Props {
   go: (screen: ScreenName) => void
@@ -12,6 +12,7 @@ interface Props {
   setState: React.Dispatch<React.SetStateAction<AppState>>
   onCityChange: (cityId: CityId) => void
   configs: CityConfig[]
+  user?: AuthUser | null
 }
 
 type Panel = 'main' | 'payment' | 'addresses' | 'security' | 'city'
@@ -507,11 +508,13 @@ function CityPanel({
 
 // ── Main settings screen ───────────────────────────────────────────────────
 
-export function SettingsScreen({ go, onLogout, state, setState, onCityChange, configs }: Props) {
+export function SettingsScreen({ go, onLogout, state, setState, onCityChange, configs, user }: Props) {
   const [panel, setPanel] = useState<Panel>('main')
   const [notifDelivery, setNotifDelivery] = useState(true)
   const [notifPromos,   setNotifPromos]   = useState(false)
   const [notifSMS,      setNotifSMS]      = useState(true)
+
+  const isGuest = user?.id === 'guest'
 
   if (panel === 'payment')   return <PaymentPanel   state={state} setState={setState} onBack={() => setPanel('main')} goForgot={() => go('forgot-password')} />
   if (panel === 'addresses') return <AddressesPanel state={state} setState={setState} onBack={() => setPanel('main')} />
@@ -525,17 +528,65 @@ export function SettingsScreen({ go, onLogout, state, setState, onCityChange, co
     />
   )
 
-  const defaultCard = state.paymentMethods.find(m => m.isDefault)
-  const cardSub = defaultCard ? `${BRAND_LABELS[defaultCard.brand]} •••• ${defaultCard.last4} · default` : 'No saved cards'
-  const addrSub = state.savedAddresses.length > 0
-    ? state.savedAddresses.map(a => a.label).join(', ')
-    : 'No saved addresses'
-
   const allCities = getAllCities(configs)
   const currentCity = allCities.find(c => c.cityId === state.selectedCityId)
   const citySub = currentCity
     ? `${currentCity.cityName}, ${currentCity.province}${currentCity.isLive ? ' · Live' : ' · Coming soon'}`
     : `${allCities[0].cityName}, ${allCities[0].province} · Live`
+
+  // ── Guest-simplified panel ─────────────────────────────────────────────────
+  if (isGuest) {
+    return (
+      <div className="cs-screen cs-enter-right">
+        <div style={{ padding: '56px 20px 0', display: 'flex', alignItems: 'center', gap: 14, flexShrink: 0 }}>
+          <IconButton onClick={() => go('profile')}><Back /></IconButton>
+          <div style={{ flex: 1, fontSize: 17, fontWeight: 600, letterSpacing: -0.3 }}>Settings</div>
+        </div>
+
+        <div style={{ flex: 1, padding: '0 20px', overflowY: 'auto', scrollbarWidth: 'none' }}>
+          <div style={{ paddingTop: 24 }}>
+
+            <SectionHeader label="Delivery area" />
+            <div style={{ background: '#fff', borderRadius: 16, border: '1px solid var(--cs-slate-100)', overflow: 'hidden', marginBottom: 16 }}>
+              <RowBtn label="Current city" sub={citySub} onClick={() => setPanel('city')} />
+            </div>
+
+            {/* Locked sections — guest teaser */}
+            {(['Payment methods', 'Saved places', 'Account & security'] as const).map((label) => (
+              <div key={label} style={{ background: '#fff', borderRadius: 16, border: '1px solid var(--cs-slate-100)', overflow: 'hidden', marginBottom: 10 }}>
+                <button
+                  onClick={() => go('auth')}
+                  style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: 'var(--cs-font)', textAlign: 'left' }}
+                >
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 15, fontWeight: 500, color: 'var(--cs-slate-400)' }}>{label}</div>
+                    <div style={{ fontSize: 13, color: 'var(--cs-accent)', marginTop: 1 }}>Create an account to unlock →</div>
+                  </div>
+                  <Lock size={15} color="var(--cs-slate-300)" />
+                </button>
+              </div>
+            ))}
+
+            <div style={{ background: '#fff', borderRadius: 16, border: '1px solid var(--cs-slate-100)', overflow: 'hidden', marginBottom: 8, marginTop: 16 }}>
+              <RowBtn label="Exit guest mode" danger onClick={onLogout} />
+            </div>
+
+            <div style={{ textAlign: 'center', marginTop: 16, marginBottom: 24 }}>
+              <div style={{ fontSize: 11, color: 'var(--cs-slate-400)', fontFamily: 'var(--cs-mono)', letterSpacing: 0.8 }}>CITYSEND v1.1.0 · citysend.ca</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // ── Full registered panel ──────────────────────────────────────────────────
+
+  const defaultCard = state.paymentMethods.find(m => m.isDefault)
+  const cardSub = defaultCard ? `${BRAND_LABELS[defaultCard.brand]} •••• ${defaultCard.last4} · default` : 'No saved cards'
+  const addrSub = state.savedAddresses.length > 0
+    ? state.savedAddresses.map(a => a.label).join(', ')
+    : 'No saved addresses'
 
   return (
     <div className="cs-screen cs-enter-right">

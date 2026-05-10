@@ -248,8 +248,11 @@ export default function App() {
       if (stored) {
         try {
           const authUser: AuthUser = JSON.parse(stored)
-          setUser(authUser)
-          loadUserData(authUser)
+          // Never restore a guest session from storage — guests are always temporary.
+          if (authUser.id !== 'guest') {
+            setUser(authUser)
+            loadUserData(authUser)
+          }
         } catch {}
       }
       setAuthChecked(true)
@@ -347,6 +350,14 @@ export default function App() {
     // For Supabase mode: setUser + loadUserData happen here for instant UI
     // feedback. onAuthStateChange SIGNED_IN also fires and is harmlessly
     // redundant (same data). For guest / non-Supabase, this is the only path.
+
+    // Guest sessions always start fresh — never carry over previous guest state
+    // or draft. Each "Continue as guest" click produces a clean slate.
+    if (authUser.id === 'guest') {
+      setState(INITIAL_STATE)
+      setDraft(BLANK_DRAFT)
+    }
+
     setUser(authUser)
     await loadUserData(authUser)
     // Honour tracking deep-link: if the URL still contains /tracking/:id the
@@ -362,11 +373,21 @@ export default function App() {
   }, [loadUserData])
 
   const handleLogout = useCallback(async () => {
-    // Clear state immediately so the UI snaps to the auth screen at once.
+    const wasGuest = userRef.current?.id === 'guest'
+
+    // Clear all local state immediately — UI snaps to landing/auth at once.
     setUser(null)
     setState(INITIAL_STATE)
     setDraft(BLANK_DRAFT)
     setScreen('home')
+
+    if (wasGuest) {
+      // Guests never have a Supabase session — just wipe local state and return.
+      // Also clear any non-Supabase dev tokens that might have been set.
+      localStorage.removeItem('cs_token')
+      localStorage.removeItem('cs_user')
+      return
+    }
 
     if (isSupabaseConfigured) {
       // Await so Supabase clears its own localStorage tokens before we return.
@@ -438,8 +459,10 @@ export default function App() {
       setTimeout(() => setDraft(BLANK_DRAFT), 300)
     }
 
-    // Already logged in + navigating to auth → redirect home (e.g. from ForgotPassword)
-    setScreen(next === 'auth' && userRef.current ? 'home' : next)
+    // Registered users navigating to 'auth' → redirect home (e.g. after ForgotPassword).
+    // Guests navigating to 'auth' → allow, so they can convert to a registered account.
+    const isRegistered = userRef.current && userRef.current.id !== 'guest'
+    setScreen(next === 'auth' && isRegistered ? 'home' : next)
   }, [])
 
   // ── Payment completion ──────────────────────────────────────────────────────
@@ -568,9 +591,9 @@ export default function App() {
       case 'tracking':
         return <TrackingScreen go={go} draft={draft} cityConfig={cityConfig} orderId={trackingOrderId} user={user} />
       case 'history':
-        return <HistoryScreen go={go} state={state} />
+        return <HistoryScreen go={go} state={state} user={user} />
       case 'billing':
-        return <BillingScreen go={go} state={state} />
+        return <BillingScreen go={go} state={state} user={user} />
       case 'notifications':
         return <NotificationsScreen go={go} user={user} notifVersion={notifVersion} />
       case 'profile':
@@ -584,10 +607,11 @@ export default function App() {
             setState={setState}
             onCityChange={handleCityChange}
             configs={configs}
+            user={user}
           />
         )
       case 'add-place':
-        return <AddPlaceScreen go={go} setState={setState} />
+        return <AddPlaceScreen go={go} setState={setState} user={user} />
       case 'city-blocked':
         return <CityBlockedScreen go={go} cityConfig={cityConfig} configs={configs} />
       default:
