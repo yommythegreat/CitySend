@@ -70,6 +70,41 @@ async function detectCityFromGeolocation(configs: CityConfig[]): Promise<CityId 
   })
 }
 
+// ── Session-storage helpers for booking continuity ───────────────────────────
+//
+// Booking screens (new-1 through payment) and the in-progress draft are
+// persisted to sessionStorage so a page refresh doesn't drop the user back to
+// the landing page. sessionStorage is tab-scoped and auto-cleared when the tab
+// closes, so there's no cross-session bleed.
+//
+// Guest sessions intentionally bypass this: guests have no persistent identity,
+// so restoring a booking mid-flow after a refresh is impossible.
+
+const BOOKING_SCREENS: ScreenName[] = ['new-1', 'new-2', 'new-3', 'pricing', 'pay']
+const SESSION_SCREEN_KEY = 'cs_screen'
+const SESSION_DRAFT_KEY  = 'cs_draft'
+
+function saveBookingSession(screen: ScreenName, draft: Draft) {
+  if (BOOKING_SCREENS.includes(screen)) {
+    sessionStorage.setItem(SESSION_SCREEN_KEY, screen)
+    sessionStorage.setItem(SESSION_DRAFT_KEY,  JSON.stringify(draft))
+  } else {
+    sessionStorage.removeItem(SESSION_SCREEN_KEY)
+    sessionStorage.removeItem(SESSION_DRAFT_KEY)
+  }
+}
+
+function restoreBookingSession(): { screen: ScreenName; draft: Draft } | null {
+  try {
+    const s = sessionStorage.getItem(SESSION_SCREEN_KEY) as ScreenName | null
+    const d = sessionStorage.getItem(SESSION_DRAFT_KEY)
+    if (s && BOOKING_SCREENS.includes(s) && d) {
+      return { screen: s, draft: JSON.parse(d) as Draft }
+    }
+  } catch {}
+  return null
+}
+
 // ── User-scoped localStorage helpers ─────────────────────────────────────────
 
 const savedAddressesKey = (userId: string) => `cs_saved_places_${userId}`
@@ -130,6 +165,15 @@ export default function App() {
   const [trackingOrderId, setTrackingOrderId] = useState<string | undefined>(
     () => parseTrackingId(),
   )
+
+  // Persist active booking screen + draft to sessionStorage so a page refresh
+  // during a booking flow restores the user to where they left off (registered
+  // users only — guests are ephemeral and always start fresh).
+  useEffect(() => {
+    if (user && user.id !== 'guest') {
+      saveBookingSession(screen, draft)
+    }
+  }, [screen, draft, user])
 
   // Refs so go() callback is never stale
   const userRef            = useRef<AuthUser | null>(null)
@@ -252,6 +296,9 @@ export default function App() {
           if (authUser.id !== 'guest') {
             setUser(authUser)
             loadUserData(authUser)
+            // Restore any in-progress booking from sessionStorage
+            const saved = restoreBookingSession()
+            if (saved) { setScreen(saved.screen); setDraft(saved.draft) }
           }
         } catch {}
       }
@@ -281,6 +328,12 @@ export default function App() {
             // causes a permanent blank screen.
             setUser(authUser)
             userRef.current = authUser
+            // Restore in-progress booking from sessionStorage (INITIAL_SESSION only —
+            // a fresh SIGNED_IN after a new login should not restore a stale draft).
+            if (event === 'INITIAL_SESSION') {
+              const saved = restoreBookingSession()
+              if (saved) { setScreen(saved.screen); setDraft(saved.draft) }
+            }
             setAuthChecked(true)
             loadUserData(authUser).catch(err =>
               console.error('[Auth] loadUserData failed during session restore', err)
@@ -380,6 +433,9 @@ export default function App() {
     setState(INITIAL_STATE)
     setDraft(BLANK_DRAFT)
     setScreen('home')
+    // Clear any saved booking session so it's not accidentally restored after re-login
+    sessionStorage.removeItem(SESSION_SCREEN_KEY)
+    sessionStorage.removeItem(SESSION_DRAFT_KEY)
 
     if (wasGuest) {
       // Guests never have a Supabase session — just wipe local state and return.
