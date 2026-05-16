@@ -89,9 +89,13 @@ function saveBookingSession(screen: ScreenName, draft: Draft) {
     sessionStorage.setItem(SESSION_SCREEN_KEY, screen)
     sessionStorage.setItem(SESSION_DRAFT_KEY,  JSON.stringify(draft))
   } else {
-    sessionStorage.removeItem(SESSION_SCREEN_KEY)
-    sessionStorage.removeItem(SESSION_DRAFT_KEY)
+    clearBookingSession()
   }
+}
+
+function clearBookingSession() {
+  sessionStorage.removeItem(SESSION_SCREEN_KEY)
+  sessionStorage.removeItem(SESSION_DRAFT_KEY)
 }
 
 function restoreBookingSession(): { screen: ScreenName; draft: Draft } | null {
@@ -169,10 +173,15 @@ export default function App() {
   // Persist active booking screen + draft to sessionStorage so a page refresh
   // during a booking flow restores the user to where they left off (registered
   // users only — guests are ephemeral and always start fresh).
+  // Guard: skip the write when neither screen nor the serialized draft changed
+  // so typing in a form field doesn't repeatedly serialize the whole object.
+  const _prevBookingKey = useRef('')
   useEffect(() => {
-    if (user && user.id !== 'guest') {
-      saveBookingSession(screen, draft)
-    }
+    if (!user || user.id === 'guest') return
+    const key = BOOKING_SCREENS.includes(screen) ? `${screen}::${JSON.stringify(draft)}` : screen
+    if (key === _prevBookingKey.current) return
+    _prevBookingKey.current = key
+    saveBookingSession(screen, draft)
   }, [screen, draft, user])
 
   // Refs so go() callback is never stale
@@ -286,19 +295,23 @@ export default function App() {
   //     which path triggered the logout.
   //
   useEffect(() => {
+    // Shared helper: apply a saved booking session if one exists.
+    // Only called on initial session restore, not on fresh sign-in.
+    const applyRestoredSession = () => {
+      const saved = restoreBookingSession()
+      if (saved) { setScreen(saved.screen); setDraft(saved.draft) }
+    }
+
     if (!isSupabaseConfigured) {
       // ── Dev / no-Supabase fallback ──────────────────────────────────────────
       const stored = localStorage.getItem('cs_user')
       if (stored) {
         try {
           const authUser: AuthUser = JSON.parse(stored)
-          // Never restore a guest session from storage — guests are always temporary.
           if (authUser.id !== 'guest') {
             setUser(authUser)
             loadUserData(authUser)
-            // Restore any in-progress booking from sessionStorage
-            const saved = restoreBookingSession()
-            if (saved) { setScreen(saved.screen); setDraft(saved.draft) }
+            applyRestoredSession()
           }
         } catch {}
       }
@@ -322,18 +335,11 @@ export default function App() {
                      ?? session.user.email?.split('@')[0]
                      ?? 'User',
             }
-            // Unblock the app immediately — user is confirmed, render now.
-            // loadUserData fetches past orders and runs in the background;
-            // it does NOT gate rendering so a slow/failed DB query never
-            // causes a permanent blank screen.
             setUser(authUser)
             userRef.current = authUser
-            // Restore in-progress booking from sessionStorage (INITIAL_SESSION only —
-            // a fresh SIGNED_IN after a new login should not restore a stale draft).
-            if (event === 'INITIAL_SESSION') {
-              const saved = restoreBookingSession()
-              if (saved) { setScreen(saved.screen); setDraft(saved.draft) }
-            }
+            // Only restore a saved booking on initial page load, not on a fresh sign-in
+            // where the user just completed auth and should land on home.
+            if (event === 'INITIAL_SESSION') applyRestoredSession()
             setAuthChecked(true)
             loadUserData(authUser).catch(err =>
               console.error('[Auth] loadUserData failed during session restore', err)
@@ -433,9 +439,7 @@ export default function App() {
     setState(INITIAL_STATE)
     setDraft(BLANK_DRAFT)
     setScreen('home')
-    // Clear any saved booking session so it's not accidentally restored after re-login
-    sessionStorage.removeItem(SESSION_SCREEN_KEY)
-    sessionStorage.removeItem(SESSION_DRAFT_KEY)
+    clearBookingSession()
 
     if (wasGuest) {
       // Guests never have a Supabase session — just wipe local state and return.

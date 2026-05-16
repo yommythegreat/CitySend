@@ -12,7 +12,7 @@ interface Props {
 
 // ── Guest profile ─────────────────────────────────────────────────────────────
 
-function GuestProfile({ go, onLogout }: { go: Props['go']; onLogout: Props['onLogout'] }) {
+function GuestProfile({ go }: { go: Props['go'] }) {
   const benefits: { label: string; icon: React.ReactNode }[] = [
     { label: 'Save places for faster checkout',  icon: <Pin     size={16} color="var(--cs-accent)" /> },
     { label: 'View delivery history & receipts', icon: <Receipt size={16} color="var(--cs-accent)" /> },
@@ -114,7 +114,7 @@ function GuestProfile({ go, onLogout }: { go: Props['go']; onLogout: Props['onLo
 
 export function ProfileScreen({ go, user, state, onLogout }: Props) {
   if (user.id === 'guest') {
-    return <GuestProfile go={go} onLogout={onLogout} />
+    return <GuestProfile go={go} />
   }
 
   const initials = user.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()

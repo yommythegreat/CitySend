@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { IconButton } from '../components/IconButton'
-import { Back, Bell, Card, Home as HomeIcon, Lock, Chevron, Check, Plus, X, Pin, Package } from '../components/Icons'
+import { Back, Bell, Card, Lock, Chevron, Check, Plus, X } from '../components/Icons'
+import { AddrIcon, ADDR_ICONS, ICON_LABELS } from '../components/AddrIcon'
 import { getAllCities } from '../utils/serviceAvailability'
 import type { CityConfig } from '../config/cityConfig'
 import type { AppState, AuthUser, CityId, PaymentMethod, SavedAddress, ScreenName } from '../types'
@@ -191,15 +192,6 @@ function PaymentPanel({ state, setState, onBack, goForgot }: { state: AppState; 
 }
 
 // ── Addresses panel ────────────────────────────────────────────────────────
-
-const ADDR_ICONS: SavedAddress['icon'][] = ['home', 'package', 'pin']
-const ICON_LABELS: Record<SavedAddress['icon'], string> = { home: 'Home', package: 'Work', pin: 'Other' }
-
-function AddrIcon({ icon, size = 16 }: { icon: SavedAddress['icon']; size?: number }) {
-  if (icon === 'home')    return <HomeIcon size={size} />
-  if (icon === 'package') return <Package size={size} />
-  return <Pin size={size} />
-}
 
 function AddressesPanel({ state, setState, onBack }: { state: AppState; setState: Props['setState']; onBack: () => void }) {
   const [editing,   setEditing]   = useState<number | null>(null) // index

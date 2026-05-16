@@ -28,14 +28,12 @@ export function GuestPrompt({
       textAlign: 'center',
       overflowY: 'auto',
     }}>
-      {/* Icon */}
       <div style={{
         width: 72, height: 72, borderRadius: 36,
         background: 'var(--cs-slate-100)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         marginBottom: 20,
       }}>
-        {/* CitySend user icon — 20×20 stroke */}
         <svg width="32" height="32" viewBox="0 0 20 20" fill="none"
              stroke="var(--cs-slate-400)" strokeWidth="1.6"
              strokeLinecap="round" strokeLinejoin="round">

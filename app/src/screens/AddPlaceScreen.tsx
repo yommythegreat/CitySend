@@ -1,26 +1,14 @@
 import React, { useState } from 'react'
 import { IconButton } from '../components/IconButton'
-import { Back, Home as HomeIcon, Package, Pin, Check } from '../components/Icons'
-import { GuestPrompt } from '../components/GuestPrompt'
+import { Back, Check } from '../components/Icons'
+import { GuestGatedScreen } from '../components/GuestGatedScreen'
+import { AddrIcon, ADDR_ICONS, ICON_LABELS } from '../components/AddrIcon'
 import type { AppState, AuthUser, SavedAddress, ScreenName } from '../types'
 
 interface Props {
   go: (screen: ScreenName) => void
   setState: React.Dispatch<React.SetStateAction<AppState>>
   user: AuthUser | null
-}
-
-const ADDR_ICONS: SavedAddress['icon'][] = ['home', 'package', 'pin']
-const ICON_LABELS: Record<SavedAddress['icon'], string> = {
-  home:    'Home',
-  package: 'Work',
-  pin:     'Other',
-}
-
-function AddrIcon({ icon, size = 14 }: { icon: SavedAddress['icon']; size?: number }) {
-  if (icon === 'home')    return <HomeIcon size={size} />
-  if (icon === 'package') return <Package size={size} />
-  return <Pin size={size} />
 }
 
 function FieldError({ msg }: { msg?: string }) {
@@ -39,22 +27,13 @@ const sectionLabel: React.CSSProperties = {
 
 export function AddPlaceScreen({ go, setState, user }: Props) {
   // Guests cannot save places — gate immediately
-  if (user?.id === 'guest') {
-    return (
-      <div className="cs-screen cs-enter-right">
-        <div style={{ padding: '56px 20px 0', display: 'flex', alignItems: 'center', gap: 14, flexShrink: 0 }}>
-          <IconButton onClick={() => go('home')}><Back /></IconButton>
-          <div style={{ flex: 1, fontSize: 17, fontWeight: 600, letterSpacing: -0.3 }}>Save a place</div>
-        </div>
-        <GuestPrompt
-          go={go}
-          title="Your future self will thank you."
-          message="Create a free CitySend account to save Home, Work, and your other frequent stops — one tap to autofill on your next send."
-          onDismiss={() => go('home')}
-        />
-      </div>
-    )
-  }
+  if (user?.id === 'guest') return (
+    <GuestGatedScreen
+      go={go} screenTitle="Save a place" backTarget="home"
+      promptTitle="Your future self will thank you."
+      promptMessage="Create a free CitySend account to save Home, Work, and your other frequent stops — one tap to autofill on your next send."
+    />
+  )
   const [label,        setLabel]        = useState('')
   const [address,      setAddress]      = useState('')
   const [unit,         setUnit]         = useState('')
