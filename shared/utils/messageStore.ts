@@ -168,7 +168,7 @@ export function subscribeToMessages(
         if (msgs) onUpdate(msgs)
       },
     )
-    .subscribe((status) => {
+    .subscribe((status: string) => {
       console.log('[messageStore] channel status', status)
     })
 

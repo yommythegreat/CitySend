@@ -10,6 +10,7 @@
 
 import React, { createContext, useContext, useReducer, useEffect, useCallback } from 'react'
 import type { Order, Driver, OrderStatus, AdminNote } from '@shared/types'
+import type { AuthChangeEvent, Session } from '@supabase/supabase-js'
 import { supabase, isSupabaseConfigured } from '@shared/lib/supabase'
 import {
   fetchOrders, subscribeToOrders,
@@ -274,7 +275,7 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!isSupabaseConfigured) return
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event: AuthChangeEvent, session: Session | null) => {
       console.log('[DriverAuth] state change:', event, session?.user?.email ?? 'no user')
 
       if (event === 'SIGNED_OUT') {
