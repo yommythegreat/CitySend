@@ -1,6 +1,6 @@
 import React from 'react'
 import { IconButton } from '../components/IconButton'
-import { Back, User, Phone, Home as HomeIcon, Package, Pin, Repeat, Settings } from '../components/Icons'
+import { Back, User, Phone, Home as HomeIcon, Package, Pin, Repeat, Settings, Bell, Card, Receipt } from '../components/Icons'
 import type { AppState, AuthUser, ScreenName } from '../types'
 
 interface Props {
@@ -13,11 +13,11 @@ interface Props {
 // ── Guest profile ─────────────────────────────────────────────────────────────
 
 function GuestProfile({ go, onLogout }: { go: Props['go']; onLogout: Props['onLogout'] }) {
-  const benefits = [
-    'Save places for faster checkout',
-    'View delivery history & receipts',
-    'Get real-time notifications',
-    'Manage payment methods',
+  const benefits: { label: string; icon: React.ReactNode }[] = [
+    { label: 'Save places for faster checkout',  icon: <Pin     size={16} color="var(--cs-accent)" /> },
+    { label: 'View delivery history & receipts', icon: <Receipt size={16} color="var(--cs-accent)" /> },
+    { label: 'Get real-time notifications',      icon: <Bell    size={16} color="var(--cs-accent)" /> },
+    { label: 'Manage payment methods',           icon: <Card    size={16} color="var(--cs-accent)" /> },
   ]
 
   return (
@@ -69,14 +69,13 @@ function GuestProfile({ go, onLogout }: { go: Props['go']; onLogout: Props['onLo
           {benefits.map((b, i) => (
             <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px' }}>
               <div style={{
-                width: 28, height: 28, borderRadius: 14, flexShrink: 0,
+                width: 32, height: 32, borderRadius: 10, flexShrink: 0,
                 background: 'rgba(201,74,27,.08)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 13,
               }}>
-                {['📍','🧾','🔔','💳'][i]}
+                {b.icon}
               </div>
-              <div style={{ fontSize: 14, color: 'var(--cs-ink)', fontWeight: 500 }}>{b}</div>
+              <div style={{ fontSize: 14, color: 'var(--cs-ink)', fontWeight: 500 }}>{b.label}</div>
             </div>
           ))}
         </div>

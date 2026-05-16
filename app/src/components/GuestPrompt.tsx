@@ -11,7 +11,7 @@ interface Props {
 
 /**
  * Full-screen gate shown when a guest tries to access a registered-only feature.
- * Replaces the normal screen content so there's no broken/empty UI.
+ * Uses flex: 1 so it fills remaining height after the top bar, never obscuring it.
  */
 export function GuestPrompt({
   go,
@@ -21,19 +21,28 @@ export function GuestPrompt({
 }: Props) {
   return (
     <div style={{
-      position: 'absolute', inset: 0,
+      flex: 1,
       display: 'flex', flexDirection: 'column',
       alignItems: 'center', justifyContent: 'center',
-      background: 'var(--cs-paper)', padding: '0 32px',
+      padding: '0 32px 32px',
       textAlign: 'center',
+      overflowY: 'auto',
     }}>
       {/* Icon */}
       <div style={{
         width: 72, height: 72, borderRadius: 36,
         background: 'var(--cs-slate-100)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        fontSize: 30, marginBottom: 20,
-      }}>👤</div>
+        marginBottom: 20,
+      }}>
+        {/* CitySend user icon — 20×20 stroke */}
+        <svg width="32" height="32" viewBox="0 0 20 20" fill="none"
+             stroke="var(--cs-slate-400)" strokeWidth="1.6"
+             strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="10" cy="7" r="3"/>
+          <path d="M4 17c0-3 3-5 6-5s6 2 6 5"/>
+        </svg>
+      </div>
 
       <div style={{
         fontSize: 22, fontWeight: 600, letterSpacing: -0.5,

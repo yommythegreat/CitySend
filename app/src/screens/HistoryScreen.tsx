@@ -45,7 +45,7 @@ export function HistoryScreen({ go, state, user }: Props) {
   // Guests have no delivery history — show a signup prompt instead
   if (user?.id === 'guest') {
     return (
-      <div className="cs-screen cs-enter-up" style={{ position: 'relative' }}>
+      <div className="cs-screen cs-enter-up">
         <div style={{ padding: '56px 20px 0', display: 'flex', alignItems: 'center', gap: 14, flexShrink: 0 }}>
           <IconButton onClick={() => go('home')}><Back /></IconButton>
           <div style={{ flex: 1, fontSize: 17, fontWeight: 600, letterSpacing: -0.3 }}>History</div>

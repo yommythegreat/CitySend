@@ -207,7 +207,7 @@ export const CITY_CONFIGS: CityConfig[] = [
     geocodeBbox:    '-97.45,49.77,-96.95,50.05',
     geocodeContext: 'Winnipeg, MB, Canada',
     mapCenter:      [49.8951, -97.1384],
-    avgPickupMinutes: 12,
+    avgPickupMinutes: 30,
     onTimePercent:    '98.4%',
   },
 
@@ -240,7 +240,7 @@ export const CITY_CONFIGS: CityConfig[] = [
     geocodeBbox:    '-79.64,43.58,-79.12,43.86',
     geocodeContext: 'Toronto, ON, Canada',
     mapCenter:      [43.6532, -79.3832],
-    avgPickupMinutes: 15,
+    avgPickupMinutes: 30,
     onTimePercent:    '—',
   },
 
@@ -273,7 +273,7 @@ export const CITY_CONFIGS: CityConfig[] = [
     geocodeBbox:    '-114.27,50.84,-113.90,51.21',
     geocodeContext: 'Calgary, AB, Canada',
     mapCenter:      [51.0447, -114.0719],
-    avgPickupMinutes: 15,
+    avgPickupMinutes: 30,
     onTimePercent:    '—',
   },
 
@@ -306,7 +306,7 @@ export const CITY_CONFIGS: CityConfig[] = [
     geocodeBbox:    '-123.27,49.20,-122.99,49.35',
     geocodeContext: 'Vancouver, BC, Canada',
     mapCenter:      [49.2827, -123.1207],
-    avgPickupMinutes: 15,
+    avgPickupMinutes: 30,
     onTimePercent:    '—',
   },
 
@@ -339,7 +339,7 @@ export const CITY_CONFIGS: CityConfig[] = [
     geocodeBbox:    '-113.71,53.40,-113.27,53.72',
     geocodeContext: 'Edmonton, AB, Canada',
     mapCenter:      [53.5461, -113.4938],
-    avgPickupMinutes: 15,
+    avgPickupMinutes: 30,
     onTimePercent:    '—',
   },
 
@@ -372,7 +372,7 @@ export const CITY_CONFIGS: CityConfig[] = [
     geocodeBbox:    '-75.95,45.26,-75.47,45.54',
     geocodeContext: 'Ottawa, ON, Canada',
     mapCenter:      [45.4215, -75.6972],
-    avgPickupMinutes: 15,
+    avgPickupMinutes: 30,
     onTimePercent:    '—',
   },
 
@@ -405,7 +405,7 @@ export const CITY_CONFIGS: CityConfig[] = [
     geocodeBbox:    '-73.98,45.41,-73.47,45.71',
     geocodeContext: 'Montreal, QC, Canada',
     mapCenter:      [45.5017, -73.5673],
-    avgPickupMinutes: 15,
+    avgPickupMinutes: 30,
     onTimePercent:    '—',
   },
 ]

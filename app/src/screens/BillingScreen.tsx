@@ -146,7 +146,7 @@ export function BillingScreen({ go, state, user }: Props) {
   // Guests have no billing history — show a signup gate
   if (user?.id === 'guest') {
     return (
-      <div className="cs-screen cs-enter-right" style={{ position: 'relative' }}>
+      <div className="cs-screen cs-enter-right">
         <div style={{ padding: '56px 20px 0', display: 'flex', alignItems: 'center', gap: 14, flexShrink: 0 }}>
           <IconButton onClick={() => go('settings')}><Back /></IconButton>
           <div style={{ flex: 1, fontSize: 17, fontWeight: 600, letterSpacing: -0.3 }}>Billing history</div>

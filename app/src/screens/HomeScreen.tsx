@@ -300,7 +300,7 @@ export function HomeScreen({ go, state, user, cityConfig, configs, onCityChange 
               {cityIsLive ? 'Send a package' : `Coming soon in ${cityConfig.cityName}`}
             </div>
             <div style={{ fontSize: 13, color: 'rgba(255,255,255,.65)', marginTop: 2 }}>
-              {cityIsLive ? 'Avg. pickup in 12 min' : 'Join the waitlist →'}
+              {cityIsLive ? 'Avg. pickup in 30 min' : 'Join the waitlist →'}
             </div>
           </div>
           <Arrow color="#fff" />

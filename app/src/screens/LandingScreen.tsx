@@ -621,7 +621,7 @@ export function LandingScreen({ go }: Props) {
             }}>
               Same-day delivery for anything that fits in a car — documents, keys, cakes,
               laptops. Flat <strong style={{ color: 'var(--cs-ink)' }}>$15</strong>, picked
-              up in about 20 minutes, tracked the whole way.
+              up in about 30 minutes, tracked the whole way.
             </p>
             <div style={{ display: 'flex', gap: 12, marginTop: 32, flexWrap: 'wrap' }}>
               <button onClick={handleSend} style={{
@@ -649,7 +649,7 @@ export function LandingScreen({ go }: Props) {
             {/* Stats */}
             <div style={{ display: 'flex', gap: 28, marginTop: 36, flexWrap: 'wrap' }}>
               {([
-                ['20 min', 'avg pickup'],
+                ['30 min', 'avg pickup'],
                 ['98.4%', 'on-time'],
                 ['$15',   'flat across WPG'],
               ] as [string, string][]).map(([n, k]) => (
@@ -702,7 +702,7 @@ export function LandingScreen({ go }: Props) {
       {/* ─── How it works ─────────────────────────────────────────────── */}
       <section className="lp-section-how">
         <div className="lp-eyebrow" style={{ color: 'var(--cs-slate-500)' }}>How it works</div>
-        <div className="lp-section-title">Three taps. Twenty minutes. Done.</div>
+        <div className="lp-section-title">Three taps. Thirty minutes. Done.</div>
         <div className="lp-section-sub" style={{ maxWidth: 620 }}>
           No quotes, no calls, no waiting on a hub. Tell us where, snap a photo,
           hand it to the courier at your door.
@@ -714,7 +714,7 @@ export function LandingScreen({ go }: Props) {
           <StepCard n="02" title="Add the package" icon={<IconPackage/>} accent
             body="Pick a size, write what's inside. Mark it fragile if it is. We're carrying it like it's ours."/>
           <StepCard n="03" title="We handle the rest" icon={<IconSend/>}
-            body="Match a courier, pick it up in ~20 min, track the route live. Receipt in your email when it lands."/>
+            body="Match a courier, pick it up in ~30 min, track the route live. Receipt in your email when it lands."/>
         </div>
       </section>
 
@@ -818,7 +818,7 @@ export function LandingScreen({ go }: Props) {
 
         <div className="lp-trust-grid">
           <TrustCard dark icon={<IconFlash/>} title="Same-day, every time"
-            body="Pickup in ~20 min. Delivered before the day ends. If we miss, the ride's on us."/>
+            body="Pickup in ~30 min. Delivered before the day ends. If we miss, the ride's on us."/>
           <TrustCard icon={<IconRoute/>} title="Real-time tracking"
             body="Live map, honest ETAs, and a thread to message the driver if you need to."/>
           <TrustCard icon={<IconTag/>} title="Flat $15. No surprises."
