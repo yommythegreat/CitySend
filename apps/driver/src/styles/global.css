@@ -1,0 +1,153 @@
+:root {
+  --cs-ink: #0b1220;
+  --cs-ink-2: #1a2233;
+  --cs-slate-900: #0f1724;
+  --cs-slate-800: #1e2636;
+  --cs-slate-700: #2b3548;
+  --cs-slate-500: #5b657a;
+  --cs-slate-400: #8590a6;
+  --cs-slate-300: #b9c0cc;
+  --cs-slate-200: #d8dde5;
+  --cs-slate-100: #eceef2;
+  --cs-slate-50: #f5f6f8;
+  --cs-paper: #fafbfc;
+  --cs-accent: #c94a1b;
+  --cs-accent-2: #e76a3a;
+  --cs-ok: #166b3a;
+  --cs-warn: #a85c00;
+  --cs-font: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --cs-mono: "SF Mono", ui-monospace, Menlo, Monaco, Consolas, monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+  margin: 0;
+}
+
+body {
+  background: #efede8;
+  color: var(--cs-ink);
+  font-family: var(--cs-font);
+}
+
+button,
+input {
+  font: inherit;
+}
+
+button {
+  -webkit-tap-highlight-color: transparent;
+}
+
+.app-shell {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.phone-shell {
+  width: min(402px, 100vw - 32px);
+  height: min(874px, 100vh - 48px);
+  min-height: 700px;
+  overflow: hidden;
+  border-radius: 34px;
+  background: var(--cs-paper);
+  box-shadow: 0 32px 80px -32px rgba(11, 18, 32, 0.55);
+  position: relative;
+}
+
+.screen {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+  background: var(--cs-slate-50);
+}
+
+.screen-no-scroll {
+  overflow: hidden;
+}
+
+.status-bar {
+  padding: 52px 16px 12px;
+  background: var(--cs-ink);
+  color: white;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.mono-label {
+  color: var(--cs-slate-500);
+  font-family: var(--cs-mono);
+  font-size: 10px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.card {
+  background: white;
+  border: 1px solid var(--cs-slate-100);
+  border-radius: 16px;
+}
+
+.icon-button {
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: 20px;
+  background: var(--cs-slate-100);
+  color: var(--cs-ink);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+
+.primary-button,
+.secondary-button {
+  border: 0;
+  cursor: pointer;
+  border-radius: 28px;
+  min-height: 52px;
+  font-weight: 650;
+}
+
+.primary-button {
+  background: var(--cs-accent);
+  color: white;
+  box-shadow: 0 12px 24px -10px rgba(201, 74, 27, 0.65);
+}
+
+.secondary-button {
+  background: var(--cs-slate-100);
+  color: var(--cs-ink);
+}
+
+.text-button {
+  border: 0;
+  background: transparent;
+  color: var(--cs-slate-500);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 4px;
+}
+
+@keyframes cs-ping {
+  0% {
+    opacity: 0.6;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.6);
+  }
+}
