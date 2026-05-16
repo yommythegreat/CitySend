@@ -22,10 +22,14 @@ let stripe: import('stripe').default | null = null
 
 ;(async () => {
   const key = process.env.STRIPE_SECRET_KEY
-  if (key && key !== 'sk_test_placeholder') {
+  if (key && key !== 'sk_test_placeholder' && (key.startsWith('sk_test_') || key.startsWith('sk_live_'))) {
     const { default: Stripe } = await import('stripe')
     stripe = new Stripe(key, { apiVersion: '2024-06-20' as any })
-    console.log('[stripe] connected in test mode')
+    const mode = key.startsWith('sk_live_') ? 'LIVE 💳' : 'test'
+    console.log(`[stripe] connected — ${mode} mode`)
+    if (key.startsWith('sk_live_') && process.env.NODE_ENV !== 'production') {
+      console.warn('[stripe] ⚠️  LIVE key detected outside NODE_ENV=production — double-check this is intentional')
+    }
   } else {
     console.log('[stripe] no real key — payment endpoint will return mock secret')
   }

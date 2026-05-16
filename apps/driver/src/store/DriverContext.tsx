@@ -16,6 +16,11 @@ import {
   getSharedOrders, setSharedOrders, ORDERS_STORAGE_KEY,
 } from '@shared/utils/orderStore'
 import { pushNotification } from '@shared/utils/notificationStore'
+import {
+  startLocationBroadcast,
+  stopLocationBroadcast,
+  updateBroadcastOrder,
+} from '@shared/utils/locationStore'
 import { MOCK_DRIVERS } from '@shared/mock-data/drivers'
 
 // ── Driver sub-steps (local UI only, not in shared model) ─────────────────────
@@ -344,6 +349,40 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
     }, 1000)
     return () => clearInterval(interval)
   }, [state.jobOffer?.showModal])
+
+  // GPS broadcast — start when driver logs in, stop on logout
+  useEffect(() => {
+    const driverId = state.auth?.driverId
+    if (!driverId) { stopLocationBroadcast(); return }
+
+    // Find the active order ID (if any)
+    const activeOrder = state.orders.find(
+      o => o.assignedDriverId === driverId &&
+           o.status !== 'delivered' && o.status !== 'cancelled',
+    )
+    startLocationBroadcast(driverId, activeOrder?.id ?? null)
+
+    return () => stopLocationBroadcast()
+  // Re-run only when driverId or the active order changes
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.auth?.driverId])
+
+  // When active order changes, update the broadcast orderId without restarting the watch
+  useEffect(() => {
+    const driverId = state.auth?.driverId
+    if (!driverId) return
+    const activeOrder = state.orders.find(
+      o => o.assignedDriverId === driverId &&
+           o.status !== 'delivered' && o.status !== 'cancelled',
+    )
+    updateBroadcastOrder(driverId, activeOrder?.id ?? null)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    state.orders.find(o =>
+      o.assignedDriverId === state.auth?.driverId &&
+      o.status !== 'delivered' && o.status !== 'cancelled',
+    )?.id,
+  ])
 
   const myOrders = state.auth
     ? state.orders

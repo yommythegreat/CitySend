@@ -6,6 +6,7 @@ import { Back, Check, Phone, Send, Star, X } from '../components/Icons'
 import { geocodeOnce, fetchRoute } from '../hooks/useGeocoder'
 import { getOrderById, subscribeToOrderById, type CustomerOrder } from '../utils/orderStore'
 import { getMessages, sendMessage, subscribeToMessages, markMessagesRead, type Message } from '../utils/messageStore'
+import { subscribeToDriverLocation } from '../utils/locationStore'
 import type { CityConfig } from '../config/cityConfig'
 import type { AuthUser, Draft, NavOptions, RouteInfo, ScreenName } from '../types'
 
@@ -344,6 +345,25 @@ export function TrackingScreen({ go, draft, cityConfig, orderId, user }: Props) 
     })
     return unsub
   }, [orderId])
+
+  // ── Real-time driver GPS location ─────────────────────────────────────────────
+  useEffect(() => {
+    const driverId = order?.assignedDriverId
+    if (!driverId) return
+
+    const unsub = subscribeToDriverLocation(driverId, (loc) => {
+      if (!driverMarker.current || !mapRef.current) return
+      const latLng: [number, number] = [loc.lat, loc.lng]
+      driverMarker.current.setLatLng(latLng)
+      // Smoothly pan map to keep driver in view if they're close to an edge
+      const bounds = mapRef.current.getBounds().pad(-0.15)
+      if (!bounds.contains(latLng)) {
+        mapRef.current.panTo(latLng, { animate: true, duration: 0.8 })
+      }
+    })
+
+    return unsub
+  }, [order?.assignedDriverId])
 
   // ── Single message subscription — drives both the chat panel and unread badge ──
   useEffect(() => {
@@ -748,6 +768,38 @@ export function TrackingScreen({ go, draft, cityConfig, orderId, user }: Props) 
                 </div>
               )}
             </div>
+
+            {/* Handoff code — shown when driver is on the way to drop-off */}
+            {order?.handoffCode && (status === 'in_transit' || status === 'picked_up') && (
+              <div style={{
+                margin: '14px 20px 0',
+                padding: '14px 16px',
+                background: 'var(--cs-ink)',
+                borderRadius: 16,
+                display: 'flex', alignItems: 'center', gap: 14,
+              }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontFamily: 'var(--cs-mono)', fontSize: 10, color: 'rgba(255,255,255,.5)', letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 6 }}>
+                    Handoff code
+                  </div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    {order.handoffCode.split('').map((d, i) => (
+                      <div key={i} style={{
+                        width: 44, height: 52, borderRadius: 10,
+                        background: 'rgba(255,255,255,.1)',
+                        border: '1.5px solid rgba(255,255,255,.18)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: 24, fontWeight: 700, fontFamily: 'var(--cs-mono)',
+                        color: '#fff', letterSpacing: 0,
+                      }}>{d}</div>
+                    ))}
+                  </div>
+                  <div style={{ fontSize: 12, color: 'rgba(255,255,255,.45)', marginTop: 8, lineHeight: 1.4 }}>
+                    Share this code with the person receiving the parcel — the driver will ask for it at the door.
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Guest signup nudge — dismissible, non-blocking */}
             {!isAuthed && !guestBannerDismissed && (

@@ -31,6 +31,15 @@ const CARD_ELEMENT_OPTIONS = {
   hidePostalCode: false,
 }
 
+// ── Mode notice badge ─────────────────────────────────────────────────────────
+function ModeNotice({ label, color }: { label: string; color: string }) {
+  return (
+    <div style={{ textAlign: 'center', fontSize: 11, color, marginTop: 10, fontFamily: 'var(--cs-mono)', letterSpacing: 0.5 }}>
+      {label}
+    </div>
+  )
+}
+
 // ── Inner form (needs stripe + elements context) ────────────────────────────
 function CheckoutForm({
   clientSecret, priceTotal, onSuccess, isMock
@@ -118,9 +127,13 @@ function CheckoutForm({
       >
         {processing ? 'Processing…' : `Pay ${fmt(priceTotal)}`}
       </Button>
-      <div style={{ textAlign: 'center', fontSize: 11, color: 'var(--cs-slate-500)', marginTop: 10, fontFamily: 'var(--cs-mono)', letterSpacing: 0.5 }}>
-        {isMock ? 'DEMO MODE — NOT A REAL CHARGE' : 'STRIPE TEST MODE — USE CARD 4242 4242 4242 4242'}
-      </div>
+      {/* Mode badge — only shown in non-live environments */}
+      {(() => {
+        const pubKey = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY as string | undefined
+        if (isMock)                            return <ModeNotice label="DEMO MODE — NOT A REAL CHARGE"        color="#6b7280" />
+        if (pubKey?.startsWith('pk_test_'))    return <ModeNotice label="TEST MODE — USE CARD 4242 4242 4242 4242" color="#d97706" />
+        return null  // live key — no badge shown
+      })()}
     </>
   )
 }

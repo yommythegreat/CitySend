@@ -100,6 +100,8 @@ export interface Order {
   updatedAt: string
   notes: AdminNote[]
   cancelReason?: string
+  /** 4-digit numeric code generated at booking; shown to recipient for driver handoff verification */
+  handoffCode?: string
 }
 
 // ── Driver ────────────────────────────────────────────────────────────────────

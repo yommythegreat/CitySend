@@ -1,6 +1,8 @@
-import React, { useState, useRef } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 import { useDriver } from '../store/DriverContext'
 import { SlideAction } from '../components/SlideAction'
+import { PhotoCapture } from '../components/PhotoCapture'
+import { validateHandoffCode } from '@shared/utils/handoffCodeStore'
 
 interface Props {
   orderId:     string
@@ -8,19 +10,29 @@ interface Props {
   onConfirmed: () => void
 }
 
-type ProofTab = 'signature' | 'photo' | 'code'
+type ProofTab = 'photo' | 'signature' | 'code'
 
 export function ProofOfDeliveryScreen({ orderId, onBack, onConfirmed }: Props) {
   const { state, dispatch } = useDriver()
   const order = state.orders.find(o => o.id === orderId)
 
-  const [activeTab,    setActiveTab]    = useState<ProofTab>('signature')
-  const [receiverName, setReceiverName] = useState(order?.dropoff.name ?? '')
-  const [notes,        setNotes]        = useState('')
-  const [signed,       setSigned]       = useState(false)
-  const [photoAdded,   setPhotoAdded]   = useState(false)
-  const [submitting,   setSubmitting]   = useState(false)
-  const [error,        setError]        = useState('')
+  const [activeTab,      setActiveTab]      = useState<ProofTab>('photo')
+  const [receiverName,   setReceiverName]   = useState(order?.dropoff.name ?? '')
+  const [notes,          setNotes]          = useState('')
+  const [signed,         setSigned]         = useState(false)
+  const [photoPreview,   setPhotoPreview]   = useState<string | null>(null)
+  const [photoUrl,       setPhotoUrl]       = useState<string | null>(null)
+  const [photoUploading, setPhotoUploading] = useState(false)
+  const [submitting,     setSubmitting]     = useState(false)
+  const [error,          setError]          = useState('')
+
+  const [codeDigits, setCodeDigits] = useState(['', '', '', ''])
+  const codeRefs = [
+    useRef<HTMLInputElement>(null),
+    useRef<HTMLInputElement>(null),
+    useRef<HTMLInputElement>(null),
+    useRef<HTMLInputElement>(null),
+  ]
 
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const drawing   = useRef(false)
@@ -32,9 +44,7 @@ export function ProofOfDeliveryScreen({ orderId, onBack, onConfirmed }: Props) {
 
   const getPos = (e: React.TouchEvent | React.MouseEvent, canvas: HTMLCanvasElement) => {
     const rect = canvas.getBoundingClientRect()
-    if ('touches' in e) {
-      return { x: e.touches[0].clientX - rect.left, y: e.touches[0].clientY - rect.top }
-    }
+    if ('touches' in e) return { x: e.touches[0].clientX - rect.left, y: e.touches[0].clientY - rect.top }
     return { x: (e as React.MouseEvent).clientX - rect.left, y: (e as React.MouseEvent).clientY - rect.top }
   }
 
@@ -77,291 +87,242 @@ export function ProofOfDeliveryScreen({ orderId, onBack, onConfirmed }: Props) {
 
   // ── Submit ────────────────────────────────────────────────────────────────
 
+  const codeComplete = codeDigits.every(d => d !== '')
+
   const canSubmit = (() => {
     if (!receiverName.trim()) return false
-    if (activeTab === 'signature' && !signed)   return false
-    if (activeTab === 'photo'     && !photoAdded) return false
+    if (activeTab === 'signature' && !signed)       return false
+    if (activeTab === 'photo'     && !photoPreview) return false
+    if (activeTab === 'code'      && !codeComplete) return false
     return true
   })()
 
   const handleSubmit = async () => {
     if (!receiverName.trim()) { setError('Receiver name is required.'); return }
-    if (activeTab === 'signature' && !signed)    { setError('Please capture a signature.'); return }
-    if (activeTab === 'photo'     && !photoAdded){ setError('Please add a photo.'); return }
+    if (activeTab === 'signature' && !signed)       { setError('Please capture a signature.'); return }
+    if (activeTab === 'photo'     && !photoPreview) { setError('Please add a photo.'); return }
+    if (activeTab === 'code') {
+      const valid = await validateHandoffCode(orderId, codeDigits.join(''))
+      if (!valid) { setError('Incorrect code — ask the recipient to check their notification.'); return }
+    }
     setError('')
     setSubmitting(true)
-
     await new Promise(r => setTimeout(r, 600))
-
+    const proofDetail = activeTab === 'code'  ? ` Code: ${codeDigits.join('')}.`
+                      : activeTab === 'photo' ? (photoUrl ? ` Photo: ${photoUrl}` : '') : ''
     dispatch({
       type: 'ADD_NOTE', orderId,
-      note: {
-        id:         `pod-${Date.now()}`,
-        text:       `✅ Delivery confirmed: received by ${receiverName.trim()} via ${activeTab}.${notes ? ' Notes: ' + notes : ''}`,
-        authorName: state.auth?.name ?? 'Driver',
-        createdAt:  new Date().toISOString(),
-      },
+      note: { id: `pod-${Date.now()}`, text: `✅ Delivery confirmed: received by ${receiverName.trim()} via ${activeTab}.${proofDetail}${notes ? ' Notes: ' + notes : ''}`, authorName: state.auth?.name ?? 'Driver', createdAt: new Date().toISOString() },
     })
-
     dispatch({ type: 'UPDATE_STATUS', orderId, status: 'delivered' })
     dispatch({ type: 'SET_SUBSTEP',   orderId, substep: 'at_dropoff' })
-
     setSubmitting(false)
     onConfirmed()
   }
 
+  // ── Tabs ──────────────────────────────────────────────────────────────────
+
+  const TABS: { k: ProofTab; label: string }[] = [
+    { k: 'photo',     label: 'Photo'     },
+    { k: 'signature', label: 'Signature' },
+    { k: 'code',      label: 'Code'      },
+  ]
+
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div style={{
-      display: 'flex', flexDirection: 'column',
-      height: '100vh', background: '#f5f6f8', overflow: 'hidden',
-    }}>
-      {/* Header */}
-      <div style={{
-        background: '#1a1a1a',
-        padding: '52px 20px 24px',
-        flexShrink: 0,
-      }}>
-        <button
-          onClick={onBack}
-          style={{
-            position: 'absolute', top: 16, left: 16,
-            width: 40, height: 40, borderRadius: '50%',
-            background: 'rgba(255,255,255,0.1)', border: 'none',
-            color: '#fff', fontSize: 20, cursor: 'pointer',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}
-        >‹</button>
-        <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', marginBottom: 6, letterSpacing: 1 }}>
-          AT DROP-OFF · {order.id}
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: 'var(--d-bg)', overflow: 'hidden' }}>
+
+      {/* Dark header */}
+      <div style={{ background: '#111827', paddingTop: 'max(52px, env(safe-area-inset-top, 52px))', paddingBottom: 20, paddingLeft: 20, paddingRight: 20, flexShrink: 0, position: 'relative' }}>
+        <button onClick={onBack} style={{ position: 'absolute', top: 'max(14px, env(safe-area-inset-top, 14px))', left: 16, width: 36, height: 36, borderRadius: '50%', background: 'rgba(255,255,255,0.1)', border: 'none', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="white" strokeWidth="2.2" strokeLinecap="round"><path d="M9 2L4 7l5 5"/></svg>
+        </button>
+
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(34,197,94,0.15)', borderRadius: 99, padding: '4px 10px' }}>
+            <div style={{ width: 7, height: 7, borderRadius: '50%', background: '#22c55e' }} />
+            <span style={{ fontSize: 11, fontWeight: 700, color: '#fff', letterSpacing: 0.6 }}>ONLINE</span>
+          </div>
+          <div style={{ textAlign: 'right' }}>
+            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.45)' }}>TODAY</div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>11 Jobs</div>
+          </div>
         </div>
-        <div style={{ fontSize: 26, fontWeight: 800, color: '#fff', marginBottom: 4 }}>
+
+        {/* AT DROP-OFF tag */}
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'rgba(255,255,255,0.1)', borderRadius: 99, padding: '5px 12px', marginBottom: 10 }}>
+          <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#fff' }} />
+          <span style={{ fontSize: 11, fontWeight: 700, color: '#fff', letterSpacing: 0.5 }}>AT DROP-OFF</span>
+          <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', marginLeft: 2 }}>{order.id}</span>
+        </div>
+
+        <div style={{ fontSize: 26, fontWeight: 800, color: '#fff', marginBottom: 4, letterSpacing: -0.5 }}>
           Hand it off.
         </div>
-        <div style={{ fontSize: 14, color: 'rgba(255,255,255,0.65)' }}>
-          {order.dropoff.address.split(',')[0]}
-          {order.dropoff.unit ? ` · ${order.dropoff.unit}` : ''}
-          {' · '}{order.dropoff.name}
-        </div>
-        <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.45)', marginTop: 4 }}>
-          Choose how to record proof of delivery.
+        <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.55)', lineHeight: 1.4 }}>
+          {order.dropoff.address.split(',')[0]}{order.dropoff.unit ? ` · ${order.dropoff.unit}` : ''} · {order.dropoff.name}. Choose how to record proof of delivery.
         </div>
       </div>
 
       {/* Tab bar */}
-      <div style={{
-        display: 'flex',
-        background: '#fff',
-        borderBottom: '1px solid #e8ebf0',
-        flexShrink: 0,
-      }}>
-        {(['photo', 'signature', 'code'] as ProofTab[]).map(tab => (
-          <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            style={{
-              flex: 1,
-              padding: '14px 0',
-              border: 'none',
-              background: 'none',
-              cursor: 'pointer',
-              fontSize: 14,
-              fontWeight: activeTab === tab ? 700 : 400,
-              color: activeTab === tab ? 'var(--d-accent)' : 'var(--d-muted)',
-              borderBottom: activeTab === tab ? '2.5px solid var(--d-accent)' : '2.5px solid transparent',
-              transition: 'all 0.15s',
-              textTransform: 'capitalize',
-            }}
-          >
-            {tab === 'photo'     ? '📷 Photo'
-             : tab === 'signature' ? '✍️ Signature'
-             : '🔢 Code'}
+      <div style={{ display: 'flex', background: '#fff', borderBottom: '1px solid var(--d-border)', flexShrink: 0 }}>
+        {TABS.map(tab => (
+          <button key={tab.k} onClick={() => setActiveTab(tab.k)} style={{
+            flex: 1, padding: '14px 0', border: 'none', background: 'none', cursor: 'pointer',
+            fontSize: 14, fontWeight: activeTab === tab.k ? 700 : 400,
+            color: activeTab === tab.k ? 'var(--d-ink)' : 'var(--d-muted)',
+            borderBottom: `2.5px solid ${activeTab === tab.k ? 'var(--d-ink)' : 'transparent'}`,
+            transition: 'all 0.15s',
+          }}>
+            {tab.label}
           </button>
         ))}
       </div>
 
-      {/* Content */}
+      {/* Scrollable content */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '20px', scrollbarWidth: 'none' }}>
 
-        {/* Recipient name (always shown) */}
+        {/* Received by (always) */}
         <div style={{ marginBottom: 16 }}>
-          <div style={{ fontSize: 12, color: 'var(--d-muted)', fontWeight: 600, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--d-muted)', letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 8 }}>
             Received by
           </div>
           <input
-            type="text"
-            value={receiverName}
-            onChange={e => setReceiverName(e.target.value)}
+            type="text" value={receiverName} onChange={e => setReceiverName(e.target.value)}
             placeholder="Full name of person who received the parcel"
-            style={{
-              width: '100%', boxSizing: 'border-box',
-              padding: '12px 14px', border: '1.5px solid #e8ebf0',
-              borderRadius: 10, fontSize: 14, outline: 'none',
-              fontFamily: 'inherit', background: '#fff',
-            }}
+            style={{ width: '100%', boxSizing: 'border-box', padding: '12px 14px', border: '1.5px solid var(--d-border)', borderRadius: 10, fontSize: 14, outline: 'none', fontFamily: 'inherit', background: '#fff' }}
           />
           <div style={{ fontSize: 11, color: 'var(--d-muted)', marginTop: 4 }}>
-            Pre-filled with recipient name — update if someone else received it.
+            Pre-filled with recipient — update if someone else received it.
           </div>
         </div>
 
-        {/* ── Tab: Signature ─────────────────────────────────────────────────── */}
+        {/* ── Photo tab ─────────────────────────────────────────────────────── */}
+        {activeTab === 'photo' && (
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--d-muted)', letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 8 }}>
+              Delivery photo
+            </div>
+            <PhotoCapture
+              orderId={orderId}
+              label="dropoff"
+              captured={!!photoPreview}
+              previewUrl={photoPreview}
+              uploading={photoUploading}
+              onCapture={(preview, storage) => {
+                setPhotoPreview(preview)
+                setPhotoUploading(storage === null && preview !== null)
+                if (storage !== null) { setPhotoUrl(storage); setPhotoUploading(false) }
+              }}
+              onClear={() => { setPhotoPreview(null); setPhotoUrl(null) }}
+            />
+          </div>
+        )}
+
+        {/* ── Signature tab ─────────────────────────────────────────────────── */}
         {activeTab === 'signature' && (
           <div style={{ marginBottom: 16 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-              <div style={{ fontSize: 12, color: 'var(--d-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                Recipient signature
-              </div>
-              {signed && (
-                <button
-                  onClick={clearSignature}
-                  style={{ fontSize: 12, color: 'var(--d-muted)', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}
-                >
-                  Clear
-                </button>
-              )}
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--d-muted)', letterSpacing: 0.5, textTransform: 'uppercase' }}>Recipient signature</div>
+              {signed && <button onClick={clearSignature} style={{ fontSize: 12, color: 'var(--d-muted)', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>Clear</button>}
             </div>
-            <div style={{
-              border: `2px solid ${signed ? '#22c55e' : '#e8ebf0'}`,
-              borderRadius: 12, overflow: 'hidden', background: '#fafafa',
-              position: 'relative',
-              transition: 'border-color 0.2s',
-            }}>
+            <div style={{ border: `1.5px solid ${signed ? '#22c55e' : 'var(--d-border)'}`, borderRadius: 12, overflow: 'hidden', background: '#fafafa', position: 'relative', transition: 'border-color 0.2s' }}>
               <canvas
-                ref={canvasRef}
-                width={360}
-                height={140}
+                ref={canvasRef} width={360} height={140}
                 style={{ width: '100%', height: 140, display: 'block', touchAction: 'none', cursor: 'crosshair' }}
-                onMouseDown={startDraw}
-                onMouseMove={draw}
-                onMouseUp={stopDraw}
-                onMouseLeave={stopDraw}
-                onTouchStart={startDraw}
-                onTouchMove={draw}
-                onTouchEnd={stopDraw}
+                onMouseDown={startDraw} onMouseMove={draw} onMouseUp={stopDraw} onMouseLeave={stopDraw}
+                onTouchStart={startDraw} onTouchMove={draw} onTouchEnd={stopDraw}
               />
               {!signed && (
-                <div style={{
-                  position: 'absolute', inset: 0,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 13, color: '#bbb', pointerEvents: 'none',
-                }}>
-                  ✍️ Sign here
+                <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, color: '#bbb', pointerEvents: 'none' }}>
+                  Sign here
                 </div>
               )}
             </div>
-            {signed && (
-              <div style={{ fontSize: 12, color: '#22c55e', marginTop: 6, fontWeight: 500 }}>
-                ✓ Signature captured
-              </div>
-            )}
+            {signed && <div style={{ fontSize: 12, color: '#22c55e', marginTop: 6, fontWeight: 500 }}>✓ Signature captured</div>}
           </div>
         )}
 
-        {/* ── Tab: Photo ────────────────────────────────────────────────────── */}
-        {activeTab === 'photo' && (
-          <div style={{ marginBottom: 16 }}>
-            <div style={{ fontSize: 12, color: 'var(--d-muted)', fontWeight: 600, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-              Delivery photo
-            </div>
-            {!photoAdded ? (
-              <button
-                onClick={() => setPhotoAdded(true)}
-                style={{
-                  width: '100%', height: 140,
-                  border: '2px dashed #e8ebf0', borderRadius: 12, background: '#fafafa',
-                  cursor: 'pointer', display: 'flex', flexDirection: 'column',
-                  alignItems: 'center', justifyContent: 'center', gap: 8,
-                  fontSize: 14, color: 'var(--d-muted)',
-                }}
-              >
-                <span style={{ fontSize: 36 }}>📷</span>
-                Tap to capture delivery photo
-              </button>
-            ) : (
-              <div
-                onClick={() => setPhotoAdded(false)}
-                style={{
-                  width: '100%', height: 140,
-                  border: '2px solid #22c55e', borderRadius: 12,
-                  background: 'rgba(34,197,94,0.06)',
-                  display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                  gap: 8, cursor: 'pointer',
-                }}
-              >
-                <span style={{ fontSize: 36 }}>✓</span>
-                <div style={{ fontSize: 14, color: '#22c55e', fontWeight: 600 }}>Photo captured</div>
-                <div style={{ fontSize: 12, color: 'var(--d-muted)' }}>Tap to retake</div>
-              </div>
-            )}
-            <div style={{ fontSize: 11, color: 'var(--d-muted)', marginTop: 6 }}>
-              Camera access is simulated in this demo.
-            </div>
-          </div>
-        )}
-
-        {/* ── Tab: Code ─────────────────────────────────────────────────────── */}
+        {/* ── Code tab ──────────────────────────────────────────────────────── */}
         {activeTab === 'code' && (
-          <div style={{ marginBottom: 16 }}>
-            <div style={{ fontSize: 12, color: 'var(--d-muted)', fontWeight: 600, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-              Delivery code
+          <div style={{ marginBottom: 16, background: '#fff', border: '1.5px solid var(--d-border)', borderRadius: 16, padding: 20, display: 'flex', flexDirection: 'column', gap: 14, alignItems: 'center' }}>
+            <div style={{ fontSize: 14, color: '#374151', textAlign: 'center', maxWidth: 260 }}>
+              Ask the recipient for the 4-digit code from their notification.
             </div>
-            <div style={{
-              background: '#fafafa', border: '1.5px dashed #e8ebf0', borderRadius: 12,
-              padding: 20, textAlign: 'center', color: 'var(--d-muted)',
-            }}>
-              <div style={{ fontSize: 32 }}>🔢</div>
-              <div style={{ fontSize: 14, marginTop: 8, fontWeight: 500 }}>Code verification</div>
-              <div style={{ fontSize: 12, marginTop: 4 }}>Coming in a future release</div>
+            <div style={{ display: 'flex', gap: 10 }}>
+              {codeDigits.map((digit, i) => (
+                <input
+                  key={i}
+                  ref={codeRefs[i]}
+                  value={digit}
+                  maxLength={1}
+                  inputMode="numeric"
+                  onChange={e => {
+                    const val = e.target.value.replace(/\D/g, '').slice(0, 1)
+                    const next = [...codeDigits]; next[i] = val; setCodeDigits(next)
+                    if (val && i < 3) codeRefs[i + 1].current?.focus()
+                  }}
+                  onKeyDown={e => {
+                    if (e.key === 'Backspace' && !digit && i > 0) codeRefs[i - 1].current?.focus()
+                  }}
+                  style={{
+                    width: 56, height: 64, textAlign: 'center', fontSize: 28,
+                    fontFamily: 'monospace', fontWeight: 600, color: '#111827',
+                    border: `1.5px solid ${digit ? '#111827' : 'var(--d-border)'}`,
+                    borderRadius: 12, outline: 'none', background: '#fff',
+                    transition: 'border-color 0.15s',
+                  }}
+                />
+              ))}
             </div>
+            <div style={{ fontFamily: 'monospace', fontSize: 11, color: 'var(--d-muted)', letterSpacing: 1, textTransform: 'uppercase' }}>
+              4-digit handoff code
+            </div>
+            {codeComplete && (
+              <div style={{ fontSize: 12, color: '#22c55e', fontWeight: 500 }}>✓ Code entered</div>
+            )}
           </div>
         )}
 
         {/* Notes */}
         <div style={{ marginBottom: 16 }}>
-          <div style={{ fontSize: 12, color: 'var(--d-muted)', fontWeight: 600, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-            Delivery notes <span style={{ fontWeight: 400, textTransform: 'none' }}>(optional)</span>
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--d-muted)', letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 8 }}>
+            Delivery notes <span style={{ fontWeight: 400, textTransform: 'none', fontSize: 12 }}>(optional)</span>
           </div>
-          <textarea
-            value={notes}
-            onChange={e => setNotes(e.target.value)}
-            placeholder="Left at front door, given to concierge, etc."
-            style={{
-              width: '100%', boxSizing: 'border-box', minHeight: 70, resize: 'vertical',
-              border: '1.5px solid #e8ebf0', borderRadius: 10, padding: '10px 12px',
-              fontSize: 14, fontFamily: 'inherit', outline: 'none', background: '#fff',
-            }}
-          />
+          <textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="Left at front door, given to concierge, etc." style={{ width: '100%', boxSizing: 'border-box', minHeight: 70, resize: 'vertical', border: '1.5px solid var(--d-border)', borderRadius: 10, padding: '10px 12px', fontSize: 14, fontFamily: 'inherit', outline: 'none', background: '#fff' }} />
         </div>
 
-        {/* Error */}
         {error && (
-          <div style={{
-            padding: '12px 14px', background: '#fef2f2', border: '1px solid #fca5a5',
-            borderRadius: 10, fontSize: 13, color: '#dc2626', marginBottom: 12,
-          }}>
+          <div style={{ padding: '12px 14px', background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 10, fontSize: 13, color: '#dc2626', marginBottom: 12 }}>
             {error}
           </div>
         )}
       </div>
 
       {/* Bottom action */}
-      <div style={{
-        padding: '14px 20px', background: '#fff',
-        borderTop: '1px solid #e8ebf0', flexShrink: 0,
-        paddingBottom: 'env(safe-area-inset-bottom, 14px)',
-        display: 'flex', justifyContent: 'center',
-      }}>
-        <SlideAction
-          label={submitting ? 'Confirming…' : 'Slide to complete delivery'}
-          onSlideComplete={handleSubmit}
-          disabled={!canSubmit || submitting}
-          color="#22c55e"
-        />
+      <div style={{ padding: '12px 20px', background: '#fff', borderTop: '1px solid var(--d-border)', flexShrink: 0, paddingBottom: 'env(safe-area-inset-bottom, 12px)', display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {canSubmit ? (
+          <SlideAction
+            label={submitting ? 'Confirming…' : 'Slide to complete delivery'}
+            variant="green"
+            onSlideComplete={handleSubmit}
+            disabled={submitting}
+          />
+        ) : (
+          <button disabled style={{ width: '100%', padding: '16px 0', border: 'none', borderRadius: 28, background: '#e5e7eb', color: '#9ca3af', fontSize: 14, fontWeight: 600, cursor: 'not-allowed' }}>
+            {activeTab === 'photo' ? 'Take a photo to continue' : activeTab === 'signature' ? 'Capture a signature to continue' : 'Enter the 4-digit code to continue'}
+          </button>
+        )}
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button onClick={onBack} style={{ flex: 1, padding: '11px 0', border: '1px solid var(--d-border)', borderRadius: 10, background: '#fff', fontSize: 13, fontWeight: 500, color: 'var(--d-muted)', cursor: 'pointer' }}>
+            Recipient unavailable?
+          </button>
+          <button onClick={onBack} style={{ flex: 1, padding: '11px 0', border: '1px solid var(--d-border)', borderRadius: 10, background: '#fff', fontSize: 13, fontWeight: 500, color: 'var(--d-muted)', cursor: 'pointer' }}>
+            Need help?
+          </button>
+        </div>
       </div>
-
-      <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
     </div>
   )
 }

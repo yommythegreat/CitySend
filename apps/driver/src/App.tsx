@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { DriverProvider, useDriver, signOutDriver } from './store/DriverContext'
 import { LoginScreen }            from './screens/LoginScreen'
+import { DriverSignupScreen }     from './screens/DriverSignupScreen'
 import { DashboardScreen }        from './screens/DashboardScreen'
 import { DeliveryScreen }         from './screens/DeliveryScreen'
 import { ProofOfDeliveryScreen }  from './screens/ProofOfDeliveryScreen'
@@ -88,7 +89,14 @@ function DriverApp() {
     return () => window.removeEventListener('popstate', onPopState)
   }, [])
 
-  if (!state.auth) return <LoginScreen />
+  const [showSignup, setShowSignup] = useState(false)
+
+  if (!state.auth) {
+    if (showSignup) {
+      return <DriverSignupScreen onBackToLogin={() => setShowSignup(false)} />
+    }
+    return <LoginScreen onSignUp={() => setShowSignup(true)} />
+  }
 
   const handleLogout = async () => {
     dispatch({ type: 'LOGOUT' })

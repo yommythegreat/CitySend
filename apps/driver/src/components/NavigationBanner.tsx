@@ -1,86 +1,51 @@
-import React, { useEffect, useState } from 'react'
+import React from 'react'
 
 interface Props {
   /** Instruction text (e.g. "Turn left onto Princess St") */
   instruction: string
-  /** Optional: auto-dismiss after N milliseconds */
-  autoDismissMs?: number
-  /** Called when user dismisses */
-  onDismiss?: () => void
+  /** Distance cue (e.g. "In 250 m") */
+  distanceCue?: string
 }
 
 /**
- * NavigationBanner — Sticky navigation instruction bar.
- * Appears at top of screen with orange accent color.
+ * NavigationBanner — Dark ink navigation card at top of map.
+ * Design matches DEnRouteScreen nav banner from driver-screens.jsx prototype.
+ * Accent-colored square icon with up-arrow SVG + instruction text.
  */
-export function NavigationBanner({
-  instruction, autoDismissMs, onDismiss,
-}: Props) {
-  const [show, setShow] = useState(true)
-
-  useEffect(() => {
-    if (!autoDismissMs) return
-    const timer = setTimeout(() => {
-      setShow(false)
-      onDismiss?.()
-    }, autoDismissMs)
-    return () => clearTimeout(timer)
-  }, [autoDismissMs, onDismiss])
-
-  if (!show) return null
-
+export function NavigationBanner({ instruction, distanceCue = 'In 250 m' }: Props) {
   return (
-    <div
-      style={{
-        position: 'fixed',
-        top: 12,
-        left: 12,
-        right: 12,
-        background: 'var(--d-accent)',
-        color: '#fff',
-        padding: '12px 16px',
-        borderRadius: 12,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        zIndex: 50,
-        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
-        animation: 'slideDown 0.3s ease-out',
-        fontSize: 14,
-        fontWeight: 500,
-      }}
-    >
-      <span style={{ marginRight: 12, fontSize: 18 }}>📍</span>
-      <span style={{ flex: 1 }}>{instruction}</span>
-      <button
-        onClick={() => {
-          setShow(false)
-          onDismiss?.()
-        }}
-        style={{
-          background: 'rgba(255, 255, 255, 0.2)',
-          border: 'none',
-          color: '#fff',
-          fontSize: 18,
-          cursor: 'pointer',
-          padding: '4px 8px',
-          borderRadius: 6,
-          marginLeft: 8,
-        }}
-      >
-        ✕
-      </button>
-
+    <div style={{
+      position: 'absolute', top: 44, left: 12, right: 12, zIndex: 5,
+      background: '#111827', color: '#fff', borderRadius: 18,
+      padding: 14, display: 'flex', alignItems: 'center', gap: 14,
+      boxShadow: '0 12px 30px -10px rgba(11,18,32,.5)',
+      animation: 'navSlideDown 0.3s ease-out',
+    }}>
+      {/* Direction icon */}
+      <div style={{
+        width: 48, height: 48, borderRadius: 12, background: '#c94a1b',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        flexShrink: 0,
+      }}>
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff"
+             strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 20V8"/>
+          <path d="M6 14l6-6 6 6"/>
+        </svg>
+      </div>
+      {/* Text */}
+      <div style={{ flex: 1 }}>
+        <div style={{ fontFamily: 'monospace', fontSize: 11, color: 'rgba(255,255,255,.55)', letterSpacing: 1.2, textTransform: 'uppercase' }}>
+          {distanceCue}
+        </div>
+        <div style={{ fontSize: 16, fontWeight: 600, letterSpacing: -0.3, marginTop: 2 }}>
+          {instruction}
+        </div>
+      </div>
       <style>{`
-        @keyframes slideDown {
-          from {
-            transform: translateY(-100%);
-            opacity: 0;
-          }
-          to {
-            transform: translateY(0);
-            opacity: 1;
-          }
+        @keyframes navSlideDown {
+          from { transform: translateY(-12px); opacity: 0; }
+          to   { transform: translateY(0);    opacity: 1; }
         }
       `}</style>
     </div>

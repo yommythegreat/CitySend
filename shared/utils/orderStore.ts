@@ -34,6 +34,7 @@ function rowToOrder(row: Record<string, any>): Order {
     distanceKm:          Number(row.distance_km),
     cancelReason:        row.cancel_reason ?? undefined,
     notes:               Array.isArray(row.notes) ? row.notes : [],
+    handoffCode:         row.handoff_code ?? undefined,
     createdAt:           row.created_at,
     updatedAt:           row.updated_at,
   }
@@ -55,6 +56,7 @@ export function orderToRow(order: Order): Record<string, any> {
     distance_km:          order.distanceKm,
     cancel_reason:        order.cancelReason ?? null,
     notes:                order.notes,
+    handoff_code:         order.handoffCode ?? null,
     created_at:           order.createdAt,
     updated_at:           order.updatedAt,
   }

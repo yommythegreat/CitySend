@@ -7,6 +7,11 @@
 
 import { supabase, isSupabaseConfigured } from '../lib/supabase'
 
+/** Generate a random 4-digit handoff code, e.g. "0847" */
+function newHandoffCode(): string {
+  return String(Math.floor(Math.random() * 10000)).padStart(4, '0')
+}
+
 export const ORDERS_STORAGE_KEY = 'cs_orders_v1'
 
 export interface CustomerOrder {
@@ -30,6 +35,8 @@ export interface CustomerOrder {
   updatedAt:  string
   notes:      { id: string; text: string; authorName: string; createdAt: string }[]
   cancelReason?: string
+  /** 4-digit handoff code shown to recipient for driver verification at drop-off */
+  handoffCode?: string
 }
 
 // ── Write a new order ─────────────────────────────────────────────────────────
@@ -45,6 +52,8 @@ export async function pushNewOrder(order: CustomerOrder): Promise<void> {
     return
   }
 
+  const code = order.handoffCode ?? newHandoffCode()
+
   const { error } = await supabase.from('orders').insert({
     id:                   order.id,
     customer_id:          order.customerId,
@@ -59,6 +68,7 @@ export async function pushNewOrder(order: CustomerOrder): Promise<void> {
     city_id:              order.cityId,
     distance_km:          order.distanceKm,
     notes:                [],
+    handoff_code:         code,
     created_at:           order.createdAt,
     updated_at:           order.updatedAt,
   })
@@ -168,6 +178,7 @@ function rowToCustomerOrder(row: Record<string, any>): CustomerOrder {
     distanceKm:          Number(row.distance_km),
     cancelReason:        row.cancel_reason ?? undefined,
     notes:               Array.isArray(row.notes) ? row.notes : [],
+    handoffCode:         row.handoff_code ?? undefined,
     createdAt:           row.created_at,
     updatedAt:           row.updated_at,
   }

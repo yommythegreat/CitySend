@@ -2,301 +2,199 @@ import React, { useState, useEffect } from 'react'
 import type { Order } from '@shared/types'
 
 interface Props {
-  order: Order
-  onAccept: () => void
+  order:     Order
+  onAccept:  () => void
   onDecline: () => void
   onTimeout: () => void
 }
 
 /**
- * JobOfferModal — Job assignment overlay with countdown timer.
- *
- * Shows new job details and countdown (15s).
- * Auto-dismisses on timeout.
+ * JobOfferModal — Full-screen job offer with countdown ring.
+ * Design matches DOfferScreen from driver-screens.jsx prototype.
  */
 export function JobOfferModal({ order, onAccept, onDecline, onTimeout }: Props) {
-  const [timeRemaining, setTimeRemaining] = useState(15)
-  const [isExpired, setIsExpired] = useState(false)
+  const [t, setT] = useState(15)
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      setTimeRemaining(prev => {
-        if (prev <= 1) {
-          setIsExpired(true)
-          onTimeout()
-          return 0
-        }
-        return prev - 1
-      })
-    }, 1000)
-    return () => clearInterval(interval)
-  }, [onTimeout])
+    if (t <= 0) { onTimeout(); return }
+    const id = setTimeout(() => setT(prev => prev - 1), 1000)
+    return () => clearTimeout(id)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [t])
 
-  const pickupAddr = order.pickup.address.split(',')[0]
+  const pct         = t / 15
+  const radius      = 42
+  const circumf     = 2 * Math.PI * radius
+  const dashOffset  = circumf * (1 - pct)
+
+  const pickupAddr  = order.pickup.address.split(',')[0]
   const dropoffAddr = order.dropoff.address.split(',')[0]
-  const distanceKm = order.distanceKm
+  const distanceKm  = order.distanceKm
+  const payout      = (5.99 + distanceKm * 1.5).toFixed(2)
+  const [dollars, cents] = payout.split('.')
 
-  // Simple earnings estimate: base ($5.99) + distance ($1.50/km)
-  const estimatedEarnings = 5.99 + (distanceKm * 1.5)
+  const fragile = order.parcel.fragile
+  const size    = order.parcel.size === 's' ? 'Small' : order.parcel.size === 'l' ? 'Large' : 'Medium'
 
   return (
-    <>
-      {/* Backdrop */}
-      <div
-        style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          background: 'rgba(0, 0, 0, 0.5)',
-          zIndex: 200,
-          animation: 'fadeIn 0.2s ease-out',
-        }}
-      />
-
-      {/* Modal Card */}
-      <div
-        style={{
-          position: 'fixed',
-          top: '50%',
-          left: '50%',
-          transform: 'translate(-50%, -50%)',
-          background: '#fff',
-          borderRadius: 20,
-          padding: 24,
-          width: 'min(90vw, 360px)',
-          maxHeight: '90vh',
-          zIndex: 201,
-          boxShadow: '0 10px 40px rgba(0, 0, 0, 0.2)',
-          overflowY: 'auto',
-          animation: 'popIn 0.3s ease-out',
-        }}
-      >
-        {/* Timer badge (top right) */}
-        <div
-          style={{
-            position: 'absolute',
-            top: 16,
-            right: 16,
-            background: isExpired ? 'var(--d-danger, #e74c3c)' : 'var(--d-accent)',
-            color: '#fff',
-            borderRadius: 20,
-            padding: '6px 12px',
-            fontSize: 13,
-            fontWeight: 700,
-          }}
-        >
-          {isExpired ? 'Expired' : `${timeRemaining}s`}
-        </div>
-
-        {/* Header */}
-        <div style={{ marginBottom: 20 }}>
-          <div style={{
-            fontSize: 11,
-            fontFamily: 'monospace',
-            color: 'var(--d-muted)',
-            fontWeight: 700,
-            letterSpacing: 1,
-            marginBottom: 4,
-          }}>
-            {order.id}
-          </div>
-          <div style={{
-            fontSize: 20,
-            fontWeight: 700,
-            color: 'var(--d-ink)',
-          }}>
-            New Job Available!
-          </div>
-        </div>
-
-        {/* Route summary */}
-        <div style={{
-          background: 'var(--d-bg)',
-          borderRadius: 12,
-          padding: 16,
-          marginBottom: 20,
-        }}>
-          {/* Pickup */}
-          <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
-            <div style={{
-              width: 24,
-              height: 24,
-              borderRadius: '50%',
-              background: '#22c55e',
-              flexShrink: 0,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: '#fff',
-              fontSize: 12,
-              fontWeight: 700,
-            }}>
-              A
-            </div>
-            <div>
-              <div style={{
-                fontSize: 13,
-                fontWeight: 600,
-                color: 'var(--d-ink)',
-                marginBottom: 2,
-              }}>
-                {pickupAddr}
-              </div>
-              <div style={{ fontSize: 12, color: 'var(--d-muted)' }}>
-                {order.pickup.name}
-              </div>
-            </div>
-          </div>
-
-          {/* Arrow */}
-          <div style={{
-            height: 20,
-            marginLeft: 12,
-            marginRight: 12,
-            borderLeft: '2px dashed var(--d-border)',
-          }} />
-
-          {/* Dropoff */}
-          <div style={{ display: 'flex', gap: 12 }}>
-            <div style={{
-              width: 24,
-              height: 24,
-              borderRadius: '50%',
-              background: 'var(--d-accent)',
-              flexShrink: 0,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: '#fff',
-              fontSize: 12,
-              fontWeight: 700,
-            }}>
-              B
-            </div>
-            <div>
-              <div style={{
-                fontSize: 13,
-                fontWeight: 600,
-                color: 'var(--d-ink)',
-                marginBottom: 2,
-              }}>
-                {dropoffAddr}
-              </div>
-              <div style={{ fontSize: 12, color: 'var(--d-muted)' }}>
-                {order.dropoff.name}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Details */}
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: '1fr 1fr',
-          gap: 12,
-          marginBottom: 20,
-        }}>
-          <div style={{
-            background: 'var(--d-bg)',
-            borderRadius: 10,
-            padding: 12,
-            textAlign: 'center',
-          }}>
-            <div style={{ fontSize: 12, color: 'var(--d-muted)', marginBottom: 4 }}>Distance</div>
-            <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--d-ink)' }}>
-              {distanceKm.toFixed(1)} km
-            </div>
-          </div>
-          <div style={{
-            background: 'var(--d-bg)',
-            borderRadius: 10,
-            padding: 12,
-            textAlign: 'center',
-          }}>
-            <div style={{ fontSize: 12, color: 'var(--d-muted)', marginBottom: 4 }}>Est. Earnings</div>
-            <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--d-accent)' }}>
-              ${estimatedEarnings.toFixed(2)}
-            </div>
-          </div>
-        </div>
-
-        {/* Parcel info */}
-        <div style={{
-          background: 'var(--d-bg)',
-          borderRadius: 10,
-          padding: 12,
-          marginBottom: 20,
-        }}>
-          <div style={{ fontSize: 12, color: 'var(--d-muted)', marginBottom: 6 }}>Parcel</div>
-          <div style={{ fontSize: 13, color: 'var(--d-ink)' }}>
-            {order.parcel.size.toUpperCase()} • {order.parcel.desc}
-            {order.parcel.fragile && ' • ⚠️ Fragile'}
-          </div>
-        </div>
-
-        {/* Buttons */}
-        <div style={{
-          display: 'flex',
-          gap: 12,
-          marginTop: 20,
-        }}>
-          <button
-            onClick={onDecline}
-            disabled={isExpired}
-            style={{
-              flex: 1,
-              padding: '12px 16px',
-              background: 'var(--d-surface)',
-              border: '1.5px solid var(--d-border)',
-              borderRadius: 10,
-              fontSize: 14,
-              fontWeight: 600,
-              color: isExpired ? 'var(--d-muted)' : 'var(--d-ink)',
-              cursor: isExpired ? 'default' : 'pointer',
-              transition: 'all 0.15s',
-            }}
-          >
-            Decline
-          </button>
-          <button
-            onClick={onAccept}
-            disabled={isExpired}
-            style={{
-              flex: 1,
-              padding: '12px 16px',
-              background: isExpired ? 'var(--d-muted)' : 'var(--d-accent)',
-              border: 'none',
-              borderRadius: 10,
-              fontSize: 14,
-              fontWeight: 700,
-              color: '#fff',
-              cursor: isExpired ? 'default' : 'pointer',
-              transition: 'all 0.15s',
-            }}
-          >
-            {isExpired ? 'Offer Expired' : 'Accept Job'}
-          </button>
-        </div>
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 300,
+      background: '#111827',
+      display: 'flex', flexDirection: 'column', justifyContent: 'flex-end',
+    }}>
+      {/* Dim map peek */}
+      <div style={{
+        position: 'absolute', inset: 0, opacity: 0.15, overflow: 'hidden', pointerEvents: 'none',
+      }}>
+        <iframe
+          title="map-peek"
+          src={`https://maps.google.com/maps?q=${encodeURIComponent(order.pickup.address)}&t=m&z=14&output=embed&iwloc=near`}
+          style={{ width: '100%', height: '100%', border: 'none', filter: 'grayscale(1)' }}
+        />
       </div>
 
-      <style>{`
-        @keyframes fadeIn {
-          from { opacity: 0; }
-          to { opacity: 1; }
-        }
-        @keyframes popIn {
-          from {
-            transform: translate(-50%, -50%) scale(0.9);
-            opacity: 0;
-          }
-          to {
-            transform: translate(-50%, -50%) scale(1);
-            opacity: 1;
-          }
-        }
-      `}</style>
-    </>
+      {/* Timer ring */}
+      <div style={{
+        position: 'relative', flex: 1,
+        display: 'flex', flexDirection: 'column', justifyContent: 'flex-end',
+      }}>
+        <div style={{ padding: '64px 20px 0', display: 'flex', justifyContent: 'center' }}>
+          <div style={{ position: 'relative', width: 96, height: 96 }}>
+            <svg width="96" height="96" viewBox="0 0 96 96">
+              <circle cx="48" cy="48" r={radius} fill="none" stroke="rgba(255,255,255,.15)" strokeWidth="6"/>
+              <circle
+                cx="48" cy="48" r={radius}
+                fill="none" stroke="#c94a1b" strokeWidth="6"
+                strokeLinecap="round"
+                strokeDasharray={`${circumf}`}
+                strokeDashoffset={`${dashOffset}`}
+                transform="rotate(-90 48 48)"
+                style={{ transition: 'stroke-dashoffset 1s linear' }}
+              />
+            </svg>
+            <div style={{
+              position: 'absolute', inset: 0,
+              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+              color: '#fff',
+            }}>
+              <div style={{ fontSize: 28, fontWeight: 600, letterSpacing: -1, fontFamily: 'monospace' }}>{t}</div>
+              <div style={{ fontSize: 9, letterSpacing: 1.4, textTransform: 'uppercase', color: 'rgba(255,255,255,.5)', fontFamily: 'monospace' }}>seconds</div>
+            </div>
+          </div>
+        </div>
+
+        {/* White bottom sheet */}
+        <div style={{
+          background: '#fff', borderRadius: '24px 24px 0 0',
+          padding: '24px 20px', paddingBottom: 'max(28px, env(safe-area-inset-bottom, 28px))',
+          boxShadow: '0 -20px 50px -20px rgba(0,0,0,.5)',
+          display: 'flex', flexDirection: 'column', gap: 18,
+        }}>
+          {/* NEW tag + order ID */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{
+              display: 'inline-flex', alignItems: 'center', gap: 5,
+              background: '#fef2f0', borderRadius: 99, padding: '4px 10px',
+            }}>
+              <div style={{ width: 6, height: 6, borderRadius: 3, background: '#c94a1b' }} />
+              <span style={{ fontSize: 10, fontWeight: 700, color: '#c94a1b', letterSpacing: 1, textTransform: 'uppercase' }}>NEW</span>
+            </div>
+            <span style={{
+              fontFamily: 'monospace', fontSize: 11, color: '#6b7280',
+              letterSpacing: 1, textTransform: 'uppercase',
+            }}>{order.id} · Standard</span>
+          </div>
+
+          {/* Payout */}
+          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 14 }}>
+            <div style={{ fontSize: 52, fontWeight: 600, letterSpacing: -2, color: '#111827', lineHeight: 1 }}>
+              ${dollars}<span style={{ fontSize: 28, color: '#9ca3af' }}>.{cents}</span>
+            </div>
+            <div style={{ paddingBottom: 8, fontSize: 13, color: '#6b7280', lineHeight: 1.5 }}>
+              <div><b style={{ color: '#111827' }}>{distanceKm.toFixed(1)} km</b> · ~{Math.round(distanceKm * 4 + 10)} min</div>
+              <div style={{ fontFamily: 'monospace', fontSize: 11 }}>80% to you</div>
+            </div>
+          </div>
+
+          {/* Route mini card */}
+          <div style={{ background: '#f9fafb', borderRadius: 14, padding: 14, display: 'flex', gap: 14 }}>
+            {/* Route line */}
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', paddingTop: 6 }}>
+              <div style={{ width: 10, height: 10, borderRadius: 5, border: '2.5px solid #111827' }} />
+              <div style={{ width: 2, flex: 1, background: '#e5e7ea', margin: '3px 0', minHeight: 22 }} />
+              <div style={{ width: 10, height: 10, background: '#c94a1b', borderRadius: 2 }} />
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ marginBottom: 12 }}>
+                <div style={{ fontFamily: 'monospace', fontSize: 10, color: '#6b7280', letterSpacing: 1, textTransform: 'uppercase' }}>
+                  Pickup · {Math.round(distanceKm * 0.6 + 2)} min away
+                </div>
+                <div style={{ fontSize: 14, fontWeight: 500, color: '#111827' }}>{pickupAddr}</div>
+                <div style={{ fontSize: 12, color: '#6b7280' }}>{order.pickup.name}</div>
+              </div>
+              <div>
+                <div style={{ fontFamily: 'monospace', fontSize: 10, color: '#6b7280', letterSpacing: 1, textTransform: 'uppercase' }}>Drop-off</div>
+                <div style={{ fontSize: 14, fontWeight: 500, color: '#111827' }}>{dropoffAddr}{order.dropoff.unit ? ` · ${order.dropoff.unit}` : ''}</div>
+                <div style={{ fontSize: 12, color: '#6b7280' }}>{order.dropoff.name}</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Parcel tags */}
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <Tag>{size} · {order.parcel.size === 's' ? '~5 lb' : order.parcel.size === 'l' ? '~25 lb' : '~10 lb'}</Tag>
+            {fragile && <Tag tone="warn">⚠ Fragile</Tag>}
+            {order.parcel.desc && <Tag tone="neutral">{order.parcel.desc.slice(0, 24)}</Tag>}
+          </div>
+
+          {/* Actions */}
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button
+              onClick={onDecline}
+              style={{
+                flex: 1, height: 52, borderRadius: 26, cursor: 'pointer',
+                background: '#f3f4f6', border: 'none', color: '#111827',
+                fontFamily: 'inherit', fontSize: 15, fontWeight: 500,
+              }}
+            >Decline</button>
+            <button
+              onClick={onAccept}
+              style={{
+                flex: 2, height: 52, borderRadius: 26, cursor: 'pointer',
+                background: '#c94a1b', border: 'none', color: '#fff',
+                fontFamily: 'inherit', fontSize: 15, fontWeight: 600, letterSpacing: -0.2,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                boxShadow: '0 10px 24px -10px rgba(201,74,27,.5)',
+              }}
+            >
+              Accept · ${payout}
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 8h10M9 4l4 4-4 4"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Inline tag component ──────────────────────────────────────────────────────
+
+function Tag({ children, tone = 'default' }: { children: React.ReactNode; tone?: 'default' | 'warn' | 'neutral' }) {
+  const colors: Record<string, { bg: string; color: string }> = {
+    default: { bg: '#f3f4f6',  color: '#374151' },
+    warn:    { bg: '#fef3c7',  color: '#92400e' },
+    neutral: { bg: '#ede9fe',  color: '#5b21b6' },
+  }
+  const { bg, color } = colors[tone]
+  return (
+    <div style={{
+      display: 'inline-flex', alignItems: 'center',
+      background: bg, color, borderRadius: 99,
+      padding: '4px 10px', fontSize: 12, fontWeight: 500,
+    }}>
+      {children}
+    </div>
   )
 }

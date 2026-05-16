@@ -2,7 +2,11 @@ import React, { useState } from 'react'
 import { useDriver, authenticateDriver } from '../store/DriverContext'
 import { supabase, isSupabaseConfigured } from '@shared/lib/supabase'
 
-export function LoginScreen() {
+interface Props {
+  onSignUp?: () => void
+}
+
+export function LoginScreen({ onSignUp }: Props) {
   const { dispatch } = useDriver()
   const [view,     setView]     = useState<'login' | 'forgot'>('login')
   const [email,    setEmail]    = useState('')
@@ -207,6 +211,22 @@ export function LoginScreen() {
             : 'Sign In'}
         </button>
       </form>
+
+      {/* Sign-up CTA */}
+      {onSignUp && (
+        <div style={{ marginTop: 28, textAlign: 'center' }}>
+          <span style={{ fontSize: 13, color: 'var(--d-muted)' }}>New driver? </span>
+          <button
+            type="button"
+            onClick={onSignUp}
+            style={{
+              background: 'none', border: 'none', cursor: 'pointer',
+              color: 'var(--d-accent)', fontSize: 13, fontWeight: 600,
+              padding: 0, fontFamily: 'var(--d-font)',
+            }}
+          >Apply to drive →</button>
+        </div>
+      )}
 
       <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
     </div>
