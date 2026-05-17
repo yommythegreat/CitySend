@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { useDriver } from '../store/DriverContext'
+import { driverPayout } from '../utils/payout'
 import type { DeliverySubstep } from '../store/DriverContext'
 import { Toast } from '../components/Toast'
 import { SlideAction } from '../components/SlideAction'
@@ -37,7 +38,6 @@ function initials(name: string) {
   return name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
 }
 
-const PAYOUT = (distanceKm: number) => `$${(5.99 + distanceKm * 1.5).toFixed(2)}`
 
 // ── Step logic ────────────────────────────────────────────────────────────────
 
@@ -211,7 +211,7 @@ function ChatPanel({ order, myId, messages, fetchError, sending, inputText, call
 // ── Main screen ───────────────────────────────────────────────────────────────
 
 export function DeliveryScreen({ orderId, onBack, onComplete, initialChatOpen = false }: Props) {
-  const { state, dispatch } = useDriver()
+  const { state, dispatch, completedOrders } = useDriver()
 
   const [toast,         setToast]        = useState('')
   const [showIssue,     setShowIssue]    = useState(false)
@@ -284,14 +284,18 @@ export function DeliveryScreen({ orderId, onBack, onComplete, initialChatOpen = 
   const substep  = state.substeps[order.id]
   const step     = resolveStep(order, substep)
   const mapAddr  = step === 'en_route_pickup' ? order.pickup.address : order.dropoff.address
-  const payout   = PAYOUT(order.distanceKm)
+  const payout   = `$${driverPayout(order).toFixed(2)}`
 
   const navInstruction = step === 'en_route_pickup'
     ? `Head to ${order.pickup.address.split(',')[0]}`
     : `Head to ${order.dropoff.address.split(',')[0]}`
 
-  const earningsToday = 184.00  // placeholder for header display
-  const todayJobs     = 11
+  const todayCompleted = completedOrders.filter(o => {
+    const d = new Date(o.updatedAt)
+    return d.toDateString() === new Date().toDateString()
+  })
+  const earningsToday = todayCompleted.reduce((sum, o) => sum + driverPayout(o), 0)
+  const todayJobs = todayCompleted.length
 
   // ── Handlers ─────────────────────────────────────────────────────────────
 
@@ -408,7 +412,7 @@ export function DeliveryScreen({ orderId, onBack, onComplete, initialChatOpen = 
                 </div>
               </div>
               <button
-                onClick={() => { setCallNotice(true); setChatOpen(true) }}
+                onClick={() => order.pickup.phone ? window.open(`tel:${order.pickup.phone.replace(/\s/g, '')}`) : undefined}
                 style={{ width: 36, height: 36, borderRadius: '50%', border: '1px solid var(--d-border)', background: 'var(--d-bg)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
               >
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="var(--d-ink)" strokeWidth="1.5" strokeLinecap="round"><path d="M3 3c0 0 1 0 2 2s.5 3.5 2 5 3 3 5 3"/></svg>
@@ -471,7 +475,12 @@ export function DeliveryScreen({ orderId, onBack, onComplete, initialChatOpen = 
             <button onClick={() => setShowIssue(true)} style={{ flex: 1, padding: '11px 0', border: '1px solid var(--d-border)', borderRadius: 10, background: '#fff', fontSize: 13, fontWeight: 500, color: 'var(--d-ink)', cursor: 'pointer' }}>
               Wrong parcel?
             </button>
-            <button onClick={() => setShowIssue(true)} style={{ flex: 1, padding: '11px 0', border: '1px solid var(--d-border)', borderRadius: 10, background: '#fff', fontSize: 13, fontWeight: 500, color: '#ef4444', cursor: 'pointer' }}>
+            <button onClick={() => {
+              if (window.confirm('Cancel this job? This action cannot be undone.')) {
+                dispatch({ type: 'UPDATE_STATUS', orderId, status: 'cancelled' })
+                onBack()
+              }
+            }} style={{ flex: 1, padding: '11px 0', border: '1px solid var(--d-border)', borderRadius: 10, background: '#fff', fontSize: 13, fontWeight: 500, color: '#ef4444', cursor: 'pointer' }}>
               Cancel job
             </button>
           </div>
@@ -525,7 +534,7 @@ export function DeliveryScreen({ orderId, onBack, onComplete, initialChatOpen = 
       {/* Stats */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 16 }}>
         {[
-          { label: 'ETA',      value: isPickup ? '4 min' : '7 min' },
+          { label: 'ETA',      value: `~${Math.round(order.distanceKm * 3 + 5)} min` },
           { label: 'Distance', value: `${order.distanceKm} km`     },
           { label: 'Payout',   value: payout, accent: true          },
         ].map(s => (
@@ -569,7 +578,7 @@ export function DeliveryScreen({ orderId, onBack, onComplete, initialChatOpen = 
 
       {/* Navigation banner */}
       {navInstruction && (
-        <NavigationBanner instruction={navInstruction} distanceCue="In 250 m" />
+        <NavigationBanner instruction={navInstruction} distanceCue={`${order.distanceKm.toFixed(1)} km`} />
       )}
 
       {/* Right-rail glass buttons (phone + message) */}
@@ -578,7 +587,10 @@ export function DeliveryScreen({ orderId, onBack, onComplete, initialChatOpen = 
         display: 'flex', flexDirection: 'column', gap: 10,
       }}>
         <button
-          onClick={() => setCallNotice(true)}
+          onClick={() => {
+            const phone = isPickup ? order.pickup.phone : order.dropoff.phone
+            if (phone) window.open(`tel:${phone.replace(/\s/g, '')}`)
+          }}
           style={{
             width: 40, height: 40, borderRadius: 20, border: 'none', cursor: 'pointer',
             background: 'rgba(255,255,255,0.92)', backdropFilter: 'blur(10px)',

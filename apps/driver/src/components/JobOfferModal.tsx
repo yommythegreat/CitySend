@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import type { Order } from '@shared/types'
+import { driverPayout } from '../utils/payout'
 
 interface Props {
   order:     Order
@@ -30,7 +31,7 @@ export function JobOfferModal({ order, onAccept, onDecline, onTimeout }: Props) 
   const pickupAddr  = order.pickup.address.split(',')[0]
   const dropoffAddr = order.dropoff.address.split(',')[0]
   const distanceKm  = order.distanceKm
-  const payout      = (5.99 + distanceKm * 1.5).toFixed(2)
+  const payout      = driverPayout(order).toFixed(2)
   const [dollars, cents] = payout.split('.')
 
   const fragile = order.parcel.fragile

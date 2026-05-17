@@ -1,6 +1,8 @@
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useRef } from 'react'
 import { useDriver } from '../store/DriverContext'
 import type { Order } from '@shared/types'
+import { driverPayout, DRIVER_COMMISSION } from '../utils/payout'
+import { supabase, isSupabaseConfigured } from '@shared/lib/supabase'
 
 interface Props {
   order:      Order
@@ -13,13 +15,15 @@ interface Props {
  * running today total, star rating, Stay online / End shift CTAs.
  */
 export function EarningsScreen({ order, onContinue }: Props) {
-  const { completedOrders } = useDriver()
+  const { completedOrders, state } = useDriver()
   const [rating, setRating] = useState(5)
+  const ratingSubmitted = useRef(false)
 
-  const baseFare    = 5.99
-  const distanceFee = order.distanceKm * 1.5
-  const tip         = order.priceBreakdown?.tip ?? 0
-  const total       = baseFare + distanceFee + tip
+  const b           = order.priceBreakdown
+  const baseFare    = b.baseFee
+  const distanceFee = b.distanceFee
+  const tip         = b.tip
+  const total       = driverPayout(order)
   const [dollars, cents] = total.toFixed(2).split('.')
 
   // Running total for today (excluding this job, then add it)
@@ -27,7 +31,7 @@ export function EarningsScreen({ order, onContinue }: Props) {
     const today = new Date().toDateString()
     return completedOrders
       .filter(o => o.id !== order.id && new Date(o.updatedAt).toDateString() === today)
-      .reduce((sum, o) => sum + 5.99 + (o.distanceKm ?? 0) * 1.5, 0)
+      .reduce((sum, o) => sum + driverPayout(o), 0)
   }, [completedOrders, order.id])
 
   const todayTotal = todayEarnings + total
@@ -90,7 +94,7 @@ export function EarningsScreen({ order, onContinue }: Props) {
               tip > 0
                 ? { label: 'Tip from sender', value: `+$${tip.toFixed(2)}`,  accent: true }
                 : null,
-              { label: 'Time on job',      value: `~${Math.round(order.distanceKm * 5 + 10)} min`, accent: false },
+              { label: 'Time on job',      value: `~${Math.round((new Date(order.updatedAt).getTime() - new Date(order.createdAt).getTime()) / 60000)} min`, accent: false },
             ].filter(Boolean).map((row) => (
               <div key={row!.label} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
                 <div style={{ color: '#374151' }}>{row!.label}</div>
@@ -178,7 +182,15 @@ export function EarningsScreen({ order, onContinue }: Props) {
       {/* CTA buttons */}
       <div style={{ padding: '16px 20px', paddingBottom: 'max(36px, env(safe-area-inset-bottom, 36px))', display: 'flex', flexDirection: 'column', gap: 10 }}>
         <button
-          onClick={onContinue}
+          onClick={async () => {
+            if (!ratingSubmitted.current && isSupabaseConfigured) {
+              ratingSubmitted.current = true
+              try {
+                await supabase.from('orders').update({ driver_rating: rating }).eq('id', order.id)
+              } catch { /* non-critical */ }
+            }
+            onContinue()
+          }}
           style={{
             width: '100%', height: 56, borderRadius: 28, border: 'none', cursor: 'pointer',
             background: '#c94a1b', color: '#fff',
@@ -193,7 +205,16 @@ export function EarningsScreen({ order, onContinue }: Props) {
           Stay online · find next job
         </button>
         <button
-          onClick={onContinue}
+          onClick={async () => {
+            if (!ratingSubmitted.current && isSupabaseConfigured) {
+              ratingSubmitted.current = true
+              try { await supabase.from('orders').update({ driver_rating: rating }).eq('id', order.id) } catch {}
+            }
+            if (isSupabaseConfigured && state.auth?.driverId) {
+              try { await supabase.from('drivers').update({ status: 'offline' }).eq('id', state.auth.driverId) } catch {}
+            }
+            onContinue()
+          }}
           style={{
             width: '100%', height: 48, borderRadius: 24, border: 'none', cursor: 'pointer',
             background: 'transparent', color: 'rgba(255,255,255,.7)',

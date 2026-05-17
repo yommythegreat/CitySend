@@ -3,6 +3,7 @@ import { useDriver } from '../store/DriverContext'
 import { SlideAction } from '../components/SlideAction'
 import { PhotoCapture } from '../components/PhotoCapture'
 import { validateHandoffCode } from '@shared/utils/handoffCodeStore'
+import { supabase, isSupabaseConfigured } from '@shared/lib/supabase'
 
 interface Props {
   orderId:     string
@@ -13,7 +14,7 @@ interface Props {
 type ProofTab = 'photo' | 'signature' | 'code'
 
 export function ProofOfDeliveryScreen({ orderId, onBack, onConfirmed }: Props) {
-  const { state, dispatch } = useDriver()
+  const { state, dispatch, completedOrders } = useDriver()
   const order = state.orders.find(o => o.id === orderId)
 
   const [activeTab,      setActiveTab]      = useState<ProofTab>('photo')
@@ -25,6 +26,7 @@ export function ProofOfDeliveryScreen({ orderId, onBack, onConfirmed }: Props) {
   const [photoUploading, setPhotoUploading] = useState(false)
   const [submitting,     setSubmitting]     = useState(false)
   const [error,          setError]          = useState('')
+  const [sigUrl,         setSigUrl]         = useState<string | null>(null)
 
   const [codeDigits, setCodeDigits] = useState(['', '', '', ''])
   const codeRefs = [
@@ -85,6 +87,22 @@ export function ProofOfDeliveryScreen({ orderId, onBack, onConfirmed }: Props) {
     setSigned(false)
   }
 
+  const uploadSignature = async (): Promise<string | null> => {
+    const canvas = canvasRef.current
+    if (!canvas) return null
+    try {
+      const dataUrl = canvas.toDataURL('image/png')
+      // Convert data URL to blob
+      const res = await fetch(dataUrl)
+      const blob = await res.blob()
+      const path = `signatures/${orderId}-${Date.now()}.png`
+      const { data, error } = await supabase.storage.from('delivery-photos').upload(path, blob, { contentType: 'image/png', upsert: true })
+      if (error || !data) return null
+      const { data: urlData } = supabase.storage.from('delivery-photos').getPublicUrl(path)
+      return urlData.publicUrl ?? null
+    } catch { return null }
+  }
+
   // ── Submit ────────────────────────────────────────────────────────────────
 
   const codeComplete = codeDigits.every(d => d !== '')
@@ -107,9 +125,14 @@ export function ProofOfDeliveryScreen({ orderId, onBack, onConfirmed }: Props) {
     }
     setError('')
     setSubmitting(true)
-    await new Promise(r => setTimeout(r, 600))
-    const proofDetail = activeTab === 'code'  ? ` Code: ${codeDigits.join('')}.`
-                      : activeTab === 'photo' ? (photoUrl ? ` Photo: ${photoUrl}` : '') : ''
+    let resolvedSigUrl = sigUrl
+    if (activeTab === 'signature' && !sigUrl && isSupabaseConfigured) {
+      resolvedSigUrl = await uploadSignature()
+      if (resolvedSigUrl) setSigUrl(resolvedSigUrl)
+    }
+    const proofDetail = activeTab === 'code'      ? ` Code: ${codeDigits.join('')}.`
+                      : activeTab === 'photo'     ? (photoUrl ? ` Photo: ${photoUrl}` : '')
+                      : activeTab === 'signature' ? (resolvedSigUrl ? ` Signature: ${resolvedSigUrl}` : ' Signature captured.') : ''
     dispatch({
       type: 'ADD_NOTE', orderId,
       note: { id: `pod-${Date.now()}`, text: `✅ Delivery confirmed: received by ${receiverName.trim()} via ${activeTab}.${proofDetail}${notes ? ' Notes: ' + notes : ''}`, authorName: state.auth?.name ?? 'Driver', createdAt: new Date().toISOString() },
@@ -146,7 +169,7 @@ export function ProofOfDeliveryScreen({ orderId, onBack, onConfirmed }: Props) {
           </div>
           <div style={{ textAlign: 'right' }}>
             <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.45)' }}>TODAY</div>
-            <div style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>11 Jobs</div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>{completedOrders.length} Jobs</div>
           </div>
         </div>
 
@@ -315,10 +338,16 @@ export function ProofOfDeliveryScreen({ orderId, onBack, onConfirmed }: Props) {
           </button>
         )}
         <div style={{ display: 'flex', gap: 10 }}>
-          <button onClick={onBack} style={{ flex: 1, padding: '11px 0', border: '1px solid var(--d-border)', borderRadius: 10, background: '#fff', fontSize: 13, fontWeight: 500, color: 'var(--d-muted)', cursor: 'pointer' }}>
-            Recipient unavailable?
+          <button onClick={() => {
+            if (window.confirm('Mark as failed delivery? The order will be flagged for admin review.')) {
+              dispatch({ type: 'ADD_NOTE', orderId, note: { id: `unavail-${Date.now()}`, text: '⚠️ Recipient unavailable — delivery failed', authorName: state.auth?.name ?? 'Driver', createdAt: new Date().toISOString() } })
+              dispatch({ type: 'UPDATE_STATUS', orderId, status: 'cancelled' })
+              onBack()
+            }
+          }} style={{ flex: 1, padding: '11px 0', border: '1px solid var(--d-border)', borderRadius: 10, background: '#fff', fontSize: 13, fontWeight: 500, color: '#ef4444', cursor: 'pointer' }}>
+            Recipient unavailable
           </button>
-          <button onClick={onBack} style={{ flex: 1, padding: '11px 0', border: '1px solid var(--d-border)', borderRadius: 10, background: '#fff', fontSize: 13, fontWeight: 500, color: 'var(--d-muted)', cursor: 'pointer' }}>
+          <button onClick={() => window.open('mailto:support@citysend.ca?subject=Help+with+delivery+' + orderId)} style={{ flex: 1, padding: '11px 0', border: '1px solid var(--d-border)', borderRadius: 10, background: '#fff', fontSize: 13, fontWeight: 500, color: 'var(--d-muted)', cursor: 'pointer' }}>
             Need help?
           </button>
         </div>

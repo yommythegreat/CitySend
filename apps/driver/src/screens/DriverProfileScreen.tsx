@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useDriver } from '../store/DriverContext'
 import { supabase, isSupabaseConfigured } from '@shared/lib/supabase'
 
@@ -15,15 +15,38 @@ function stars(r: number) {
 }
 
 export function DriverProfileScreen({ onBack, onSignOut }: Props) {
-  const { state } = useDriver()
+  const { state, dispatch } = useDriver()
   const { auth }  = state
 
-  const [editing,  setEditing]  = useState(false)
-  const [phone,    setPhone]    = useState(auth?.phone    ?? '')
-  const [vehicle,  setVehicle]  = useState(auth?.vehicle  ?? '')
-  const [saving,   setSaving]   = useState(false)
-  const [saved,    setSaved]    = useState(false)
-  const [error,    setError]    = useState('')
+  const [editing,      setEditing]      = useState(false)
+  const [phone,        setPhone]        = useState(auth?.phone    ?? '')
+  const [vehicle,      setVehicle]      = useState(auth?.vehicle  ?? '')
+  const [saving,       setSaving]       = useState(false)
+  const [saved,        setSaved]        = useState(false)
+  const [error,        setError]        = useState('')
+  const [loadingFresh, setLoadingFresh] = useState(false)
+
+  useEffect(() => {
+    if (!auth || !isSupabaseConfigured) return
+    setLoadingFresh(true)
+    Promise.resolve(
+      supabase.from('drivers').select('*').eq('id', auth.driverId).maybeSingle()
+    ).then(({ data }) => {
+      if (data) {
+        dispatch({ type: 'LOGIN', auth: {
+          ...auth,
+          phone:           data.phone ?? auth.phone,
+          vehicle:         data.vehicle ?? auth.vehicle,
+          rating:          Number(data.rating) || auth.rating,
+          completedOrders: data.completed_orders ?? auth.completedOrders,
+        }})
+        setPhone(data.phone ?? '')
+        setVehicle(data.vehicle ?? '')
+      }
+    })
+    .catch(() => {})
+    .finally(() => setLoadingFresh(false))
+  }, [auth?.driverId])
 
   if (!auth) return null
 
@@ -39,6 +62,10 @@ export function DriverProfileScreen({ onBack, onSignOut }: Props) {
         if (dbErr) throw new Error(dbErr.message)
       }
       setSaved(true)
+      // Update local auth state so UI reflects changes without re-login
+      if (state.auth) {
+        dispatch({ type: 'LOGIN', auth: { ...state.auth, phone: phone.trim(), vehicle: vehicle.trim() } })
+      }
       setEditing(false)
       setTimeout(() => setSaved(false), 3000)
     } catch (e: any) {

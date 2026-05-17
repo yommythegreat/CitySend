@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react'
 import { useDriver } from '../store/DriverContext'
 import { SlideAction } from '../components/SlideAction'
 import type { Order } from '@shared/types'
+import { driverPayout } from '../utils/payout'
 
 interface Props {
   onSelectOrder: (orderId: string) => void
@@ -21,8 +22,8 @@ const BUSY_ZONES = [
 // ── Top status bar (always dark) ──────────────────────────────────────────────
 
 function DarkHeader({
-  isOnline, earningsToday, todayJobs, driverName, onGoProfile,
-}: { isOnline: boolean; earningsToday: number; todayJobs: number; driverName: string; onGoProfile: () => void }) {
+  isOnline, earningsToday, todayJobs, kmToday, hoursToday, barData, driverName, onGoProfile,
+}: { isOnline: boolean; earningsToday: number; todayJobs: number; kmToday: number; hoursToday: number; barData: { label: string; earnings: number; isToday: boolean }[]; driverName: string; onGoProfile: () => void }) {
   const initials = driverName.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2) || '?'
   const dollars = Math.floor(earningsToday)
   const cents   = String(Math.round((earningsToday % 1) * 100)).padStart(2, '0')
@@ -90,25 +91,25 @@ function DarkHeader({
       {/* Row 4: inline stats */}
       <div style={{ display: 'flex', gap: 24, marginTop: 8, fontSize: 13, color: 'rgba(255,255,255,.7)' }}>
         <div><span style={{ color: '#fff', fontWeight: 600 }}>{todayJobs}</span> jobs</div>
-        <div><span style={{ color: '#fff', fontWeight: 600 }}>4.2h</span> on the road</div>
-        <div><span style={{ color: '#fff', fontWeight: 600 }}>26 km</span> driven</div>
+        <div><span style={{ color: '#fff', fontWeight: 600 }}>{hoursToday < 1 ? `${Math.round(hoursToday * 60)}m` : `${hoursToday.toFixed(1)}h`}</span> on the road</div>
+        <div><span style={{ color: '#fff', fontWeight: 600 }}>{kmToday.toFixed(1)} km</span> driven</div>
       </div>
 
       {/* 7-day bar chart */}
       <div style={{ marginTop: 22, display: 'flex', alignItems: 'flex-end', gap: 10, height: 64 }}>
-        {([0.32, 0.55, 0.42, 0.71, 0.61, 0.94, 0.48] as number[]).map((h, i) => {
-          const days = ['T','F','S','S','M','T','W']
-          const isToday = i === 5
+        {barData.map((day, i) => {
+          const maxEarnings = Math.max(...barData.map(d => d.earnings), 1)
+          const h = day.earnings / maxEarnings
           return (
             <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
               <div style={{
-                width: '100%', height: `${h * 100}%`, borderRadius: 3,
-                background: isToday ? '#c94a1b' : 'rgba(255,255,255,.22)',
+                width: '100%', height: `${Math.max(h * 100, day.earnings > 0 ? 8 : 4)}%`, borderRadius: 3,
+                background: day.isToday ? '#c94a1b' : 'rgba(255,255,255,.22)',
               }}/>
               <div style={{
                 fontFamily: 'monospace', fontSize: 9, letterSpacing: 1,
-                color: isToday ? '#fff' : 'rgba(255,255,255,.4)',
-              }}>{days[i]}</div>
+                color: day.isToday ? '#fff' : 'rgba(255,255,255,.4)',
+              }}>{day.label}</div>
             </div>
           )
         })}
@@ -134,11 +135,35 @@ export function DashboardScreen({ onSelectOrder, onGoHistory, onGoProfile, onGoE
   )
 
   const earningsToday = useMemo(() =>
-    todayCompleted.reduce((sum, o) => sum + 5.99 + (o.distanceKm ?? 0) * 1.5, 0),
+    todayCompleted.reduce((sum, o) => sum + driverPayout(o), 0),
+    [todayCompleted],
+  )
+
+  const kmToday = useMemo(() =>
+    todayCompleted.reduce((sum, o) => sum + (o.distanceKm ?? 0), 0),
+    [todayCompleted],
+  )
+  // Estimate hours: 10 min base + 4 min/km average city speed
+  const hoursToday = useMemo(() =>
+    todayCompleted.reduce((sum, o) => sum + (10 + (o.distanceKm ?? 0) * 4) / 60, 0),
     [todayCompleted],
   )
 
   const todayJobs = auth ? auth.completedOrders + todayCompleted.length : todayCompleted.length
+
+  const DAY_LABELS = ['S','M','T','W','T','F','S']
+  const barData = useMemo(() => {
+    const today = new Date()
+    return Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(today)
+      d.setDate(d.getDate() - (6 - i))
+      const dayStr = d.toDateString()
+      const earnings = completedOrders
+        .filter(o => o.status === 'delivered' && new Date(o.updatedAt).toDateString() === dayStr)
+        .reduce((sum, o) => sum + driverPayout(o), 0)
+      return { label: DAY_LABELS[d.getDay()], earnings, isToday: i === 6 }
+    })
+  }, [completedOrders])
 
   if (!auth) return null
 
@@ -188,7 +213,7 @@ export function DashboardScreen({ onSelectOrder, onGoHistory, onGoProfile, onGoE
       )}
 
       {/* Dark header */}
-      <DarkHeader isOnline={isOnline} earningsToday={earningsToday} todayJobs={todayJobs} driverName={auth.name} onGoProfile={onGoProfile} />
+      <DarkHeader isOnline={isOnline} earningsToday={earningsToday} todayJobs={todayJobs} kmToday={kmToday} hoursToday={hoursToday} barData={barData} driverName={auth.name} onGoProfile={onGoProfile} />
 
       {/* Scrollable body */}
       <div style={{ flex: 1, overflowY: 'auto', scrollbarWidth: 'none' }}>
@@ -292,7 +317,7 @@ export function DashboardScreen({ onSelectOrder, onGoHistory, onGoProfile, onGoE
                   </div>
                   <div style={{ textAlign: 'right' }}>
                     <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--d-ink)' }}>
-                      ${(5.99 + order.distanceKm * 1.5).toFixed(2)}
+                      ${driverPayout(order).toFixed(2)}
                     </div>
                     <div style={{ fontSize: 11, color: 'var(--d-muted)' }}>{order.distanceKm} km</div>
                   </div>
@@ -330,23 +355,24 @@ export function DashboardScreen({ onSelectOrder, onGoHistory, onGoProfile, onGoE
               <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
                 <rect x="2" y="5" width="16" height="12" rx="2"/><path d="M6 5V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v1"/><path d="M10 10v2m0-4v.5"/>
               </svg>
-            )},
+            ), onClick: onGoHistory },
             { label: 'Schedule', icon: (
               <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
                 <rect x="3" y="4" width="14" height="14" rx="2"/><path d="M7 2v2M13 2v2M3 8h14"/>
               </svg>
-            )},
+            ), onClick: null },
             { label: 'Help', icon: (
               <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
                 <circle cx="10" cy="10" r="7"/><path d="M10 14v.5"/><path d="M10 11a2.5 2.5 0 1 0-2.5-2.5"/>
               </svg>
-            )},
-          ]).map(a => (
-            <button key={a.label} style={{
+            ), onClick: null },
+          ] as { label: string; icon: React.ReactNode; onClick: (() => void) | null }[]).map(a => (
+            <button key={a.label} onClick={a.onClick ?? undefined} style={{
               padding: '14px 10px', background: '#fff', border: '1px solid var(--d-border)',
-              borderRadius: 14, cursor: 'pointer', fontFamily: 'inherit',
+              borderRadius: 14, cursor: a.onClick ? 'pointer' : 'default', fontFamily: 'inherit',
               display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
-              color: 'var(--d-ink)',
+              color: a.onClick ? 'var(--d-ink)' : 'var(--d-muted-lt)',
+              opacity: a.onClick ? 1 : 0.5,
             }}>
               {a.icon}
               <span style={{ fontSize: 12, fontWeight: 500 }}>{a.label}</span>

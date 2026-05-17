@@ -119,7 +119,9 @@ function DriverApp() {
 
   const handleAcceptOffer = () => {
     if (!jobOffer) return
-    const orderId = jobOffer.order.id
+    const orderId  = jobOffer.order.id
+    const driverId = state.auth?.driverId ?? ''
+    dispatch({ type: 'ACCEPT_JOB', orderId, driverId })
     dispatch({ type: 'HIDE_JOB_OFFER' })
     dispatch({ type: 'SET_SUBSTEP', orderId, substep: 'accepted' })
     navigateTo({ name: 'delivery', orderId })

@@ -22,7 +22,6 @@ import {
   stopLocationBroadcast,
   updateBroadcastOrder,
 } from '@shared/utils/locationStore'
-import { MOCK_DRIVERS } from '@shared/mock-data/drivers'
 
 // ── Driver sub-steps (local UI only, not in shared model) ─────────────────────
 
@@ -49,7 +48,7 @@ export interface DriverAuth {
 export interface JobOffer {
   order: Order
   showModal: boolean
-  timeRemaining: number  // countdown seconds (starts at 15)
+  timeRemaining: number  // countdown seconds (starts at 120)
 }
 
 // ── State ─────────────────────────────────────────────────────────────────────
@@ -88,6 +87,7 @@ type Action =
   | { type: 'SHOW_JOB_OFFER';      order: Order }
   | { type: 'HIDE_JOB_OFFER' }
   | { type: 'TICK_JOB_OFFER_TIMER' }
+  | { type: 'ACCEPT_JOB'; orderId: string; driverId: string }
 
 // ── Reducer ───────────────────────────────────────────────────────────────────
 
@@ -138,7 +138,7 @@ function reducer(state: DriverState, action: Action): DriverState {
         newJobOffer = {
           order: action.order,
           showModal: true,
-          timeRemaining: 15,
+          timeRemaining: 120,
         }
       }
 
@@ -154,7 +154,7 @@ function reducer(state: DriverState, action: Action): DriverState {
         jobOffer: {
           order: action.order,
           showModal: true,
-          timeRemaining: 15,
+          timeRemaining: 120,
         },
       }
     }
@@ -251,6 +251,13 @@ async function syncDriverAction(
       break
     }
 
+    case 'ACCEPT_JOB': {
+      await supabase.from('drivers').update({
+        status: 'busy', current_order_id: action.orderId,
+      }).eq('id', action.driverId)
+      break
+    }
+
     default: break
   }
 }
@@ -284,16 +291,12 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
     if (!isSupabaseConfigured) return
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event: AuthChangeEvent, session: Session | null) => {
-      console.log('[DriverAuth] state change:', event, session?.user?.email ?? 'no user')
-
       if (event === 'SIGNED_OUT') {
-        console.log('[DriverAuth] SIGNED_OUT — clearing driver state')
         baseDispatch({ type: 'LOGOUT' })
       } else if (event === 'INITIAL_SESSION' && !session) {
         // No valid Supabase session on load — clear any stale sessionStorage auth
         // that may have survived a previous improperly-terminated session
         if (sessionStorage.getItem('cs_driver_auth')) {
-          console.log('[DriverAuth] INITIAL_SESSION: no Supabase session, clearing stale driver auth')
           baseDispatch({ type: 'LOGOUT' })
         }
       }
@@ -329,12 +332,10 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const onOffline = () => {
       setConnStatus('offline')
-      console.log('[DriverContext] network offline')
     }
 
     const onOnline = async () => {
       setConnStatus('reconnecting')
-      console.log('[DriverContext] network back — re-syncing orders…')
       try {
         const orders = await fetchOrders()
         baseDispatch({ type: '_HYDRATE_ORDERS', orders })
