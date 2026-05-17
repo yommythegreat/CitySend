@@ -29,6 +29,7 @@
     "@types/node": "^22.5.0",
     "@types/react": "^18.3.1",
     "@types/react-dom": "^18.3.1",
+    "@vercel/node": "^5.8.2",
     "@vitejs/plugin-react": "^4.3.1",
     "concurrently": "^9.0.1",
     "tsx": "^4.19.0",
