@@ -8,7 +8,7 @@
  *   • Status updates: written to Supabase + optimistic local state.
  */
 
-import React, { createContext, useContext, useReducer, useEffect, useCallback } from 'react'
+import React, { createContext, useContext, useReducer, useEffect, useCallback, useState } from 'react'
 import type { Order, Driver, OrderStatus, AdminNote } from '@shared/types'
 import type { AuthChangeEvent, Session } from '@supabase/supabase-js'
 import { supabase, isSupabaseConfigured } from '@shared/lib/supabase'
@@ -181,13 +181,16 @@ function reducer(state: DriverState, action: Action): DriverState {
 
 // ── Context ───────────────────────────────────────────────────────────────────
 
+export type ConnectionStatus = 'online' | 'offline' | 'reconnecting'
+
 interface DriverContextValue {
-  state:           DriverState
-  dispatch:        React.Dispatch<Action>
-  myOrders:        Order[]
-  activeOrders:    Order[]
-  completedOrders: Order[]
-  jobOffer:        JobOffer | null  // Current job offer (if any)
+  state:            DriverState
+  dispatch:         React.Dispatch<Action>
+  myOrders:         Order[]
+  activeOrders:     Order[]
+  completedOrders:  Order[]
+  jobOffer:         JobOffer | null
+  connectionStatus: ConnectionStatus
 }
 
 const DriverContext = createContext<DriverContextValue | null>(null)
@@ -255,7 +258,12 @@ async function syncDriverAction(
 // ── Provider ──────────────────────────────────────────────────────────────────
 
 export function DriverProvider({ children }: { children: React.ReactNode }) {
-  const [state, baseDispatch] = useReducer(reducer, initialState)
+  const [state, baseDispatch]           = useReducer(reducer, initialState)
+  const [connectionStatus, setConnStatus] = useState<ConnectionStatus>(
+    navigator.onLine ? 'online' : 'offline',
+  )
+  // Incrementing this causes the subscription useEffect to resubscribe
+  const [subscribeKey, setSubscribeKey] = useState(0)
 
   const snapshotRef = React.useRef<DriverState>(state)
   useEffect(() => { snapshotRef.current = state }, [state])
@@ -317,7 +325,35 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
     setSharedOrders(state.orders)
   }, [state.orders])
 
-  // Realtime: subscribe to all order changes
+  // Network online / offline detection + reconnect
+  useEffect(() => {
+    const onOffline = () => {
+      setConnStatus('offline')
+      console.log('[DriverContext] network offline')
+    }
+
+    const onOnline = async () => {
+      setConnStatus('reconnecting')
+      console.log('[DriverContext] network back — re-syncing orders…')
+      try {
+        const orders = await fetchOrders()
+        baseDispatch({ type: '_HYDRATE_ORDERS', orders })
+      } catch (e) {
+        console.warn('[DriverContext] re-fetch failed', e)
+      }
+      setSubscribeKey(k => k + 1)   // resubscribe realtime
+      setConnStatus('online')
+    }
+
+    window.addEventListener('offline', onOffline)
+    window.addEventListener('online',  onOnline)
+    return () => {
+      window.removeEventListener('offline', onOffline)
+      window.removeEventListener('online',  onOnline)
+    }
+  }, [])
+
+  // Realtime: subscribe to all order changes (resubscribes on reconnect via subscribeKey)
   useEffect(() => {
     const unsubOrders = subscribeToOrders(
       (order) => baseDispatch({ type: '_UPSERT_ORDER', order }),
@@ -340,7 +376,8 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
       unsubOrders()
       window.removeEventListener('storage', legacyHandler)
     }
-  }, [])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [subscribeKey])
 
   // Job offer countdown timer
   useEffect(() => {
@@ -402,6 +439,7 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
       activeOrders,
       completedOrders,
       jobOffer: state.jobOffer,
+      connectionStatus,
     }}>
       {children}
     </DriverContext.Provider>

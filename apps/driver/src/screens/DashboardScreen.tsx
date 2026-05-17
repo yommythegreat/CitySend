@@ -104,7 +104,7 @@ function DarkHeader({
 // ── Main component ────────────────────────────────────────────────────────────
 
 export function DashboardScreen({ onSelectOrder, onGoHistory, onGoEarnings }: Props) {
-  const { state, completedOrders, activeOrders, dispatch } = useDriver()
+  const { state, completedOrders, activeOrders, dispatch, connectionStatus } = useDriver()
   const [isOnline, setIsOnline] = useState(true)
 
   const { auth } = state
@@ -156,6 +156,20 @@ export function DashboardScreen({ onSelectOrder, onGoHistory, onGoEarnings }: Pr
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: 'var(--d-bg)', overflow: 'hidden' }}>
+
+      {/* Network connection banner */}
+      {connectionStatus !== 'online' && (
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+          padding: '8px 16px', zIndex: 200, flexShrink: 0,
+          background: connectionStatus === 'offline' ? '#7f1d1d' : '#78350f',
+          fontSize: 13, fontWeight: 600, color: '#fff',
+        }}>
+          {connectionStatus === 'offline'
+            ? '📵 No network connection — updates paused'
+            : '🔄 Reconnecting and syncing orders…'}
+        </div>
+      )}
 
       {/* Dark header */}
       <DarkHeader isOnline={isOnline} earningsToday={earningsToday} todayJobs={todayJobs} />
