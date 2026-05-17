@@ -58,7 +58,7 @@ export function JobOfferModal({ order, onAccept, onDecline, onTimeout }: Props) 
         position: 'relative', flex: 1,
         display: 'flex', flexDirection: 'column', justifyContent: 'flex-end',
       }}>
-        <div style={{ padding: '64px 20px 0', display: 'flex', justifyContent: 'center' }}>
+        <div style={{ padding: 'max(64px, env(safe-area-inset-top, 64px)) 20px 0', display: 'flex', justifyContent: 'center' }}>
           <div style={{ position: 'relative', width: 96, height: 96 }}>
             <svg width="96" height="96" viewBox="0 0 96 96">
               <circle cx="48" cy="48" r={radius} fill="none" stroke="rgba(255,255,255,.15)" strokeWidth="6"/>

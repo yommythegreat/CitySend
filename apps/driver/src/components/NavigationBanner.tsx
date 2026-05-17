@@ -15,7 +15,7 @@ interface Props {
 export function NavigationBanner({ instruction, distanceCue = 'In 250 m' }: Props) {
   return (
     <div style={{
-      position: 'absolute', top: 44, left: 12, right: 12, zIndex: 5,
+      position: 'absolute', top: 'max(44px, calc(env(safe-area-inset-top, 0px) + 16px))', left: 12, right: 12, zIndex: 5,
       background: '#111827', color: '#fff', borderRadius: 18,
       padding: 14, display: 'flex', alignItems: 'center', gap: 14,
       boxShadow: '0 12px 30px -10px rgba(11,18,32,.5)',

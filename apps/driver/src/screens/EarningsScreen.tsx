@@ -43,7 +43,7 @@ export function EarningsScreen({ order, onContinue }: Props) {
       overflowY: 'auto',
     }}>
       {/* Confirmation glyph */}
-      <div style={{ padding: '64px 20px 0', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+      <div style={{ padding: 'max(64px, env(safe-area-inset-top, 64px)) 20px 0', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
         {/* Outer ring */}
         <div style={{
           width: 64, height: 64, borderRadius: 32,

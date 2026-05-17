@@ -137,33 +137,15 @@ function DriverApp() {
 
   const renderTopBar = () => {
     if (screen.name === 'dashboard') {
-      const initials = state.auth?.name
-        .split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2) ?? '?'
-      return (
-        <div style={{ position: 'fixed', top: 'max(14px, env(safe-area-inset-top, 14px))', right: 16, zIndex: 100 }}>
-          <button
-            onClick={() => navigateTo({ name: 'profile' })}
-            title="My profile"
-            style={{
-              width: 36, height: 36, borderRadius: '50%',
-              background: 'linear-gradient(135deg, #c94a1b, #e06840)',
-              border: '2px solid rgba(255,255,255,0.25)',
-              color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
-            }}
-          >
-            {initials}
-          </button>
-        </div>
-      )
+      return null  // profile avatar lives inside DashboardScreen's DarkHeader
     }
 
     if (screen.name === 'history') {
       return (
         <div style={{
           display: 'flex', alignItems: 'center', gap: 14,
-          padding: '52px 16px 12px',
+          paddingTop: 'max(52px, env(safe-area-inset-top, 52px))',
+          paddingBottom: 12, paddingLeft: 16, paddingRight: 16,
           background: '#1a1a1a', color: '#fff', flexShrink: 0,
         }}>
           <button
@@ -192,6 +174,7 @@ function DriverApp() {
           <DashboardScreen
             onSelectOrder={orderId => navigateTo({ name: 'delivery', orderId })}
             onGoHistory={() => navigateTo({ name: 'history' })}
+            onGoProfile={() => navigateTo({ name: 'profile' })}
           />
         )
 
@@ -249,7 +232,7 @@ function DriverApp() {
     }
   }
 
-  const isFullscreen = screen.name === 'delivery' || screen.name === 'earnings' || screen.name === 'profile'
+  const isFullscreen = screen.name === 'delivery' || screen.name === 'earnings'
 
   return (
     <div className={isFullscreen ? undefined : 'd-shell'}>

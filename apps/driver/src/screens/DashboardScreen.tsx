@@ -6,6 +6,7 @@ import type { Order } from '@shared/types'
 interface Props {
   onSelectOrder: (orderId: string) => void
   onGoHistory:   () => void
+  onGoProfile:   () => void
   onGoEarnings?: () => void
 }
 
@@ -20,8 +21,9 @@ const BUSY_ZONES = [
 // ── Top status bar (always dark) ──────────────────────────────────────────────
 
 function DarkHeader({
-  isOnline, earningsToday, todayJobs,
-}: { isOnline: boolean; earningsToday: number; todayJobs: number }) {
+  isOnline, earningsToday, todayJobs, driverName, onGoProfile,
+}: { isOnline: boolean; earningsToday: number; todayJobs: number; driverName: string; onGoProfile: () => void }) {
+  const initials = driverName.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2) || '?'
   const dollars = Math.floor(earningsToday)
   const cents   = String(Math.round((earningsToday % 1) * 100)).padStart(2, '0')
 
@@ -34,7 +36,7 @@ function DarkHeader({
       paddingRight: 20,
       flexShrink: 0,
     }}>
-      {/* Row 1: status pill + today summary */}
+      {/* Row 1: status pill + today summary + avatar */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
         <div style={{
           display: 'flex', alignItems: 'center', gap: 6,
@@ -49,12 +51,26 @@ function DarkHeader({
             {isOnline ? 'ONLINE' : 'OFFLINE'}
           </span>
         </div>
-        <div style={{ textAlign: 'right' }}>
+        <div style={{ textAlign: 'right', marginRight: 10 }}>
           <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.45)', letterSpacing: 0.4 }}>TODAY</div>
           <div style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>
             ${earningsToday.toFixed(2)} · {todayJobs} Jobs
           </div>
         </div>
+        <button
+          onClick={onGoProfile}
+          title="My profile"
+          style={{
+            width: 34, height: 34, borderRadius: '50%',
+            background: 'linear-gradient(135deg, #c94a1b, #e06840)',
+            border: '2px solid rgba(255,255,255,0.2)',
+            color: '#fff', fontSize: 11, fontWeight: 700, cursor: 'pointer',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            flexShrink: 0,
+          }}
+        >
+          {initials}
+        </button>
       </div>
 
       {/* Row 2: day label */}
@@ -103,7 +119,7 @@ function DarkHeader({
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export function DashboardScreen({ onSelectOrder, onGoHistory, onGoEarnings }: Props) {
+export function DashboardScreen({ onSelectOrder, onGoHistory, onGoProfile, onGoEarnings }: Props) {
   const { state, completedOrders, activeOrders, dispatch, connectionStatus } = useDriver()
   const [isOnline, setIsOnline] = useState(true)
 
@@ -172,7 +188,7 @@ export function DashboardScreen({ onSelectOrder, onGoHistory, onGoEarnings }: Pr
       )}
 
       {/* Dark header */}
-      <DarkHeader isOnline={isOnline} earningsToday={earningsToday} todayJobs={todayJobs} />
+      <DarkHeader isOnline={isOnline} earningsToday={earningsToday} todayJobs={todayJobs} driverName={auth.name} onGoProfile={onGoProfile} />
 
       {/* Scrollable body */}
       <div style={{ flex: 1, overflowY: 'auto', scrollbarWidth: 'none' }}>
