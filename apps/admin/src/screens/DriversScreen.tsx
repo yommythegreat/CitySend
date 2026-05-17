@@ -178,13 +178,14 @@ function ConfirmModal({
 
 function DriverCard({
   driver, isExpanded, onToggle,
-  onEdit, onAssignOrder, onRemoveFromOrder, onSuspend, onReinstate, onViewOrder,
+  onEdit, onActivate, onAssignOrder, onRemoveFromOrder, onSuspend, onReinstate, onViewOrder,
   currentOrder,
 }: {
   driver: Driver
   isExpanded: boolean
   onToggle: () => void
   onEdit: () => void
+  onActivate: () => void
   onAssignOrder: () => void
   onRemoveFromOrder: () => void
   onSuspend: () => void
@@ -194,6 +195,7 @@ function DriverCard({
 }) {
   const isSuspended = driver.status === 'suspended'
   const isBusy      = driver.status === 'busy'
+  const isOffline   = driver.status === 'offline'
 
   // Stars renderer
   const stars = (r: number) => {
@@ -352,6 +354,20 @@ function DriverCard({
 
           {/* Action buttons */}
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {/* Activate — offline drivers only (self-signup approval) */}
+            {isOffline && (
+              <button
+                onClick={onActivate}
+                style={{
+                  padding: '7px 16px', border: 'none', borderRadius: 8,
+                  background: 'var(--a-ok-bg)', color: 'var(--a-ok)',
+                  fontSize: 13, cursor: 'pointer', fontWeight: 700,
+                }}
+              >
+                🟢 Activate driver
+              </button>
+            )}
+
             {/* Edit — always available */}
             <button
               onClick={onEdit}
@@ -464,6 +480,11 @@ export function DriversScreen() {
   const [filter,       setFilter]       = useState<DriverStatus | 'all'>('all')
   const [expandedId,   setExpandedId]   = useState<string | null>(null)
   const [viewOrderId,  setViewOrderId]  = useState<string | null>(null)
+
+  const pendingCount = useMemo(
+    () => state.drivers.filter(d => d.status === 'offline').length,
+    [state.drivers],
+  )
   // Modals
   const [showAdd,          setShowAdd]          = useState(false)
   const [editDriver,       setEditDriver]        = useState<Driver | null>(null)
@@ -527,6 +548,11 @@ export function DriversScreen() {
     setConfirmRemove(null)
   }
 
+  const handleActivate = (driver: Driver) => {
+    dispatch({ type: 'UPDATE_DRIVER', driverId: driver.id, patch: { status: 'available' } })
+    setExpandedId(null)
+  }
+
   const handleReinstate = (driver: Driver) => {
     dispatch({ type: 'UPDATE_DRIVER', driverId: driver.id, patch: { status: 'offline' } })
   }
@@ -552,6 +578,33 @@ export function DriversScreen() {
           + Add driver
         </button>
       </div>
+
+      {/* Pending activation banner */}
+      {pendingCount > 0 && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 12,
+          padding: '12px 16px', marginBottom: 20,
+          background: 'var(--a-warn-bg)',
+          border: '1.5px solid var(--a-warn)',
+          borderRadius: 10, fontSize: 13,
+        }}>
+          <span style={{ fontSize: 18 }}>⏳</span>
+          <div style={{ flex: 1 }}>
+            <strong style={{ color: 'var(--a-ink)' }}>
+              {pendingCount} driver{pendingCount > 1 ? 's' : ''} pending activation
+            </strong>
+            <span style={{ color: 'var(--a-muted)', marginLeft: 8 }}>
+              — self-signed up and waiting for approval. Expand their card and click <strong>Activate driver</strong>.
+            </span>
+          </div>
+          <button
+            onClick={() => setFilter('offline')}
+            style={{ padding: '5px 12px', border: 'none', borderRadius: 6, background: 'var(--a-warn)', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}
+          >
+            View offline
+          </button>
+        </div>
+      )}
 
       {/* Stats */}
       <StatsBar drivers={state.drivers} />
@@ -610,6 +663,7 @@ export function DriversScreen() {
               isExpanded={expandedId === driver.id}
               onToggle={() => toggleExpand(driver.id)}
               onEdit={() => setEditDriver(driver)}
+              onActivate={() => handleActivate(driver)}
               onAssignOrder={() => setAssignDriver(driver)}
               onRemoveFromOrder={() => setConfirmRemove(driver)}
               onSuspend={() => setConfirmSuspend(driver)}
