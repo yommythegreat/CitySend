@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { IconButton } from '../components/IconButton'
 import { Back } from '../components/Icons'
 import { getComingSoonCities, getLiveCityName } from '../utils/serviceAvailability'
+import { supabase, isSupabaseConfigured } from '../lib/supabase'
 import type { CityConfig } from '../config/cityConfig'
 import type { ScreenName } from '../types'
 
@@ -26,14 +27,26 @@ function NotifyForm({ cityName }: { cityName: string }) {
   })
   const [err, setErr] = useState<string | null>(null)
 
-  const handleNotify = () => {
+  const handleNotify = async () => {
     const v = contact.trim()
     if (!v) { setErr('Enter your email or phone number.'); return }
     const isEmail = v.includes('@')
     const isPhone = /^\+?[\d\s\-().]{7,}$/.test(v)
     if (!isEmail && !isPhone) { setErr('Enter a valid email or phone number.'); return }
 
-    // Persist interest in sessionStorage (mock — no real backend call)
+    // Write to Supabase city_interest table
+    if (isSupabaseConfigured) {
+      try {
+        await supabase.from('city_interest').insert({
+          city_name: cityName,
+          contact:   v,
+          is_email:  isEmail,
+          created_at: new Date().toISOString(),
+        })
+      } catch { /* non-critical — fall through */ }
+    }
+
+    // Also persist locally so the submitted state survives a page refresh
     try {
       const stored = JSON.parse(sessionStorage.getItem(STORAGE_KEY) ?? '[]') as string[]
       if (!stored.includes(cityName)) {
@@ -95,7 +108,7 @@ function NotifyForm({ cityName }: { cityName: string }) {
       )}
 
       <button
-        onClick={handleNotify}
+        onClick={() => { void handleNotify() }}
         style={{
           width: '100%', padding: '13px 0',
           border: 'none', borderRadius: 12,

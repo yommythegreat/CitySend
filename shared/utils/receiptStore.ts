@@ -6,7 +6,6 @@
  */
 
 import { supabase, isSupabaseConfigured } from '../lib/supabase'
-import { MOCK_RECEIPTS } from '../mock-data/receipts'
 import type { Receipt } from '../types'
 import type { RealtimeChannel } from '@supabase/supabase-js'
 
@@ -136,7 +135,7 @@ export function getSharedReceipts(): Receipt[] {
       if (Array.isArray(parsed) && parsed.length > 0) return parsed
     }
   } catch {}
-  return [...MOCK_RECEIPTS]
+  return []
 }
 
 export function setSharedReceipts(receipts: Receipt[]): void {

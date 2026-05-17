@@ -10,7 +10,6 @@
  */
 
 import { supabase, isSupabaseConfigured } from '../lib/supabase'
-import { MOCK_ORDERS } from '../mock-data/orders'
 import type { Order } from '../types'
 import type { RealtimeChannel } from '@supabase/supabase-js'
 
@@ -194,7 +193,7 @@ export function getSharedOrders(): Order[] {
       if (Array.isArray(parsed) && parsed.length > 0) return parsed
     }
   } catch {}
-  return [...MOCK_ORDERS]
+  return []
 }
 
 export function setSharedOrders(orders: Order[]): void {

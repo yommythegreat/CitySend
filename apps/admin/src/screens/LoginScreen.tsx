@@ -1,9 +1,6 @@
 import React, { useState } from 'react'
 import { supabase, isSupabaseConfigured } from '@shared/lib/supabase'
 
-const ADMIN_EMAIL    = 'admin@citysend.ca'
-const ADMIN_PASSWORD = 'Admin123!'
-
 interface Props { onLogin: () => void }
 
 export function LoginScreen({ onLogin }: Props) {
@@ -44,14 +41,7 @@ export function LoginScreen({ onLogin }: Props) {
         // authed=true via SIGNED_IN / INITIAL_SESSION events
         onLogin()
       } else {
-        // Mock fallback
-        await new Promise(r => setTimeout(r, 600))
-        if (email.trim() === ADMIN_EMAIL && password === ADMIN_PASSWORD) {
-          sessionStorage.setItem('cs_admin_auth', '1')
-          onLogin()
-        } else {
-          throw new Error('Invalid email or password.')
-        }
+        throw new Error('Admin sign-in requires a Supabase connection.')
       }
     } catch (e: any) {
       setErr(e.message ?? 'Invalid email or password.')
@@ -122,7 +112,7 @@ export function LoginScreen({ onLogin }: Props) {
                 background: 'var(--a-ok-bg)', color: 'var(--a-ok)', fontSize: 14, textAlign: 'center',
               }}>
                 ✓ Reset instructions sent to <strong>{fpEmail}</strong>.<br />
-                <span style={{ fontSize: 12, opacity: 0.8 }}>Check your inbox (this is a demo — no real email sent).</span>
+                <span style={{ fontSize: 12, opacity: 0.8 }}>Check your inbox — allow a few minutes for the email to arrive.</span>
               </div>
               <button
                 onClick={() => { setView('login'); setFpSent(false); setFpEmail('') }}
@@ -243,18 +233,6 @@ export function LoginScreen({ onLogin }: Props) {
           </button>
         </form>
 
-        <div style={{
-          marginTop: 20, padding: '10px 12px', borderRadius: 8,
-          background: 'var(--a-info-bg)', fontSize: 12, color: 'var(--a-info)',
-        }}>
-          <strong>Demo credentials</strong><br />
-          Email: admin@citysend.ca<br />
-          Password: Admin123!
-        </div>
-
-        <div style={{ marginTop: 16, textAlign: 'center', fontSize: 12, color: 'var(--a-muted)' }}>
-          Customer app · port 5173 &nbsp;|&nbsp; Driver app · port 5175
-        </div>
       </div>
     </div>
   )

@@ -180,17 +180,22 @@ export function PaymentScreen({ go, state, draft, cityConfig, onPaymentComplete 
     })
       .then(r => r.json())
       .then(d => {
-        if (d.mock || !d.clientSecret) { setIsMock(true) }
-        else { setClientSecret(d.clientSecret) }
+        if (d.mock || !d.clientSecret) {
+          if (import.meta.env.DEV) { setIsMock(true) }
+          // In production, leave clientSecret null — CheckoutForm will show an error
+        } else {
+          setClientSecret(d.clientSecret)
+        }
       })
-      .catch(() => setIsMock(true))
+      .catch(() => {
+        if (import.meta.env.DEV) { setIsMock(true) }
+        // In production, leave clientSecret null — CheckoutForm will show an error
+      })
       .finally(() => setIntentLoading(false))
   }, [tip])
 
   const handlePaymentComplete = async () => {
-    console.log('[Payment] completing — tip:', tip, 'total:', price.total)
     await onPaymentComplete(tip)
-    console.log('[Payment] order written — navigating to tracking')
     go('tracking')
   }
 

@@ -34,7 +34,6 @@ import {
   fetchCityConfigs, saveCityConfig, saveAllCityConfigs, subscribeToCityConfigs,
   getSystemCityConfigs, setSystemCityConfigs,
 } from '@shared/utils/configStore'
-import { MOCK_DRIVERS } from '@shared/mock-data/drivers'
 import { fetchProfiles } from '@shared/utils/profileStore'
 
 // ── State ─────────────────────────────────────────────────────────────────────
@@ -51,7 +50,7 @@ interface AdminState {
 
 const initialState: AdminState = {
   orders:      [],
-  drivers:     MOCK_DRIVERS,
+  drivers:     [],
   users:       [],           // populated from public.profiles on mount
   receipts:    [],
   incidents:   [],

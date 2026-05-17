@@ -11,14 +11,6 @@ interface Props {
   onGoEarnings?: () => void
 }
 
-// ── Static busy zones ─────────────────────────────────────────────────────────
-
-const BUSY_ZONES = [
-  { name: 'Exchange District', demand: 'High',   next: '3 min',  color: '#ef4444', barW: '90%' },
-  { name: 'Osborne Village',   demand: 'Steady', next: '8 min',  color: '#f59e0b', barW: '55%' },
-  { name: 'Polo Park',         demand: 'Quiet',  next: '18 min', color: '#9ca3af', barW: '22%' },
-]
-
 // ── Top status bar (always dark) ──────────────────────────────────────────────
 
 function DarkHeader({
@@ -267,21 +259,23 @@ export function DashboardScreen({ onSelectOrder, onGoHistory, onGoProfile, onGoE
               >Stop</button>
             </div>
 
-            {/* Simulate button */}
-            <button
-              onClick={handleSimulate}
-              style={{
-                width: '100%', padding: '13px 0',
-                background: 'var(--d-accent)', border: 'none', borderRadius: 12,
-                color: '#fff', fontSize: 14, fontWeight: 700, cursor: 'pointer',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-              }}
-            >
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                <path d="M3 2l10 6-10 6V2z"/>
-              </svg>
-              Simulate incoming job
-            </button>
+            {/* Simulate button — dev only */}
+            {import.meta.env.DEV && (
+              <button
+                onClick={handleSimulate}
+                style={{
+                  width: '100%', padding: '13px 0',
+                  background: 'var(--d-accent)', border: 'none', borderRadius: 12,
+                  color: '#fff', fontSize: 14, fontWeight: 700, cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                }}
+              >
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                  <path d="M3 2l10 6-10 6V2z"/>
+                </svg>
+                Simulate incoming job
+              </button>
+            )}
           </div>
         )}
 
@@ -326,27 +320,6 @@ export function DashboardScreen({ onSelectOrder, onGoHistory, onGoProfile, onGoE
             </div>
           </div>
         )}
-
-        {/* ── WHERE IT'S BUSY ──────────────────────────────────────────────── */}
-        <div style={{ padding: '24px 20px 0' }}>
-          <div style={{ fontSize: 13, fontFamily: 'monospace', color: 'var(--d-muted)', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 12 }}>
-            Where it's busy
-          </div>
-          <div style={{ background: '#fff', borderRadius: 18, border: '1px solid var(--d-border)', padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {BUSY_ZONES.map(zone => (
-              <div key={zone.name} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <div style={{ width: 6, alignSelf: 'stretch', borderRadius: 3, background: zone.color }} />
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--d-ink)' }}>{zone.name}</div>
-                  <div style={{ fontSize: 12, color: 'var(--d-muted)' }}>{zone.demand} · next job {zone.next}</div>
-                </div>
-                <div style={{ width: 56, height: 6, background: 'var(--d-border)', borderRadius: 3, overflow: 'hidden' }}>
-                  <div style={{ width: zone.barW, height: '100%', background: zone.color }} />
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
 
         {/* ── Bottom action grid ────────────────────────────────────────────── */}
         <div style={{ padding: '20px 20px 0', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>

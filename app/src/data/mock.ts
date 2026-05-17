@@ -19,10 +19,3 @@ export const INITIAL_STATE: AppState = {
   pastDeliveries:  [],
 }
 
-export const MOCK_COURIER = {
-  name:    'Armen Y.',
-  initials:'AY',
-  rating:  '4.96',
-  vehicle: 'Toyota Corolla',
-  plate:   'MFJ 4K2',
-}
