@@ -13,7 +13,7 @@ interface Props {
  * Design matches DOfferScreen from driver-screens.jsx prototype.
  */
 export function JobOfferModal({ order, onAccept, onDecline, onTimeout }: Props) {
-  const [t, setT] = useState(15)
+  const [t, setT] = useState(120)
 
   useEffect(() => {
     if (t <= 0) { onTimeout(); return }
@@ -22,7 +22,7 @@ export function JobOfferModal({ order, onAccept, onDecline, onTimeout }: Props) 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [t])
 
-  const pct         = t / 15
+  const pct         = t / 120
   const radius      = 42
   const circumf     = 2 * Math.PI * radius
   const dashOffset  = circumf * (1 - pct)
@@ -77,8 +77,10 @@ export function JobOfferModal({ order, onAccept, onDecline, onTimeout }: Props) 
               display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
               color: '#fff',
             }}>
-              <div style={{ fontSize: 28, fontWeight: 600, letterSpacing: -1, fontFamily: 'monospace' }}>{t}</div>
-              <div style={{ fontSize: 9, letterSpacing: 1.4, textTransform: 'uppercase', color: 'rgba(255,255,255,.5)', fontFamily: 'monospace' }}>seconds</div>
+              <div style={{ fontSize: 22, fontWeight: 600, letterSpacing: -1, fontFamily: 'monospace' }}>
+                {String(Math.floor(t / 60)).padStart(2, '0')}:{String(t % 60).padStart(2, '0')}
+              </div>
+              <div style={{ fontSize: 9, letterSpacing: 1.4, textTransform: 'uppercase', color: 'rgba(255,255,255,.5)', fontFamily: 'monospace' }}>left</div>
             </div>
           </div>
         </div>
