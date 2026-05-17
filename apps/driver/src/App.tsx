@@ -7,6 +7,7 @@ import { DeliveryScreen }         from './screens/DeliveryScreen'
 import { ProofOfDeliveryScreen }  from './screens/ProofOfDeliveryScreen'
 import { EarningsScreen }         from './screens/EarningsScreen'
 import { HistoryScreen }          from './screens/HistoryScreen'
+import { DriverProfileScreen }    from './screens/DriverProfileScreen'
 import { JobOfferModal }          from './components/JobOfferModal'
 
 // ── Screen types ──────────────────────────────────────────────────────────────
@@ -17,6 +18,7 @@ type Screen =
   | { name: 'proof';     orderId: string }
   | { name: 'earnings';  orderId: string }
   | { name: 'history' }
+  | { name: 'profile' }
 
 // ── Hash-based routing ────────────────────────────────────────────────────────
 // Format: #screen[/orderId[/sub]]
@@ -45,6 +47,8 @@ function parseHash(): Screen {
       return { name: 'earnings', orderId: decodeURIComponent(seg1) }
     case 'history':
       return { name: 'history' }
+    case 'profile':
+      return { name: 'profile' }
     default:
       return { name: 'dashboard' }
   }
@@ -59,6 +63,7 @@ function screenToHash(screen: Screen): string {
     case 'proof':    return `proof/${encodeURIComponent(screen.orderId)}`
     case 'earnings': return `earnings/${encodeURIComponent(screen.orderId)}`
     case 'history':  return 'history'
+    case 'profile':  return 'profile'
     default:         return 'dashboard'
   }
 }
@@ -132,18 +137,23 @@ function DriverApp() {
 
   const renderTopBar = () => {
     if (screen.name === 'dashboard') {
+      const initials = state.auth?.name
+        .split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2) ?? '?'
       return (
-        <div style={{ position: 'fixed', top: 16, right: 16, zIndex: 100 }}>
+        <div style={{ position: 'fixed', top: 'max(14px, env(safe-area-inset-top, 14px))', right: 16, zIndex: 100 }}>
           <button
-            onClick={handleLogout}
+            onClick={() => navigateTo({ name: 'profile' })}
+            title="My profile"
             style={{
-              padding: '8px 14px', border: '1px solid rgba(255,255,255,0.25)',
-              borderRadius: 10, background: 'rgba(255,255,255,0.15)',
-              color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer',
-              backdropFilter: 'blur(4px)',
+              width: 36, height: 36, borderRadius: '50%',
+              background: 'linear-gradient(135deg, #c94a1b, #e06840)',
+              border: '2px solid rgba(255,255,255,0.25)',
+              color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
             }}
           >
-            Sign out
+            {initials}
           </button>
         </div>
       )
@@ -228,10 +238,18 @@ function DriverApp() {
             onSelectOrder={orderId => navigateTo({ name: 'delivery', orderId })}
           />
         )
+
+      case 'profile':
+        return (
+          <DriverProfileScreen
+            onBack={() => navigateTo({ name: 'dashboard' })}
+            onSignOut={handleLogout}
+          />
+        )
     }
   }
 
-  const isFullscreen = screen.name === 'delivery' || screen.name === 'earnings'
+  const isFullscreen = screen.name === 'delivery' || screen.name === 'earnings' || screen.name === 'profile'
 
   return (
     <div className={isFullscreen ? undefined : 'd-shell'}>
