@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react'
-import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js'
+import React, { useState, useEffect, useRef } from 'react'
+import { Elements, CardElement, PaymentRequestButtonElement, useStripe, useElements } from '@stripe/react-stripe-js'
+import type { PaymentRequest } from '@stripe/stripe-js'
 import { Button } from '../components/Button'
 import { IconButton } from '../components/IconButton'
-import { Back, Lock, Card, Plus } from '../components/Icons'
+import { Back, Lock } from '../components/Icons'
 import { fmt } from '../utils/pricing'
 import { computeOrderPrice } from '../utils/serviceAvailability'
 import { stripePromise } from '../lib/stripe'
@@ -51,13 +52,81 @@ function CheckoutForm({
 }) {
   const stripe   = useStripe()
   const elements = useElements()
-  const [error, setError]           = useState<string | null>(null)
-  const [processing, setProcessing] = useState(false)
+  const [error,          setError]          = useState<string | null>(null)
+  const [processing,     setProcessing]     = useState(false)
+  const [paymentRequest, setPaymentRequest] = useState<PaymentRequest | null>(null)
 
-  const handlePay = async () => {
+  // Keep clientSecret in a ref so the paymentmethod handler always uses the latest
+  const clientSecretRef = useRef(clientSecret)
+  useEffect(() => { clientSecretRef.current = clientSecret }, [clientSecret])
+
+  // Create the Payment Request (Apple Pay / Google Pay) once when stripe loads
+  useEffect(() => {
+    if (!stripe || isMock) return
+
+    const pr = stripe.paymentRequest({
+      country:           'CA',
+      currency:          'cad',
+      total:             { label: 'CitySend Delivery', amount: Math.round(priceTotal * 100) },
+      requestPayerName:  false,
+      requestPayerEmail: false,
+    })
+
+    pr.canMakePayment().then(result => {
+      if (result) setPaymentRequest(pr)
+    })
+
+    pr.on('paymentmethod', async (e) => {
+      const secret = clientSecretRef.current
+      if (!secret) {
+        e.complete('fail')
+        setError('Payment not ready — please try again')
+        return
+      }
+      setProcessing(true)
+
+      // Confirm without triggering 3DS redirect first
+      const { error: confirmErr, paymentIntent } = await stripe.confirmCardPayment(
+        secret,
+        { payment_method: e.paymentMethod.id },
+        { handleActions: false },
+      )
+
+      if (confirmErr) {
+        e.complete('fail')
+        setError(confirmErr.message ?? 'Payment failed')
+        setProcessing(false)
+        return
+      }
+
+      e.complete('success')
+
+      // If 3DS is required, handle it now (rare for Apple Pay but possible)
+      if (paymentIntent?.status === 'requires_action') {
+        const { error: actionErr } = await stripe.confirmCardPayment(secret)
+        if (actionErr) {
+          setError(actionErr.message ?? 'Authentication failed')
+          setProcessing(false)
+          return
+        }
+      }
+
+      await onSuccess()
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stripe, isMock])
+
+  // Sync amount to payment request whenever the tip (price) changes
+  useEffect(() => {
+    paymentRequest?.update({
+      total: { label: 'CitySend Delivery', amount: Math.round(priceTotal * 100) },
+    })
+  }, [priceTotal, paymentRequest])
+
+  // ── Card pay handler ─────────────────────────────────────────────────────────
+  const handleCardPay = async () => {
     setError(null)
 
-    // ── Mock flow (no Stripe keys configured) ───────────────────────────────
     if (isMock || !stripe || !elements) {
       setProcessing(true)
       await new Promise(r => setTimeout(r, 1400))
@@ -65,7 +134,6 @@ function CheckoutForm({
       return
     }
 
-    // ── Real Stripe flow ────────────────────────────────────────────────────
     const cardElement = elements.getElement(CardElement)
     if (!cardElement || !clientSecret) {
       setError('Payment not initialised — try again')
@@ -85,9 +153,39 @@ function CheckoutForm({
     }
   }
 
+  const pubKey = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY as string | undefined
+
   return (
     <>
-      {/* Card input */}
+      {/* ── Express checkout (Apple Pay / Google Pay) — shown when available ── */}
+      {paymentRequest && (
+        <>
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 12, fontFamily: 'var(--cs-mono)', color: 'var(--cs-slate-500)', letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 10 }}>
+              Express checkout
+            </div>
+            <PaymentRequestButtonElement
+              options={{
+                paymentRequest,
+                style: {
+                  paymentRequestButton: { type: 'buy', theme: 'dark', height: '52px' },
+                },
+              }}
+            />
+          </div>
+
+          {/* Divider */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+            <div style={{ flex: 1, height: 1, background: 'var(--cs-slate-200)' }} />
+            <span style={{ fontSize: 11, color: 'var(--cs-slate-400)', fontFamily: 'var(--cs-mono)', letterSpacing: 0.6 }}>
+              or pay by card
+            </span>
+            <div style={{ flex: 1, height: 1, background: 'var(--cs-slate-200)' }} />
+          </div>
+        </>
+      )}
+
+      {/* ── Card input ───────────────────────────────────────────────────────── */}
       <div style={{ marginBottom: 16 }}>
         <div style={{ fontSize: 12, fontFamily: 'var(--cs-mono)', color: 'var(--cs-slate-500)', letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 10 }}>
           Card details
@@ -95,16 +193,12 @@ function CheckoutForm({
         {isMock ? (
           <div style={{
             padding: '14px 16px', background: '#fff', border: '1.5px solid var(--cs-slate-200)',
-            borderRadius: 12, fontSize: 14, color: 'var(--cs-slate-500)',
-            fontFamily: 'var(--cs-mono)',
+            borderRadius: 12, fontSize: 14, color: 'var(--cs-slate-500)', fontFamily: 'var(--cs-mono)',
           }}>
             DEMO MODE — no card needed · any click pays
           </div>
         ) : (
-          <div style={{
-            padding: '14px 16px', background: '#fff',
-            border: '1.5px solid var(--cs-slate-200)', borderRadius: 12,
-          }}>
+          <div style={{ padding: '14px 16px', background: '#fff', border: '1.5px solid var(--cs-slate-200)', borderRadius: 12 }}>
             <CardElement options={CARD_ELEMENT_OPTIONS} />
           </div>
         )}
@@ -115,10 +209,10 @@ function CheckoutForm({
         )}
       </div>
 
-      {/* Pay button */}
+      {/* ── Pay button ───────────────────────────────────────────────────────── */}
       <Button
         kind="ink" size="lg" full
-        onClick={handlePay}
+        onClick={handleCardPay}
         disabled={processing || (!isMock && !clientSecret)}
         icon={processing
           ? <div style={{ width: 16, height: 16, border: '2px solid rgba(255,255,255,.3)', borderTopColor: '#fff', borderRadius: 8, animation: 'cs-spin 0.7s linear infinite' }} />
@@ -127,20 +221,18 @@ function CheckoutForm({
       >
         {processing ? 'Processing…' : `Pay ${fmt(priceTotal)}`}
       </Button>
-      {/* Mode badge — only shown in non-live environments */}
-      {(() => {
-        const pubKey = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY as string | undefined
-        if (isMock)                            return <ModeNotice label="DEMO MODE — NOT A REAL CHARGE"        color="#6b7280" />
-        if (pubKey?.startsWith('pk_test_'))    return <ModeNotice label="TEST MODE — USE CARD 4242 4242 4242 4242" color="#d97706" />
-        return null  // live key — no badge shown
-      })()}
+
+      {/* Mode badge */}
+      {isMock && <ModeNotice label="DEMO MODE — NOT A REAL CHARGE" color="#6b7280" />}
+      {!isMock && pubKey?.startsWith('pk_test_') && (
+        <ModeNotice label="TEST MODE — USE CARD 4242 4242 4242 4242" color="#d97706" />
+      )}
     </>
   )
 }
 
 // ── Outer screen ────────────────────────────────────────────────────────────
 export function PaymentScreen({ go, state, draft, cityConfig, onPaymentComplete }: Props) {
-  const [method, setMethod]             = useState<'apple' | 'card' | 'new'>('apple')
   const [tip, setTip]                   = useState(2)
   const [customTipRaw, setCustomTipRaw] = useState('')
   const [showCustom, setShowCustom]     = useState(false)
@@ -222,12 +314,6 @@ export function PaymentScreen({ go, state, draft, cityConfig, onPaymentComplete 
     setCustomTipErr('')
   }
 
-  const METHODS = [
-    { v: 'apple' as const, l: 'Apple Pay',  sub: 'Face ID',          ic: <span style={{ fontSize: 15 }}>⬛</span> },
-    { v: 'card'  as const, l: '•••• 4242',  sub: 'Visa · default',   ic: <Card size={18} /> },
-    { v: 'new'   as const, l: 'Add card',   sub: 'Credit or debit',  ic: <Plus size={18} /> },
-  ]
-
   const PRESET_TIPS = [0, 2, 3, 5]
   const isCustomActive = showCustom || !PRESET_TIPS.includes(tip)
 
@@ -282,41 +368,6 @@ export function PaymentScreen({ go, state, draft, cityConfig, onPaymentComplete 
       </div>
 
       <div style={{ flex: 1, padding: '0 20px', overflowY: 'auto', scrollbarWidth: 'none' }}>
-        {/* Payment method selector */}
-        <div style={{ marginBottom: 16 }}>
-          <div style={{ fontSize: 12, fontFamily: 'var(--cs-mono)', color: 'var(--cs-slate-500)', letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 10 }}>
-            Pay with
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {METHODS.map((m) => {
-              const active = method === m.v
-              return (
-                <button
-                  key={m.v}
-                  onClick={() => setMethod(m.v)}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 14, padding: '14px 16px',
-                    background: '#fff',
-                    border: `1.5px solid ${active ? 'var(--cs-ink)' : 'var(--cs-slate-200)'}`,
-                    borderRadius: 14, cursor: 'pointer', textAlign: 'left', fontFamily: 'var(--cs-font)',
-                  }}
-                >
-                  <div style={{ width: 36, height: 36, borderRadius: 10, background: 'var(--cs-slate-100)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    {m.ic}
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 15, fontWeight: 500, color: 'var(--cs-ink)' }}>{m.l}</div>
-                    <div style={{ fontSize: 13, color: 'var(--cs-slate-500)' }}>{m.sub}</div>
-                  </div>
-                  <div style={{ width: 20, height: 20, borderRadius: 10, border: `2px solid ${active ? 'var(--cs-ink)' : 'var(--cs-slate-300)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    {active && <div style={{ width: 10, height: 10, borderRadius: 5, background: 'var(--cs-ink)' }} />}
-                  </div>
-                </button>
-              )
-            })}
-          </div>
-        </div>
-
         {/* Tip selector */}
         <div style={{ marginBottom: 16 }}>
           <div style={{ fontSize: 12, fontFamily: 'var(--cs-mono)', color: 'var(--cs-slate-500)', letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 10 }}>
@@ -411,7 +462,7 @@ export function PaymentScreen({ go, state, draft, cityConfig, onPaymentComplete 
             Initialising payment…
           </div>
         ) : (
-          <Elements stripe={stripePromise} options={clientSecret ? { clientSecret } : undefined}>
+          <Elements stripe={stripePromise}>
             <CheckoutForm
               clientSecret={clientSecret}
               priceTotal={price.total}
