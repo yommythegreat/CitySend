@@ -4,6 +4,7 @@ import { OrderDetailPanel } from '../components/OrderDetailPanel'
 import { Modal } from '../components/Modal'
 import { useAdminStore } from '../store/AdminContext'
 import { fmt, relativeTime, parcelSizeLabel } from '@shared/utils/format'
+import { computeOrderPrice } from '@shared/utils/serviceAvailability'
 import type { Order, OrderStatus, CityId } from '@shared/types'
 import { ORDER_STATUS_LABELS } from '@shared/types'
 
@@ -43,29 +44,15 @@ function CreateOrderModal({ onClose }: { onClose: () => void }) {
     color: 'var(--a-ink2)', marginBottom: 5,
   }
 
-  // Compute a simple price breakdown
-  function calcBreakdown() {
-    const baseFee  = 14
-    const distFee  = distKm > 5 ? parseFloat(((distKm - 5) * 0.35).toFixed(2)) : 0
-    const sizeFee  = parcelSize === 's' ? 0 : parcelSize === 'm' ? 2 : 4
-    const fragFee  = fragile ? 2 : 0
-    const subtotal = parseFloat((baseFee + distFee + sizeFee + fragFee).toFixed(2))
-    const gst      = parseFloat((subtotal * 0.05).toFixed(2))
-    const pst      = parseFloat((subtotal * 0.07).toFixed(2))
-    const totalTax = parseFloat((gst + pst).toFixed(2))
-    const subtotalWithTax = parseFloat((subtotal + totalTax).toFixed(2))
-    return {
-      baseFee, distanceFee: distFee, sizeFee, fragileFee: fragFee,
-      subtotalPreTax: subtotal, gst, pst, hst: 0, qst: 0,
-      totalTax, subtotalWithTax, tip,
-      total: parseFloat((subtotalWithTax + tip).toFixed(2)),
-    }
-  }
-
-  const breakdown = useMemo(calcBreakdown, [distKm, parcelSize, fragile, tip])
+  // Compute price from live city config (same formula as customer app)
+  const cityConfig = state.cityConfigs.find(c => c.cityId === cityId)
+  const breakdown = useMemo(() => {
+    if (!cityConfig) return null
+    return computeOrderPrice({ cityConfig, distKm, parcelSize, fragile, tip })
+  }, [cityConfig, distKm, parcelSize, fragile, tip])
 
   const handleCreate = () => {
-    if (!customerName.trim() || !pickupAddr.trim() || !dropoffAddr.trim()) return
+    if (!customerName.trim() || !pickupAddr.trim() || !dropoffAddr.trim() || !breakdown) return
     setSaving(true)
 
     const now   = new Date().toISOString()
@@ -108,7 +95,7 @@ function CreateOrderModal({ onClose }: { onClose: () => void }) {
   }
 
   const cityOptions: CityId[] = ['winnipeg', 'toronto', 'calgary', 'vancouver', 'edmonton', 'ottawa', 'montreal']
-  const canCreate = customerName.trim() && pickupAddr.trim() && dropoffAddr.trim()
+  const canCreate = customerName.trim() && pickupAddr.trim() && dropoffAddr.trim() && !!breakdown
 
   return (
     <div style={{ maxHeight: '75vh', overflowY: 'auto', paddingRight: 4 }}>
@@ -199,20 +186,26 @@ function CreateOrderModal({ onClose }: { onClose: () => void }) {
 
       {/* Price preview */}
       <div style={{ background: 'var(--a-bg)', borderRadius: 8, padding: '12px 14px', marginBottom: 16, fontSize: 13 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3, color: 'var(--a-muted)' }}>
-          <span>Subtotal</span><span style={{ fontFamily: 'var(--a-mono)' }}>{fmt(breakdown.subtotalPreTax)}</span>
-        </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3, color: 'var(--a-muted)' }}>
-          <span>Tax (GST + PST)</span><span style={{ fontFamily: 'var(--a-mono)' }}>{fmt(breakdown.totalTax)}</span>
-        </div>
-        {tip > 0 && (
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3, color: 'var(--a-muted)' }}>
-            <span>Tip</span><span style={{ fontFamily: 'var(--a-mono)' }}>{fmt(tip)}</span>
-          </div>
+        {!breakdown ? (
+          <div style={{ color: 'var(--a-muted)', textAlign: 'center' }}>Loading pricing…</div>
+        ) : (
+          <>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3, color: 'var(--a-muted)' }}>
+              <span>Subtotal</span><span style={{ fontFamily: 'var(--a-mono)' }}>{fmt(breakdown.subtotalPreTax)}</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3, color: 'var(--a-muted)' }}>
+              <span>Tax</span><span style={{ fontFamily: 'var(--a-mono)' }}>{fmt(breakdown.totalTax)}</span>
+            </div>
+            {tip > 0 && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3, color: 'var(--a-muted)' }}>
+                <span>Tip</span><span style={{ fontFamily: 'var(--a-mono)' }}>{fmt(tip)}</span>
+              </div>
+            )}
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6, paddingTop: 6, borderTop: '1px solid var(--a-border)', fontWeight: 700, color: 'var(--a-ink)' }}>
+              <span>Total</span><span style={{ fontFamily: 'var(--a-mono)' }}>{fmt(breakdown.total)}</span>
+            </div>
+          </>
         )}
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6, paddingTop: 6, borderTop: '1px solid var(--a-border)', fontWeight: 700, color: 'var(--a-ink)' }}>
-          <span>Total</span><span style={{ fontFamily: 'var(--a-mono)' }}>{fmt(breakdown.total)}</span>
-        </div>
       </div>
 
       <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>

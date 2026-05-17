@@ -471,11 +471,11 @@ export async function authenticateDriver(
     })
     if (error || !data.user) return null
 
-    // Load driver record linked to this auth user
+    // Load driver record linked to this auth user via user_id (not email)
     const { data: driverRow } = await supabase
       .from('drivers')
       .select('*')
-      .eq('email', canonEmail)
+      .eq('user_id', data.user.id)
       .maybeSingle()
 
     if (!driverRow) return null
