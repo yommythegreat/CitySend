@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import type { AuthChangeEvent, Session } from '@supabase/supabase-js'
 import { AdminProvider } from './store/AdminContext'
 import { supabase, isSupabaseConfigured } from '@shared/lib/supabase'
 import { Sidebar }              from './components/Sidebar'
@@ -123,7 +124,7 @@ export default function App() {
     if (!isSupabaseConfigured) return
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
+      async (event: AuthChangeEvent, session: Session | null) => {
         console.log('[AdminAuth] state change:', event, session?.user?.email ?? 'no user')
 
         if (event === 'INITIAL_SESSION') {

@@ -7,8 +7,8 @@ export default defineConfig({
   server: { port: 5174 },
   resolve: {
     alias: {
-      // @shared resolves to the top-level shared/ folder
       '@shared': path.resolve(__dirname, '../../shared'),
+      '@supabase/supabase-js': path.resolve(__dirname, 'node_modules/@supabase/supabase-js'),
     },
   },
 })
