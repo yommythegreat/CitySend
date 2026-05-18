@@ -8,7 +8,8 @@ import { HistoryScreen }       from './screens/HistoryScreen'
 import { BillingScreen }       from './screens/BillingScreen'
 import { NotificationsScreen } from './screens/NotificationsScreen'
 import { AuthScreen }          from './screens/AuthScreen'
-import { ForgotPasswordScreen } from './screens/ForgotPasswordScreen'
+import { ForgotPasswordScreen }  from './screens/ForgotPasswordScreen'
+import { ResetPasswordScreen }   from './screens/ResetPasswordScreen'
 import { LandingScreen }        from './screens/LandingScreen'
 import { ProfileScreen }       from './screens/ProfileScreen'
 import { SettingsScreen }      from './screens/SettingsScreen'
@@ -362,6 +363,13 @@ export default function App() {
           }
           setAuthChecked(true)
 
+        } else if (event === 'PASSWORD_RECOVERY') {
+          // User clicked the reset-password link in their email.
+          // Supabase has already exchanged the token for a session — navigate
+          // to the reset screen so they can choose a new password.
+          setAuthChecked(true)
+          setScreen('reset-password')
+
         } else if (event === 'TOKEN_REFRESHED' && session?.user) {
           // Keep name/email in sync with latest metadata; don't reload data
           setUser({
@@ -612,6 +620,8 @@ export default function App() {
         return <AuthScreen onAuth={handleAuth} go={go} />
       case 'forgot-password':
         return <ForgotPasswordScreen go={go} />
+      case 'reset-password':
+        return <ResetPasswordScreen go={go} />
       case 'home':
         return (
           <HomeScreen
@@ -713,6 +723,9 @@ export default function App() {
     // Dedicated auth screens stay inside the phone shell
     if (screen === 'forgot-password') {
       return <div className="cs-shell"><ForgotPasswordScreen go={go} /></div>
+    }
+    if (screen === 'reset-password') {
+      return <div className="cs-shell"><ResetPasswordScreen go={go} /></div>
     }
     if (screen === 'auth') {
       return <div className="cs-shell"><AuthScreen onAuth={handleAuth} go={go} /></div>

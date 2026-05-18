@@ -3,6 +3,7 @@ import { IconButton } from '../components/IconButton'
 import { Button } from '../components/Button'
 import { Field } from '../components/Field'
 import { Back } from '../components/Icons'
+import { supabase } from '../lib/supabase'
 import type { ScreenName } from '../types'
 
 interface Props {
@@ -19,9 +20,17 @@ export function ForgotPasswordScreen({ go }: Props) {
   const submit = async () => {
     if (!valid || loading) return
     setLoading(true)
-    await new Promise(r => setTimeout(r, 900))
-    setLoading(false)
-    setSent(true)
+    try {
+      await supabase.auth.resetPasswordForEmail(email.trim(), {
+        redirectTo: window.location.origin,
+      })
+    } catch {
+      // Silently ignore — we always show the generic "check your inbox" message
+      // to avoid leaking whether an email address is registered.
+    } finally {
+      setLoading(false)
+      setSent(true)
+    }
   }
 
   return (

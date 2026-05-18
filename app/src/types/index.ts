@@ -16,6 +16,7 @@ export type ScreenName =
   | 'landing'
   | 'auth'
   | 'forgot-password'
+  | 'reset-password'
   | 'home'
   | 'new-1'
   | 'new-2'
