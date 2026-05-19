@@ -17,6 +17,7 @@ import { AddPlaceScreen }      from './screens/AddPlaceScreen'
 import { CityBlockedScreen }   from './screens/CityBlockedScreen'
 import { PrivacyScreen }       from './screens/PrivacyScreen'
 import { TermsScreen }         from './screens/TermsScreen'
+import { AboutScreen }         from './screens/AboutScreen'
 import { TabBar }              from './components/TabBar'
 import { BLANK_DRAFT, INITIAL_STATE } from './data/mock'
 import { getCityConfig, getCityConfigByDetectedName, computeOrderPrice, canStartOrder } from './utils/serviceAvailability'
@@ -745,6 +746,11 @@ export default function App() {
     // Default: show the full-width marketing landing page
     return <LandingScreen go={go} />
   }
+
+  // Full-page screens that must render outside the phone shell
+  if (screen === 'privacy') return <PrivacyScreen go={go} />
+  if (screen === 'terms')   return <TermsScreen go={go} />
+  if (screen === 'about')   return <AboutScreen go={go} />
 
   return (
     <div className="cs-shell">

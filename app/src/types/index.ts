@@ -33,6 +33,7 @@ export type ScreenName =
   | 'city-blocked'
   | 'privacy'
   | 'terms'
+  | 'about'
 
 export interface SavedAddress {
   label:   string

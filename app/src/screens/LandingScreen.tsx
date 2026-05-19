@@ -516,25 +516,16 @@ function Footer({ go }: { go: (screen: ScreenName) => void }) {
       ],
     },
     {
-      h: 'Drivers',
-      l: [
-        { label: 'Drive with us', href: 'https://driver.citysend.ca' },
-        { label: 'Earnings',      href: 'https://driver.citysend.ca' },
-        { label: 'Driver app',    href: 'https://driver.citysend.ca' },
-      ],
-    },
-    {
       h: 'Company',
       l: [
-        { label: 'About',  href: 'mailto:hello@citysend.ca' },
-        { label: 'Press',  href: 'mailto:press@citysend.ca' },
+        { label: 'About',        action: () => go('about') },
+        { label: 'Drive with us', href: 'https://driver.citysend.ca' },
       ],
     },
     {
       h: 'Help',
       l: [
         { label: 'Support', href: 'mailto:support@citysend.ca' },
-        { label: 'Contact', href: 'mailto:hello@citysend.ca'   },
         { label: 'Privacy', action: () => go('privacy') },
         { label: 'Terms',   action: () => go('terms')   },
       ],
@@ -792,7 +783,7 @@ export function LandingScreen({ go }: Props) {
               letterSpacing: -2, lineHeight: 1.02, marginTop: 16, color: '#fff',
             }}>
               Watch it move.<br/>Message the driver.<br/>
-              <span style={{ color: 'var(--cs-accent-2)' }}>Know before they do.</span>
+              <span style={{ color: 'var(--cs-accent-2)' }}>You'll know when it lands.</span>
             </div>
             <div style={{
               fontSize: 17, lineHeight: 1.55, color: 'rgba(255,255,255,.7)',
