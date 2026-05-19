@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react'
+import './LandingScreen.css'
 import type { ScreenName } from '../types'
 
 interface Props {
@@ -44,6 +45,7 @@ const S = {
 export function TermsScreen({ go }: Props) {
   useEffect(() => {
     document.body.classList.add('cs-landing')
+    window.scrollTo(0, 0)
     return () => document.body.classList.remove('cs-landing')
   }, [])
 

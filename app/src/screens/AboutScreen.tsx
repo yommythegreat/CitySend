@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react'
+import './LandingScreen.css'
 import type { ScreenName } from '../types'
 
 interface Props {
@@ -38,6 +39,7 @@ function BackButton({ go }: { go: (screen: ScreenName) => void }) {
 export function AboutScreen({ go }: Props) {
   useEffect(() => {
     document.body.classList.add('cs-landing')
+    window.scrollTo(0, 0)
     return () => document.body.classList.remove('cs-landing')
   }, [])
 
