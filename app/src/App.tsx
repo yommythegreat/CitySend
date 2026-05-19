@@ -15,6 +15,8 @@ import { ProfileScreen }       from './screens/ProfileScreen'
 import { SettingsScreen }      from './screens/SettingsScreen'
 import { AddPlaceScreen }      from './screens/AddPlaceScreen'
 import { CityBlockedScreen }   from './screens/CityBlockedScreen'
+import { PrivacyScreen }       from './screens/PrivacyScreen'
+import { TermsScreen }         from './screens/TermsScreen'
 import { TabBar }              from './components/TabBar'
 import { BLANK_DRAFT, INITIAL_STATE } from './data/mock'
 import { getCityConfig, getCityConfigByDetectedName, computeOrderPrice, canStartOrder } from './utils/serviceAvailability'
@@ -683,6 +685,10 @@ export default function App() {
         return <AddPlaceScreen go={go} setState={setState} user={user} />
       case 'city-blocked':
         return <CityBlockedScreen go={go} cityConfig={cityConfig} configs={configs} />
+      case 'privacy':
+        return <PrivacyScreen go={go} />
+      case 'terms':
+        return <TermsScreen go={go} />
       default:
         return <HomeScreen go={go} state={state} user={user} cityConfig={cityConfig} configs={configs} onCityChange={handleCityChange} />
     }
@@ -726,6 +732,12 @@ export default function App() {
     }
     if (screen === 'reset-password') {
       return <div className="cs-shell"><ResetPasswordScreen go={go} /></div>
+    }
+    if (screen === 'privacy') {
+      return <PrivacyScreen go={go} />
+    }
+    if (screen === 'terms') {
+      return <TermsScreen go={go} />
     }
     if (screen === 'auth') {
       return <div className="cs-shell"><AuthScreen onAuth={handleAuth} go={go} /></div>

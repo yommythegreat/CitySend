@@ -231,9 +231,9 @@ function PhoneMockup() {
             }}>🧑</div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--cs-ink)',
-                            letterSpacing: -0.2 }}>Armen Y.</div>
+                            letterSpacing: -0.2 }}>Tomi O.</div>
               <div style={{ fontSize: 11, color: 'var(--cs-slate-500)',
-                            fontFamily: 'var(--cs-mono)', letterSpacing: 0.3 }}>Toyota Corolla · ★ 4.96</div>
+                            fontFamily: 'var(--cs-mono)', letterSpacing: 0.3 }}>★ 4.96</div>
             </div>
             <div style={{
               background: 'var(--cs-accent)', borderRadius: 999,
@@ -498,13 +498,60 @@ function WinnipegMap() {
 
 // ── Footer ────────────────────────────────────────────────────────────────────
 
-function Footer() {
-  const cols = [
-    { h: 'Product', l: ['Send a package', 'Track', 'For business', 'Pricing'] },
-    { h: 'Drivers',  l: ['Drive with us', 'Earnings', 'Driver app', 'Apply'] },
-    { h: 'Company',  l: ['About', 'Cities', 'Press', 'Careers'] },
-    { h: 'Help',     l: ['Support', 'Contact', 'Privacy', 'Terms'] },
+type FooterLink =
+  | { label: string; href: string }
+  | { label: string; action: () => void }
+
+function Footer({ go }: { go: (screen: ScreenName) => void }) {
+  const scrollTo = (id: string) =>
+    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' })
+
+  const cols: { h: string; l: FooterLink[] }[] = [
+    {
+      h: 'Product',
+      l: [
+        { label: 'Send a package', action: () => go('auth') },
+        { label: 'Track',          action: () => go('auth') },
+        { label: 'Pricing',        action: () => scrollTo('pricing') },
+      ],
+    },
+    {
+      h: 'Drivers',
+      l: [
+        { label: 'Drive with us', href: 'https://driver.citysend.ca' },
+        { label: 'Earnings',      href: 'https://driver.citysend.ca' },
+        { label: 'Driver app',    href: 'https://driver.citysend.ca' },
+      ],
+    },
+    {
+      h: 'Company',
+      l: [
+        { label: 'About',  href: 'mailto:hello@citysend.ca' },
+        { label: 'Press',  href: 'mailto:press@citysend.ca' },
+      ],
+    },
+    {
+      h: 'Help',
+      l: [
+        { label: 'Support', href: 'mailto:support@citysend.ca' },
+        { label: 'Contact', href: 'mailto:hello@citysend.ca'   },
+        { label: 'Privacy', action: () => go('privacy') },
+        { label: 'Terms',   action: () => go('terms')   },
+      ],
+    },
   ]
+
+  const socials = [
+    { label: 'IG', href: 'https://instagram.com/citysend.ca' },
+    { label: 'X',  href: 'https://x.com/citysend_ca' },
+  ]
+
+  const linkStyle: React.CSSProperties = {
+    fontSize: 14, color: 'rgba(255,255,255,.78)', textDecoration: 'none',
+    background: 'none', border: 'none', cursor: 'pointer',
+    fontFamily: 'var(--cs-font)', padding: 0, textAlign: 'left',
+  }
+
   return (
     <footer className="lp-footer">
       <div className="lp-footer-grid">
@@ -517,17 +564,18 @@ function Footer() {
             Same-day delivery for Winnipeg.<br/>Across town, before dawn.
           </div>
           <div style={{ display: 'flex', gap: 10, marginTop: 22 }}>
-            {['IG', 'X', 'TT', 'IN'].map((s) => (
-              <div key={s} style={{
+            {socials.map((s) => (
+              <a key={s.label} href={s.href} target="_blank" rel="noopener noreferrer" style={{
                 width: 36, height: 36, borderRadius: 18,
                 background: 'rgba(255,255,255,.08)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 fontFamily: 'var(--cs-mono)', fontSize: 11, fontWeight: 500,
-                letterSpacing: 0.5, color: '#fff', cursor: 'pointer',
-              }}>{s}</div>
+                letterSpacing: 0.5, color: '#fff', textDecoration: 'none',
+              }}>{s.label}</a>
             ))}
           </div>
         </div>
+
         {cols.map((c) => (
           <div key={c.h}>
             <div style={{
@@ -535,11 +583,17 @@ function Footer() {
               letterSpacing: 1.4, textTransform: 'uppercase', marginBottom: 14,
             }}>{c.h}</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {c.l.map((x) => (
-                <a key={x} href="#" style={{
-                  fontSize: 14, color: 'rgba(255,255,255,.78)', textDecoration: 'none',
-                }} onClick={(e) => e.preventDefault()}>{x}</a>
-              ))}
+              {c.l.map((item) =>
+                'href' in item ? (
+                  <a key={item.label} href={item.href}
+                     target={item.href.startsWith('mailto') ? undefined : '_blank'}
+                     rel="noopener noreferrer"
+                     style={linkStyle}>{item.label}</a>
+                ) : (
+                  <button key={item.label} onClick={item.action}
+                          style={linkStyle}>{item.label}</button>
+                )
+              )}
             </div>
           </div>
         ))}
@@ -572,9 +626,9 @@ export function LandingScreen({ go }: Props) {
       <nav className="lp-nav">
         <LogoWordmark scale={0.65}/>
         <div className="lp-nav-links">
-          {['How it works', 'Track delivery', 'Cities', 'Support'].map((l) => (
-            <a key={l} href="#" onClick={(e) => e.preventDefault()}>{l}</a>
-          ))}
+          <a href="#how" onClick={(e) => { e.preventDefault(); document.getElementById('how')?.scrollIntoView({ behavior: 'smooth' }) }}>How it works</a>
+          <a href="#" onClick={(e) => { e.preventDefault(); go('auth') }}>Track delivery</a>
+          <a href="mailto:support@citysend.ca">Support</a>
         </div>
         <div className="lp-nav-right">
           <button className="lp-nav-login" onClick={handleAuth}>Log in</button>
@@ -700,7 +754,7 @@ export function LandingScreen({ go }: Props) {
       </section>
 
       {/* ─── How it works ─────────────────────────────────────────────── */}
-      <section className="lp-section-how">
+      <section id="how" className="lp-section-how">
         <div className="lp-eyebrow" style={{ color: 'var(--cs-slate-500)' }}>How it works</div>
         <div className="lp-section-title">Three taps. Thirty minutes. Done.</div>
         <div className="lp-section-sub" style={{ maxWidth: 620 }}>
@@ -738,7 +792,7 @@ export function LandingScreen({ go }: Props) {
               letterSpacing: -2, lineHeight: 1.02, marginTop: 16, color: '#fff',
             }}>
               Watch it move.<br/>Message the driver.<br/>
-              <span style={{ color: 'var(--cs-accent-2)' }}>Sleep easier.</span>
+              <span style={{ color: 'var(--cs-accent-2)' }}>Know before they do.</span>
             </div>
             <div style={{
               fontSize: 17, lineHeight: 1.55, color: 'rgba(255,255,255,.7)',
@@ -750,7 +804,7 @@ export function LandingScreen({ go }: Props) {
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginTop: 32 }}>
               {([
-                ['Matched',  'Armen Y. · Toyota Corolla · 4.96★'],
+                ['Matched',  'Tomi O. · 4.96★'],
                 ['Picked up','134 Princess St · 1:08 PM'],
                 ['Arriving', '2 blocks from Osborne St · ETA 2 min'],
               ] as [string, string][]).map(([k, v], i) => (
@@ -808,7 +862,7 @@ export function LandingScreen({ go }: Props) {
       </section>
 
       {/* ─── Trust grid ───────────────────────────────────────────────── */}
-      <section className="lp-section-trust">
+      <section id="pricing" className="lp-section-trust">
         <div style={{ maxWidth: 720, marginInline: 'auto', textAlign: 'center' }}>
           <div className="lp-eyebrow" style={{ color: 'var(--cs-slate-500)', justifyContent: 'center' }}>
             Why CitySend
@@ -825,44 +879,6 @@ export function LandingScreen({ go }: Props) {
             body="Same price whether you're in the Exchange or Transcona. No surge, no zones, no hidden fees."/>
           <TrustCard icon={<IconUser/>} title="Local drivers"
             body="Couriers vetted in Winnipeg, paid fairly, rated by the people they deliver to."/>
-        </div>
-      </section>
-
-      {/* ─── Local / Winnipeg ─────────────────────────────────────────── */}
-      <section className="lp-section-local">
-        <div className="lp-local-grid">
-          <div>
-            <div className="lp-eyebrow" style={{ color: 'var(--cs-accent)' }}>Built in Winnipeg</div>
-            <div style={{
-              fontSize: 'clamp(38px, 5vw, 64px)', fontWeight: 600,
-              letterSpacing: 'clamp(-1.5px, -0.04em, -2.5px)',
-              lineHeight: 1.0, marginTop: 16, color: 'var(--cs-ink)',
-            }}>
-              Made for the<br/>prairie city we<br/>actually live in.
-            </div>
-            <div style={{
-              fontSize: 17, lineHeight: 1.55, color: 'var(--cs-slate-700)',
-              marginTop: 22, maxWidth: 460,
-            }}>
-              From the Exchange to St. Vital, Polo Park to the Forks — we're in your
-              neighbourhood, not a head office two provinces away. Saskatoon and Regina
-              are next.
-            </div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 28 }}>
-              {[
-                'Exchange District','Osborne Village','River Heights','St. Boniface',
-                'The Forks','Polo Park','St. Vital','Wolseley','West End','Transcona',
-              ].map((n) => (
-                <span key={n} style={{
-                  padding: '8px 14px', borderRadius: 999, background: '#fff',
-                  border: '1px solid var(--cs-slate-200)',
-                  fontSize: 13, fontWeight: 500, color: 'var(--cs-ink)',
-                }}>{n}</span>
-              ))}
-            </div>
-          </div>
-
-          <WinnipegMap/>
         </div>
       </section>
 
@@ -903,7 +919,7 @@ export function LandingScreen({ go }: Props) {
         </div>
       </section>
 
-      <Footer/>
+      <Footer go={go}/>
     </div>
   )
 }

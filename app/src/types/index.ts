@@ -31,6 +31,8 @@ export type ScreenName =
   | 'settings'
   | 'add-place'
   | 'city-blocked'
+  | 'privacy'
+  | 'terms'
 
 export interface SavedAddress {
   label:   string
