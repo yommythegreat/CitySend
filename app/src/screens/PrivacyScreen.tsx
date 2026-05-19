@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect } from 'react'
 import type { ScreenName } from '../types'
 
 interface Props {
@@ -42,6 +42,11 @@ const S = {
 }
 
 export function PrivacyScreen({ go }: Props) {
+  useEffect(() => {
+    document.body.classList.add('cs-landing')
+    return () => document.body.classList.remove('cs-landing')
+  }, [])
+
   return (
     <div style={S.wrap}>
       <nav style={S.nav}>

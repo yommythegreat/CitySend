@@ -734,12 +734,9 @@ export default function App() {
     if (screen === 'reset-password') {
       return <div className="cs-shell"><ResetPasswordScreen go={go} /></div>
     }
-    if (screen === 'privacy') {
-      return <PrivacyScreen go={go} />
-    }
-    if (screen === 'terms') {
-      return <TermsScreen go={go} />
-    }
+    if (screen === 'privacy') return <PrivacyScreen go={go} />
+    if (screen === 'terms')   return <TermsScreen go={go} />
+    if (screen === 'about')   return <AboutScreen go={go} />
     if (screen === 'auth') {
       return <div className="cs-shell"><AuthScreen onAuth={handleAuth} go={go} /></div>
     }
