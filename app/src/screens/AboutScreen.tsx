@@ -8,7 +8,7 @@ interface Props {
 
 const S = {
   wrap: {
-    minHeight: '100vh', background: '#fafbfc',
+    width: '100%', minHeight: '100vh', background: '#fafbfc',
     fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif",
   } as React.CSSProperties,
   nav: {
