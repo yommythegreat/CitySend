@@ -69,15 +69,15 @@ export function AboutScreen({ go }: Props) {
             lineHeight: 1.0, margin: '0 0 28px',
           }}>
             Delivery that actually<br/>
-            <span style={{ color: '#c94a1b' }}>works here.</span>
+            <span style={{ color: '#c94a1b' }}>delivers.</span>
           </h1>
           <p style={{
             fontSize: 'clamp(16px, 1.4vw, 20px)', lineHeight: 1.6,
             color: 'rgba(255,255,255,.7)', maxWidth: 580, margin: 0,
           }}>
-            CitySend is a same-day delivery platform built for Winnipeg — not adapted from
-            somewhere else. We started with one question: why is it still easier to ship
-            something to Vancouver than to get it across the city the same afternoon?
+            CitySend is a same-day delivery platform built for Canadian cities. We saw how
+            frustrating local deliveries could be — long wait times, unclear pricing, and
+            unreliable communication — and we built CitySend to simplify the experience.
           </p>
         </div>
       </div>
@@ -93,16 +93,16 @@ export function AboutScreen({ go }: Props) {
             color: '#94a3b8', marginBottom: 16,
           }}>The problem</div>
           <h2 style={{ fontSize: 'clamp(26px, 3vw, 36px)', fontWeight: 700, letterSpacing: -1, color: '#0b1220', margin: '0 0 20px', lineHeight: 1.1 }}>
-            Winnipeg moves fast.<br/>Delivery didn't.
+            Our cities move fast.<br/>Delivery didn't.
           </h2>
           <p style={{ fontSize: 16, lineHeight: 1.7, color: '#475569', margin: '0 0 16px' }}>
-            You need a key at a friend's house across the river. A birthday cake at the office.
-            A document signed and back before 5. The tools to do this have been either
-            expensive couriers with minimum bookings, or regional apps that weren't built
-            for how this city is laid out.
+            You need a key at a friend's house across the city. A birthday cake at the office.
+            A document signed and back before dawn. The tools to do this have been either
+            expensive couriers with minimum bookings, or ride-sharing apps that weren't built
+            specifically for this purpose.
           </p>
           <p style={{ fontSize: 16, lineHeight: 1.7, color: '#475569', margin: 0 }}>
-            CitySend was built to close that gap — flat pricing, a real app, and drivers
+            CitySend was built to close that gap — flat pricing, a real solution, and drivers
             who know the neighbourhood.
           </p>
         </div>
@@ -122,7 +122,7 @@ export function AboutScreen({ go }: Props) {
           </h2>
           <p style={{ fontSize: 16, lineHeight: 1.7, color: '#475569', margin: '0 0 16px' }}>
             Customers book a delivery in under two minutes — two addresses, a parcel description,
-            done. A nearby driver is matched and en route to pickup in about 30 minutes.
+            done. A nearby driver is matched and en route to pick up in about 30 minutes.
             The whole journey is tracked live. The recipient gets a notification when it
             arrives. A receipt lands in the sender's email. No calls, no wait-for-quote,
             no wondering.
@@ -148,8 +148,8 @@ export function AboutScreen({ go }: Props) {
             Local people, paid fairly.
           </h2>
           <p style={{ fontSize: 16, lineHeight: 1.7, color: '#475569', margin: '0 0 16px' }}>
-            Every driver on CitySend is vetted, rated, and from Winnipeg. They set their
-            own schedules and keep the majority of every delivery fee. We believe the
+            Every driver on CitySend is vetted, rated, and a member of our dear city. They set
+            their own schedules and keep the majority of every delivery fee. We believe the
             people who do the work should benefit from the platform — not just fund it.
           </p>
           <p style={{ fontSize: 16, lineHeight: 1.7, color: '#475569', margin: '0 0 24px' }}>
@@ -191,7 +191,7 @@ export function AboutScreen({ go }: Props) {
             how CitySend works.
           </p>
           <p style={{ fontSize: 16, lineHeight: 1.7, color: '#475569', margin: 0 }}>
-            Saskatoon and Regina are next. If your city isn't on the list yet, you
+            Calgary and Saskatoon are next. If your city isn't on the list yet, you
             can register your interest at citysend.ca and we'll let you know when we arrive.
           </p>
         </div>
@@ -211,7 +211,7 @@ export function AboutScreen({ go }: Props) {
           </h2>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
             {[
-              { label: 'General',  email: 'hello@citysend.ca' },
+              { label: 'General',  email: 'info@citysend.ca' },
               { label: 'Support',  email: 'support@citysend.ca' },
             ].map(({ label, email }) => (
               <a key={email} href={`mailto:${email}`} style={{

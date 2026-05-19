@@ -200,7 +200,7 @@ export function TermsScreen({ go }: Props) {
         <p style={S.p}>
           CitySend Delivery Co.<br/>
           Winnipeg, Manitoba, Canada<br/>
-          <a href="mailto:hello@citysend.ca" style={{ color: '#c94a1b' }}>hello@citysend.ca</a>
+          <a href="mailto:info@citysend.ca" style={{ color: '#c94a1b' }}>info@citysend.ca</a>
         </p>
       </div>
     </div>
