@@ -49,31 +49,31 @@ create trigger orders_rate_limit_trigger
 -- existing rows — safe to run on a live database.
 
 alter table public.orders
-  add constraint if not exists orders_status_valid
+  add constraint orders_status_valid
     check (status in ('new','assigned','picked_up','in_transit','delivered','cancelled'))
     not valid,
 
-  add constraint if not exists orders_city_id_valid
+  add constraint orders_city_id_valid
     check (city_id in ('winnipeg','toronto','calgary','vancouver','edmonton','ottawa','montreal'))
     not valid,
 
-  add constraint if not exists orders_distance_positive
+  add constraint orders_distance_positive
     check (distance_km > 0)
     not valid,
 
-  add constraint if not exists orders_customer_id_nonempty
+  add constraint orders_customer_id_nonempty
     check (length(customer_id) > 0)
     not valid,
 
-  add constraint if not exists orders_parcel_size_valid
+  add constraint orders_parcel_size_valid
     check (parcel->>'size' in ('s','m','l'))
     not valid,
 
-  add constraint if not exists orders_pickup_address_nonempty
+  add constraint orders_pickup_address_nonempty
     check (length(pickup->>'address') > 0)
     not valid,
 
-  add constraint if not exists orders_dropoff_address_nonempty
+  add constraint orders_dropoff_address_nonempty
     check (length(dropoff->>'address') > 0)
     not valid;
 
