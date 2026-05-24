@@ -478,11 +478,10 @@ async function syncToSupabase(action: Action, snapshot: AdminState): Promise<voi
     }
 
     case 'ADD_NOTE': {
-      // notes are stored as JSONB on the order row; read the note from snapshot
-      // (snapshot is pre-dispatch, so we need to append manually)
       const order = snapshot.orders.find(o => o.id === action.orderId)
       if (!order) return
-      const updatedNotes = [...order.notes, action.note]
+      // Cap at 50 notes to prevent unbounded JSONB growth
+      const updatedNotes = [...order.notes, action.note].slice(-50)
       await supabase.from('orders').update({
         notes: updatedNotes, updated_at: now,
       }).eq('id', action.orderId)

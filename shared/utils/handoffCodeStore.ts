@@ -14,10 +14,10 @@
 
 import { supabase, isSupabaseConfigured } from '../lib/supabase'
 
-/** Generate a random 4-digit code string, e.g. "0847" */
+/** Generate a random 6-digit code string, e.g. "084712" (1 million combinations) */
 export function newHandoffCode(): string {
-  const n = Math.floor(Math.random() * 10000)
-  return String(n).padStart(4, '0')
+  const n = Math.floor(Math.random() * 1000000)
+  return String(n).padStart(6, '0')
 }
 
 /**
@@ -42,24 +42,33 @@ export async function generateHandoffCode(orderId: string): Promise<string> {
 }
 
 /**
- * Validate the code entered by the driver against what is stored on the order.
- * Returns true if the code matches (case-insensitive, leading zeros normalised).
+ * Validate the code entered by the driver via a server-side RPC.
+ *
+ * The RPC (validate_handoff_code) runs SECURITY DEFINER so:
+ *   - the stored code is never returned to the client
+ *   - failed attempts are logged server-side
+ *   - 5 wrong attempts within 15 minutes triggers a rate limit
+ *
+ * Throws an error with message 'RATE_LIMITED' if the limit is hit.
  */
 export async function validateHandoffCode(
   orderId: string,
   entered: string,
 ): Promise<boolean> {
   if (!isSupabaseConfigured) {
-    // In dev/demo mode without Supabase, accept any 4-digit code
-    return /^\d{4}$/.test(entered)
+    // Dev/demo mode — accept any 6-digit code
+    return /^\d{6}$/.test(entered)
   }
 
-  const { data, error } = await supabase
-    .from('orders')
-    .select('handoff_code')
-    .eq('id', orderId)
-    .single()
+  const { data, error } = await supabase.rpc('validate_handoff_code', {
+    p_order_id: orderId,
+    p_code:     entered.trim(),
+  })
 
-  if (error || !data?.handoff_code) return false
-  return data.handoff_code === entered.trim()
+  if (error) {
+    if (error.hint === 'HANDOFF_RATE_LIMITED') throw new Error('RATE_LIMITED')
+    console.warn('[handoffCodeStore] validation error:', error.message)
+    return false
+  }
+  return data === true
 }

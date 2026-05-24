@@ -292,17 +292,25 @@ async function syncDriverAction(
     case 'ADD_NOTE': {
       const order = snapshot.orders.find(o => o.id === action.orderId)
       if (!order) return
-      const updatedNotes = [...order.notes, action.note]
-      await supabase.from('orders').update({
-        notes: updatedNotes, updated_at: now,
-      }).eq('id', action.orderId)
+      // Cap at 50 notes to prevent unbounded JSONB growth
+      const updatedNotes = [...order.notes, action.note].slice(-50)
+      await withRetry(async () => {
+        const { error } = await supabase.from('orders').update({
+          notes: updatedNotes, updated_at: now,
+        }).eq('id', action.orderId)
+        if (error) throw error
+      })
       break
     }
 
     case 'ACCEPT_JOB': {
-      await supabase.from('drivers').update({
-        status: 'busy', current_order_id: action.orderId,
-      }).eq('id', action.driverId)
+      // Critical write — driver must be marked busy before starting pickup
+      await withRetry(async () => {
+        const { error } = await supabase.from('drivers').update({
+          status: 'busy', current_order_id: action.orderId,
+        }).eq('id', action.driverId)
+        if (error) throw error
+      })
       break
     }
 
@@ -352,7 +360,11 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
       if (action.type === 'UPDATE_STATUS') {
         setSyncError({
           message: `"${action.status}" status failed to save. Check your connection.`,
-          // Retry only re-runs the Supabase write — local state already updated optimistically
+          retry: () => syncDriverAction(action, snapshot).catch(console.error),
+        })
+      } else if (action.type === 'ACCEPT_JOB') {
+        setSyncError({
+          message: 'Failed to accept job — tap Retry now or the job may be reassigned.',
           retry: () => syncDriverAction(action, snapshot).catch(console.error),
         })
       }

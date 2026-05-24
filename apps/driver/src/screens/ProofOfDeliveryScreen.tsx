@@ -28,11 +28,13 @@ export function ProofOfDeliveryScreen({ orderId, onBack, onConfirmed }: Props) {
   const [notes,          setNotes]          = useState('')
   const [signed,         setSigned]         = useState(false)
   const [sigUrl,         setSigUrl]         = useState<string | null>(null)
-  const [codeDigits,     setCodeDigits]     = useState(['', '', '', ''])
+  const [codeDigits,     setCodeDigits]     = useState(['', '', '', '', '', ''])
   const [submitting,     setSubmitting]     = useState(false)
   const [error,          setError]          = useState('')
 
   const codeRefs = [
+    useRef<HTMLInputElement>(null),
+    useRef<HTMLInputElement>(null),
     useRef<HTMLInputElement>(null),
     useRef<HTMLInputElement>(null),
     useRef<HTMLInputElement>(null),
@@ -98,10 +100,11 @@ export function ProofOfDeliveryScreen({ orderId, onBack, onConfirmed }: Props) {
       const res = await fetch(dataUrl)
       const blob = await res.blob()
       const path = `signatures/${orderId}-${Date.now()}.png`
-      const { data, error } = await supabase.storage.from('delivery-photos').upload(path, blob, { contentType: 'image/png', upsert: true })
-      if (error || !data) return null
-      const { data: urlData } = supabase.storage.from('delivery-photos').getPublicUrl(path)
-      return urlData.publicUrl ?? null
+      const { error: upErr } = await supabase.storage.from('delivery-photos').upload(path, blob, { contentType: 'image/png', upsert: true })
+      if (upErr) return null
+      const { data: signed, error: signErr } = await supabase.storage.from('delivery-photos').createSignedUrl(path, 3600)
+      if (signErr || !signed?.signedUrl) return null
+      return signed.signedUrl
     } catch { return null }
   }
 
@@ -121,8 +124,17 @@ export function ProofOfDeliveryScreen({ orderId, onBack, onConfirmed }: Props) {
     if (!receiverName.trim()) { setError('Receiver name is required.'); return }
     if (secondaryTab === 'signature' && !signed) { setError('Please capture a signature.'); return }
     if (secondaryTab === 'code') {
-      const valid = await validateHandoffCode(orderId, codeDigits.join(''))
-      if (!valid) { setError('Incorrect code — ask the recipient to check their notification.'); return }
+      try {
+        const valid = await validateHandoffCode(orderId, codeDigits.join(''))
+        if (!valid) { setError('Incorrect code — ask the recipient to check their CitySend notification.'); return }
+      } catch (e: any) {
+        if (e.message === 'RATE_LIMITED') {
+          setError('Too many incorrect attempts. Please wait 15 minutes and try again.')
+        } else {
+          setError('Could not verify code. Check your connection and try again.')
+        }
+        return
+      }
     }
     setError('')
     setSubmitting(true)
@@ -298,10 +310,10 @@ export function ProofOfDeliveryScreen({ orderId, onBack, onConfirmed }: Props) {
           {/* Code */}
           {secondaryTab === 'code' && (
             <div style={{ background: '#fff', border: '1.5px solid var(--d-border)', borderRadius: 16, padding: 20, display: 'flex', flexDirection: 'column', gap: 14, alignItems: 'center' }}>
-              <div style={{ fontSize: 14, color: '#374151', textAlign: 'center', maxWidth: 260 }}>
-                Ask the recipient for the 4-digit code from their notification.
+              <div style={{ fontSize: 14, color: '#374151', textAlign: 'center', maxWidth: 280 }}>
+                Ask the recipient for the 6-digit code from their CitySend notification.
               </div>
-              <div style={{ display: 'flex', gap: 10 }}>
+              <div style={{ display: 'flex', gap: 8 }}>
                 {codeDigits.map((digit, i) => (
                   <input
                     key={i}
@@ -312,22 +324,22 @@ export function ProofOfDeliveryScreen({ orderId, onBack, onConfirmed }: Props) {
                     onChange={e => {
                       const val = e.target.value.replace(/\D/g, '').slice(0, 1)
                       const next = [...codeDigits]; next[i] = val; setCodeDigits(next)
-                      if (val && i < 3) codeRefs[i + 1].current?.focus()
+                      if (val && i < 5) codeRefs[i + 1].current?.focus()
                     }}
                     onKeyDown={e => {
                       if (e.key === 'Backspace' && !digit && i > 0) codeRefs[i - 1].current?.focus()
                     }}
                     style={{
-                      width: 56, height: 64, textAlign: 'center', fontSize: 28,
+                      width: 44, height: 56, textAlign: 'center', fontSize: 24,
                       fontFamily: 'monospace', fontWeight: 600, color: '#111827',
                       border: `1.5px solid ${digit ? '#111827' : 'var(--d-border)'}`,
-                      borderRadius: 12, outline: 'none', background: '#fff',
+                      borderRadius: 10, outline: 'none', background: '#fff',
                     }}
                   />
                 ))}
               </div>
               <div style={{ fontFamily: 'monospace', fontSize: 11, color: 'var(--d-muted)', letterSpacing: 1, textTransform: 'uppercase' }}>
-                4-digit handoff code
+                6-digit handoff code
               </div>
               {codeComplete && <div style={{ fontSize: 12, color: '#22c55e', fontWeight: 500 }}>✓ Code entered</div>}
             </div>

@@ -26,15 +26,44 @@ export type AdminScreen =
 
 // ── Inner app (needs AdminContext) ────────────────────────────────────────────
 
+// Orders stuck in an active status for more than 2 hours
+const STUCK_THRESHOLD_MS = 2 * 60 * 60 * 1000
+const ACTIVE_STATUSES    = ['assigned', 'picked_up', 'in_transit']
+
 function AdminApp({ onLogout }: { onLogout: () => void }) {
   const [screen, setScreen] = useState<AdminScreen>('dashboard')
   const { state } = useAdminStore()
 
   const orderCounts = {
     new:    state.orders.filter(o => o.status === 'new').length,
-    active: state.orders.filter(o => ['assigned','picked_up','in_transit'].includes(o.status)).length,
+    active: state.orders.filter(o => ACTIVE_STATUSES.includes(o.status)).length,
   }
   const openIncidents = state.incidents.filter(i => i.status === 'new' || i.status === 'in_review').length
+  const stuckOrders   = state.orders.filter(o =>
+    ACTIVE_STATUSES.includes(o.status) &&
+    Date.now() - new Date(o.updatedAt).getTime() > STUCK_THRESHOLD_MS
+  ).length
+
+  // Inactivity timeout — sign admin out after 60 min with no interaction
+  useEffect(() => {
+    if (!isSupabaseConfigured) return
+    const TIMEOUT_MS = 60 * 60 * 1000
+    let timer: ReturnType<typeof setTimeout>
+
+    const reset = () => {
+      clearTimeout(timer)
+      timer = setTimeout(onLogout, TIMEOUT_MS)
+    }
+
+    const events = ['mousedown', 'keydown', 'touchstart', 'scroll'] as const
+    events.forEach(e => window.addEventListener(e, reset, { passive: true }))
+    reset()
+
+    return () => {
+      clearTimeout(timer)
+      events.forEach(e => window.removeEventListener(e, reset))
+    }
+  }, [onLogout])
 
   const renderScreen = () => {
     switch (screen) {
@@ -69,6 +98,18 @@ function AdminApp({ onLogout }: { onLogout: () => void }) {
             CitySend Admin Console
           </span>
           <div style={{ flex: 1 }} />
+          {stuckOrders > 0 && (
+            <button
+              onClick={() => setScreen('orders')}
+              style={{
+                padding: '5px 12px', border: 'none', borderRadius: 999,
+                background: '#fff3cd', color: '#856404',
+                fontSize: 12, fontWeight: 600, cursor: 'pointer', marginRight: 8,
+              }}
+            >
+              ⚠️ {stuckOrders} stuck deliver{stuckOrders > 1 ? 'ies' : 'y'}
+            </button>
+          )}
           {orderCounts.new > 0 && (
             <button
               onClick={() => setScreen('orders')}

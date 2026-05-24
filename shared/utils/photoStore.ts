@@ -41,8 +41,15 @@ export async function uploadDeliveryPhoto(
       return null
     }
 
-    const { data } = supabase.storage.from(BUCKET).getPublicUrl(path)
-    return data?.publicUrl ?? null
+    // Return a 1-hour signed URL — bucket is private so public URLs are blocked
+    const { data: signed, error: signErr } = await supabase.storage
+      .from(BUCKET)
+      .createSignedUrl(path, 3600)
+    if (signErr || !signed?.signedUrl) {
+      console.warn('[photoStore] signed URL error:', signErr?.message)
+      return null
+    }
+    return signed.signedUrl
   } catch (err) {
     console.warn('[photoStore] unexpected error:', err)
     return null
