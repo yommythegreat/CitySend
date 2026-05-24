@@ -126,6 +126,8 @@ export interface Driver {
   currentOrderId?: string
   rating: number
   completedOrders: number
+  offersReceived?: number
+  offersDeclined?: number
   joinedAt: string
 }
 

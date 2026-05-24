@@ -13,7 +13,16 @@ export function AssignDriverModal({ orderId, onClose }: Props) {
   const { state, dispatch } = useAdminStore()
   const [selectedId, setSelectedId] = useState<string>('')
 
-  const availableDrivers = state.drivers.filter(d => d.status === 'available')
+  // Belt-and-suspenders: exclude drivers with any non-terminal order, even if
+  // their status hasn't synced yet (catches race conditions during assignment).
+  const busyDriverIds = new Set(
+    state.orders
+      .filter(o => o.status !== 'delivered' && o.status !== 'cancelled' && o.assignedDriverId)
+      .map(o => o.assignedDriverId!)
+  )
+  const availableDrivers = state.drivers.filter(
+    d => d.status === 'available' && !busyDriverIds.has(d.id)
+  )
   const order = state.orders.find(o => o.id === orderId)
 
   const handleAssign = () => {

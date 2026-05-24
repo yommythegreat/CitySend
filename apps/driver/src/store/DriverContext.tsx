@@ -85,7 +85,7 @@ type Action =
   | { type: '_HYDRATE_ORDERS';     orders: Order[] }
   | { type: '_UPSERT_ORDER';       order: Order }
   | { type: 'SHOW_JOB_OFFER';      order: Order }
-  | { type: 'HIDE_JOB_OFFER' }
+  | { type: 'HIDE_JOB_OFFER'; accepted?: boolean }
   | { type: 'TICK_JOB_OFFER_TIMER' }
   | { type: 'ACCEPT_JOB'; orderId: string; driverId: string }
 
@@ -183,6 +183,11 @@ function reducer(state: DriverState, action: Action): DriverState {
 
 export type ConnectionStatus = 'online' | 'offline' | 'reconnecting'
 
+export interface SyncError {
+  message: string
+  retry:   () => void
+}
+
 interface DriverContextValue {
   state:            DriverState
   dispatch:         React.Dispatch<Action>
@@ -191,9 +196,24 @@ interface DriverContextValue {
   completedOrders:  Order[]
   jobOffer:         JobOffer | null
   connectionStatus: ConnectionStatus
+  syncError:        SyncError | null
+  clearSyncError:   () => void
 }
 
 const DriverContext = createContext<DriverContextValue | null>(null)
+
+// ── Retry helper ─────────────────────────────────────────────────────────────
+
+async function withRetry<T>(fn: () => Promise<T>, attempts = 3, baseMs = 600): Promise<T> {
+  for (let i = 0; i < attempts; i++) {
+    try { return await fn() }
+    catch (err) {
+      if (i === attempts - 1) throw err
+      await new Promise(r => setTimeout(r, baseMs * 2 ** i))
+    }
+  }
+  throw new Error('unreachable')
+}
 
 // ── Supabase side-effects for driver actions ──────────────────────────────────
 
@@ -209,10 +229,13 @@ async function syncDriverAction(
     case 'UPDATE_STATUS': {
       const order = snapshot.orders.find(o => o.id === action.orderId)
 
-      // Update order status in DB
-      await supabase.from('orders').update({
-        status: action.status, updated_at: now,
-      }).eq('id', action.orderId)
+      // Update order status in DB — retried up to 3x before surfacing error
+      await withRetry(async () => {
+        const { error } = await supabase.from('orders').update({
+          status: action.status, updated_at: now,
+        }).eq('id', action.orderId)
+        if (error) throw error
+      })
 
       // Push customer notification
       if (order) {
@@ -231,8 +254,25 @@ async function syncDriverAction(
         }
       }
 
-      // If delivered: free up driver + increment completedOrders
+      // If delivered: check time-distance plausibility, then free up driver
       if (action.status === 'delivered' && snapshot.auth) {
+        // Plausibility: minimum 90 seconds per km (≈ 40 km/h). snapshot.orders still
+        // has the pre-delivered updatedAt (set at in_transit), so elapsed = now − updatedAt.
+        if (order) {
+          const elapsedSeconds = (Date.now() - new Date(order.updatedAt).getTime()) / 1000
+          const minSeconds     = order.distanceKm * 90
+          if (elapsedSeconds < minSeconds) {
+            const flagNote = {
+              id:          `integrity-${Date.now()}`,
+              text:        `⚠️ INTEGRITY FLAG: Delivered in ${Math.round(elapsedSeconds)}s for a ${order.distanceKm} km route (minimum expected: ${Math.round(minSeconds)}s). Possible GPS spoof or fraudulent completion. Driver: ${snapshot.auth.name}.`,
+              authorName:  'System',
+              createdAt:   now,
+            }
+            const updatedNotes = [...order.notes, flagNote]
+            await supabase.from('orders').update({ notes: updatedNotes }).eq('id', action.orderId)
+          }
+        }
+
         await supabase.from('drivers').update({
           status: 'available', current_order_id: null,
           completed_orders: snapshot.auth.completedOrders + 1,
@@ -258,6 +298,26 @@ async function syncDriverAction(
       break
     }
 
+    case 'SHOW_JOB_OFFER': {
+      if (!snapshot.auth) break
+      try {
+        const { data } = await supabase.from('drivers').select('offers_received').eq('id', snapshot.auth.driverId).maybeSingle()
+        await supabase.from('drivers').update({ offers_received: (data?.offers_received ?? 0) + 1 }).eq('id', snapshot.auth.driverId)
+      } catch { /* non-critical */ }
+      break
+    }
+
+    case 'HIDE_JOB_OFFER': {
+      // accepted === true means the driver tapped Accept; false/undefined = decline or timeout
+      if (!action.accepted && snapshot.auth && snapshot.jobOffer?.showModal) {
+        try {
+          const { data } = await supabase.from('drivers').select('offers_declined').eq('id', snapshot.auth.driverId).maybeSingle()
+          await supabase.from('drivers').update({ offers_declined: (data?.offers_declined ?? 0) + 1 }).eq('id', snapshot.auth.driverId)
+        } catch { /* non-critical */ }
+      }
+      break
+    }
+
     default: break
   }
 }
@@ -269,6 +329,7 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
   const [connectionStatus, setConnStatus] = useState<ConnectionStatus>(
     navigator.onLine ? 'online' : 'offline',
   )
+  const [syncError, setSyncError] = useState<SyncError | null>(null)
   // Incrementing this causes the subscription useEffect to resubscribe
   const [subscribeKey, setSubscribeKey] = useState(0)
 
@@ -278,9 +339,16 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
   const dispatch = useCallback((action: Action) => {
     const snapshot = snapshotRef.current
     baseDispatch(action)
-    syncDriverAction(action, snapshot).catch(err =>
-      console.error('[DriverContext] syncDriverAction error', err),
-    )
+    syncDriverAction(action, snapshot).catch(err => {
+      console.error('[DriverContext] syncDriverAction error', err)
+      if (action.type === 'UPDATE_STATUS') {
+        setSyncError({
+          message: `"${action.status}" status failed to save. Check your connection.`,
+          // Retry only re-runs the Supabase write — local state already updated optimistically
+          retry: () => syncDriverAction(action, snapshot).catch(console.error),
+        })
+      }
+    })
   }, [])
 
   // ── Supabase auth state listener ────────────────────────────────────────────
@@ -336,6 +404,9 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
 
     const onOnline = async () => {
       setConnStatus('reconnecting')
+      // Jitter: spread reconnect fetches across a 2s window so all clients
+      // don't hammer the DB simultaneously when a network blip resolves.
+      await new Promise(r => setTimeout(r, Math.random() * 2000))
       try {
         const orders = await fetchOrders()
         baseDispatch({ type: '_HYDRATE_ORDERS', orders })
@@ -441,6 +512,8 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
       completedOrders,
       jobOffer: state.jobOffer,
       connectionStatus,
+      syncError,
+      clearSyncError: () => setSyncError(null),
     }}>
       {children}
     </DriverContext.Provider>

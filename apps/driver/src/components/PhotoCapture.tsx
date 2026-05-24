@@ -10,6 +10,8 @@ interface Props {
   captured:   boolean
   previewUrl: string | null
   uploading:  boolean
+  /** When true, suppresses the gallery fallback on desktop and marks the field as required */
+  required?:  boolean
 }
 
 /**
@@ -19,7 +21,7 @@ interface Props {
  * On desktop: opens a file picker.
  * Compresses before upload; shows local preview immediately while upload runs.
  */
-export function PhotoCapture({ orderId, label, onCapture, onClear, captured, previewUrl, uploading }: Props) {
+export function PhotoCapture({ orderId, label, onCapture, onClear, captured, previewUrl, uploading, required = false }: Props) {
   const inputRef = useRef<HTMLInputElement>(null)
 
   const handleChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -126,7 +128,7 @@ export function PhotoCapture({ orderId, label, onCapture, onClear, captured, pre
         {label === 'pickup' ? 'Tap to photograph the parcel' : 'Tap to photograph the door'}
       </div>
       <div style={{ fontSize: 11, fontFamily: 'monospace', color: '#c94a1b', letterSpacing: 0.5, fontWeight: 600 }}>
-        RECOMMENDED
+        {required ? 'REQUIRED' : 'RECOMMENDED'}
       </div>
       <input
         ref={inputRef}

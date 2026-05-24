@@ -307,9 +307,17 @@ const AdminContext = createContext<AdminContextValue | null>(null)
 /** Wrap a Supabase query builder so it can be used in Promise.all(). */
 function q(query: PromiseLike<any>): Promise<any> { return Promise.resolve(query) }
 
+
 async function syncToSupabase(action: Action, snapshot: AdminState): Promise<void> {
   if (!isSupabaseConfigured) return
   const now = new Date().toISOString()
+
+  // Resolve admin identity for audit notes (best-effort; falls back to 'Admin')
+  let adminLabel = 'Admin'
+  try {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user?.email) adminLabel = `Admin (${user.email})`
+  } catch {}
 
   switch (action.type) {
 
@@ -318,11 +326,17 @@ async function syncToSupabase(action: Action, snapshot: AdminState): Promise<voi
       const order  = snapshot.orders.find(o => o.id === action.orderId)
       if (!driver || !order) return
       const newStatus = order.status === 'new' ? 'assigned' : order.status
+      const auditNote: AdminNote = {
+        id: `audit-${Date.now()}`,
+        text: `🔧 ${adminLabel}: Assigned driver ${driver.name}.`,
+        authorName: 'System', createdAt: now,
+      }
       await Promise.all([
         q(supabase.from('orders').update({
           assigned_driver_id: action.driverId,
           assigned_driver_name: driver.name,
           status: newStatus, updated_at: now,
+          notes: [...order.notes, auditNote],
         }).eq('id', action.orderId)),
         q(supabase.from('drivers').update({
           status: 'busy', current_order_id: action.orderId,
@@ -345,10 +359,19 @@ async function syncToSupabase(action: Action, snapshot: AdminState): Promise<voi
 
     case 'UNASSIGN_DRIVER': {
       const order = snapshot.orders.find(o => o.id === action.orderId)
+      const prevDriverName = order?.assignedDriverId
+        ? snapshot.drivers.find(d => d.id === order.assignedDriverId)?.name ?? 'driver'
+        : 'driver'
+      const auditNote: AdminNote = {
+        id: `audit-${Date.now()}`,
+        text: `🔧 ${adminLabel}: Unassigned ${prevDriverName} — order returned to New.`,
+        authorName: 'System', createdAt: now,
+      }
       const calls: Promise<any>[] = [
         q(supabase.from('orders').update({
           status: 'new', assigned_driver_id: null,
           assigned_driver_name: null, updated_at: now,
+          notes: [...(order?.notes ?? []), auditNote],
         }).eq('id', action.orderId)),
       ]
       if (order?.assignedDriverId) {
@@ -364,8 +387,14 @@ async function syncToSupabase(action: Action, snapshot: AdminState): Promise<voi
       const order = snapshot.orders.find(o => o.id === action.orderId)
       if (!order) return
 
+      const statusAuditNote: AdminNote = {
+        id: `audit-${Date.now()}`,
+        text: `🔧 ${adminLabel}: Status manually set to "${action.status}".`,
+        authorName: 'System', createdAt: now,
+      }
       await supabase.from('orders').update({
         status: action.status, updated_at: now,
+        notes: [...order.notes, statusAuditNote],
       }).eq('id', action.orderId)
 
       const notifMap: Partial<Record<OrderStatus, { title: string; body: string }>> = {
@@ -422,9 +451,15 @@ async function syncToSupabase(action: Action, snapshot: AdminState): Promise<voi
     case 'CANCEL_ORDER': {
       const order = snapshot.orders.find(o => o.id === action.orderId)
       if (!order) return
+      const cancelAuditNote: AdminNote = {
+        id: `audit-${Date.now()}`,
+        text: `🔧 ${adminLabel}: Order cancelled. Reason: ${action.reason || 'Not specified'}.`,
+        authorName: 'System', createdAt: now,
+      }
       const calls: Promise<any>[] = [
         q(supabase.from('orders').update({
           status: 'cancelled', cancel_reason: action.reason, updated_at: now,
+          notes: [...order.notes, cancelAuditNote],
         }).eq('id', action.orderId)),
         pushNotification({
           event: 'cancelled', audience: 'customer',
@@ -586,6 +621,8 @@ export function AdminProvider({ children }: { children: React.ReactNode }) {
               currentOrderId:  r.current_order_id ?? undefined,
               rating:          Number(r.rating),
               completedOrders: r.completed_orders,
+              offersReceived:  r.offers_received ?? 0,
+              offersDeclined:  r.offers_declined ?? 0,
               joinedAt:        r.joined_at,
             }))
             baseDispatch({ type: '_HYDRATE_DRIVERS', drivers })

@@ -250,6 +250,21 @@ function DriverCard({
             <span style={{ fontSize: 11, color: 'var(--a-muted)' }}>{driver.rating}</span>
             <span style={{ fontSize: 11, color: 'var(--a-muted)' }}>·</span>
             <span style={{ fontSize: 11, color: 'var(--a-muted)' }}>{driver.completedOrders} deliveries</span>
+            {(driver.offersReceived ?? 0) > 0 && (() => {
+              const rate = Math.round(((driver.offersReceived! - (driver.offersDeclined ?? 0)) / driver.offersReceived!) * 100)
+              return (
+                <>
+                  <span style={{ fontSize: 11, color: 'var(--a-muted)' }}>·</span>
+                  <span style={{
+                    fontSize: 10, fontWeight: 600, padding: '1px 7px', borderRadius: 999,
+                    background: rate >= 80 ? 'var(--a-ok-bg)' : rate >= 50 ? 'var(--a-warn-bg)' : 'var(--a-err-bg)',
+                    color: rate >= 80 ? 'var(--a-ok)' : rate >= 50 ? 'var(--a-warn)' : 'var(--a-err)',
+                  }}>
+                    {rate}% acceptance
+                  </span>
+                </>
+              )
+            })()}
             {isBusy && currentOrder && (
               <>
                 <span style={{ fontSize: 11, color: 'var(--a-muted)' }}>·</span>

@@ -71,7 +71,7 @@ function screenToHash(screen: Screen): string {
 // ── Inner app (needs DriverProvider) ─────────────────────────────────────────
 
 function DriverApp() {
-  const { state, dispatch, jobOffer } = useDriver()
+  const { state, dispatch, jobOffer, syncError, clearSyncError } = useDriver()
 
   // Restore screen from hash on first load; default to dashboard
   const [screen, setScreen] = useState<Screen>(() => parseHash())
@@ -122,7 +122,7 @@ function DriverApp() {
     const orderId  = jobOffer.order.id
     const driverId = state.auth?.driverId ?? ''
     dispatch({ type: 'ACCEPT_JOB', orderId, driverId })
-    dispatch({ type: 'HIDE_JOB_OFFER' })
+    dispatch({ type: 'HIDE_JOB_OFFER', accepted: true })
     dispatch({ type: 'SET_SUBSTEP', orderId, substep: 'accepted' })
     navigateTo({ name: 'delivery', orderId })
   }
@@ -249,6 +249,39 @@ function DriverApp() {
           onDecline={handleDeclineOffer}
           onTimeout={handleOfferTimeout}
         />
+      )}
+
+      {/* ── Sync error banner (write failed after 3 retries) ─────────────── */}
+      {syncError && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, zIndex: 999,
+          background: '#dc2626', color: '#fff',
+          padding: '12px 16px',
+          paddingTop: 'max(12px, env(safe-area-inset-top, 12px))',
+          display: 'flex', alignItems: 'center', gap: 10,
+          boxShadow: '0 2px 12px rgba(0,0,0,0.25)',
+        }}>
+          <span style={{ flex: 1, fontSize: 13, fontWeight: 500, lineHeight: 1.4 }}>
+            ⚠️ {syncError.message}
+          </span>
+          <button
+            onClick={() => { syncError.retry(); clearSyncError() }}
+            style={{
+              padding: '5px 12px', background: 'rgba(255,255,255,0.2)',
+              border: 'none', borderRadius: 6, color: '#fff',
+              fontSize: 12, fontWeight: 600, cursor: 'pointer', flexShrink: 0,
+            }}
+          >
+            Retry
+          </button>
+          <button
+            onClick={clearSyncError}
+            style={{
+              background: 'none', border: 'none', color: 'rgba(255,255,255,0.7)',
+              fontSize: 20, cursor: 'pointer', lineHeight: 1, padding: '0 4px', flexShrink: 0,
+            }}
+          >×</button>
+        </div>
       )}
     </div>
   )

@@ -6,6 +6,7 @@ import { Toast } from '../components/Toast'
 import { SlideAction } from '../components/SlideAction'
 import { NavigationBanner } from '../components/NavigationBanner'
 import { PhotoCapture } from '../components/PhotoCapture'
+import { checkProximity, formatDistance } from '../utils/proximity'
 import type { Order } from '@shared/types'
 import { addIncident, newIncidentId } from '@shared/utils/incidentStore'
 import { pushNotification } from '@shared/utils/notificationStore'
@@ -213,15 +214,16 @@ function ChatPanel({ order, myId, messages, fetchError, sending, inputText, call
 export function DeliveryScreen({ orderId, onBack, onComplete, initialChatOpen = false }: Props) {
   const { state, dispatch, completedOrders } = useDriver()
 
-  const [toast,         setToast]        = useState('')
-  const [showIssue,     setShowIssue]    = useState(false)
-  const [chatOpen,      setChatOpen]     = useState(initialChatOpen)
-  const [callNotice,    setCallNotice]   = useState(false)
-  const [photoPreview,  setPhotoPreview] = useState<string | null>(null)
-  const [photoUrl,      setPhotoUrl]     = useState<string | null>(null)
-  const [photoUploading,setPhotoUploading] = useState(false)
-  const [confirming,    setConfirming]   = useState(false)
-  const [sheetOpen,     setSheetOpen]    = useState(true)
+  const [toast,            setToast]           = useState('')
+  const [showIssue,        setShowIssue]       = useState(false)
+  const [chatOpen,         setChatOpen]        = useState(initialChatOpen)
+  const [callNotice,       setCallNotice]      = useState(false)
+  const [photoPreview,     setPhotoPreview]    = useState<string | null>(null)
+  const [photoUrl,         setPhotoUrl]        = useState<string | null>(null)
+  const [photoUploading,   setPhotoUploading]  = useState(false)
+  const [confirming,       setConfirming]      = useState(false)
+  const [sheetOpen,        setSheetOpen]       = useState(true)
+  const [checkingLocation, setCheckingLocation] = useState(false)
 
   const [messages,   setMessages]   = useState<Message[]>([])
   const [fetchError, setFetchError] = useState<string | null>(null)
@@ -316,12 +318,26 @@ export function DeliveryScreen({ orderId, onBack, onComplete, initialChatOpen = 
     setSending(false)
   }, [inputText, order.id, order.customerId, order.status, myId, loadMessages])
 
-  const handleArrivedPickup = useCallback(() => {
+  const handleArrivedPickup = useCallback(async () => {
+    setCheckingLocation(true)
+    const result = await checkProximity(order.pickup)
+    setCheckingLocation(false)
+
+    if (result.status === 'too_far') {
+      setToast(`You're ${formatDistance(result.distanceMeters)} from the pickup. Get closer to continue.`)
+      setTimeout(() => setToast(''), 4000)
+      return
+    }
+    if (result.status === 'location_denied') {
+      setToast('Location access is off. Enable it in Settings to verify arrival.')
+      setTimeout(() => setToast(''), 4000)
+      return
+    }
+
     dispatch({ type: 'SET_SUBSTEP', orderId, substep: 'at_pickup' })
-    // banner always visible
     setToast('Arrived at pickup! Confirm the parcel.')
     setTimeout(() => setToast(''), 2000)
-  }, [dispatch, orderId])
+  }, [dispatch, orderId, order.pickup])
 
   const handleConfirmPickup = useCallback(async () => {
     setConfirming(true)
@@ -346,11 +362,26 @@ export function DeliveryScreen({ orderId, onBack, onComplete, initialChatOpen = 
     setTimeout(() => setToast(''), 2200)
   }, [dispatch, orderId, photoUrl, photoPreview, state.auth?.name])
 
-  const handleArrivedDropoff = useCallback(() => {
+  const handleArrivedDropoff = useCallback(async () => {
+    setCheckingLocation(true)
+    const result = await checkProximity(order.dropoff)
+    setCheckingLocation(false)
+
+    if (result.status === 'too_far') {
+      setToast(`You're ${formatDistance(result.distanceMeters)} from the drop-off. Get closer to continue.`)
+      setTimeout(() => setToast(''), 4000)
+      return
+    }
+    if (result.status === 'location_denied') {
+      setToast('Location access is off. Enable it in Settings to verify arrival.')
+      setTimeout(() => setToast(''), 4000)
+      return
+    }
+
     dispatch({ type: 'UPDATE_STATUS', orderId, status: 'in_transit' })
     dispatch({ type: 'SET_SUBSTEP', orderId, substep: 'at_dropoff' })
     onComplete(orderId)
-  }, [dispatch, orderId, onComplete])
+  }, [dispatch, orderId, order.dropoff, onComplete])
 
   const handleIssueSubmit = useCallback(async (issueType: string, detail: string) => {
     setShowIssue(false)
@@ -448,6 +479,7 @@ export function DeliveryScreen({ orderId, onBack, onComplete, initialChatOpen = 
               <PhotoCapture
                 orderId={orderId}
                 label="pickup"
+                required
                 captured={!!photoPreview}
                 previewUrl={photoPreview}
                 uploading={photoUploading}
@@ -553,8 +585,9 @@ export function DeliveryScreen({ orderId, onBack, onComplete, initialChatOpen = 
 
       {/* Slide action */}
       <SlideAction
-        label="Slide when you've arrived"
+        label={checkingLocation ? 'Checking location…' : "Slide when you've arrived"}
         variant="dark"
+        disabled={checkingLocation}
         onSlideComplete={isPickup ? handleArrivedPickup : handleArrivedDropoff}
       />
     </>
