@@ -237,47 +237,55 @@ async function syncDriverAction(
         if (error) throw error
       })
 
-      // Push customer notification
-      if (order) {
-        const notifMap: Partial<Record<OrderStatus, { title: string; body: string }>> = {
-          picked_up:  { title: 'Parcel picked up', body: `${snapshot.auth?.name ?? 'Your driver'} has picked up your parcel.` },
-          in_transit: { title: 'Driver en route',  body: `Your parcel is on the way to ${order.dropoff.name}.` },
-          delivered:  { title: 'Delivered! 🎉',    body: `Your parcel has been delivered to ${order.dropoff.name}.` },
-        }
-        const n = notifMap[action.status]
-        if (n) {
-          await pushNotification({
-            event: action.status as any, audience: 'customer',
-            orderId: action.orderId, ...n,
-            customerId: order.customerId, driverId: snapshot.auth?.driverId,
-          })
-        }
-      }
-
-      // If delivered: check time-distance plausibility, then free up driver
-      if (action.status === 'delivered' && snapshot.auth) {
-        // Plausibility: minimum 90 seconds per km (≈ 40 km/h). snapshot.orders still
-        // has the pre-delivered updatedAt (set at in_transit), so elapsed = now − updatedAt.
-        if (order) {
-          const elapsedSeconds = (Date.now() - new Date(order.updatedAt).getTime()) / 1000
-          const minSeconds     = order.distanceKm * 90
-          if (elapsedSeconds < minSeconds) {
-            const flagNote = {
-              id:          `integrity-${Date.now()}`,
-              text:        `⚠️ INTEGRITY FLAG: Delivered in ${Math.round(elapsedSeconds)}s for a ${order.distanceKm} km route (minimum expected: ${Math.round(minSeconds)}s). Possible GPS spoof or fraudulent completion. Driver: ${snapshot.auth.name}.`,
-              authorName:  'System',
-              createdAt:   now,
-            }
-            const updatedNotes = [...order.notes, flagNote]
-            await supabase.from('orders').update({ notes: updatedNotes }).eq('id', action.orderId)
+      // Non-critical side-effects: notification + delivered cleanup run in parallel
+      // so neither blocks the other after the primary write has succeeded.
+      await Promise.all([
+        // Customer notification
+        (async () => {
+          if (!order) return
+          const notifMap: Partial<Record<OrderStatus, { title: string; body: string }>> = {
+            picked_up:  { title: 'Parcel picked up', body: `${snapshot.auth?.name ?? 'Your driver'} has picked up your parcel.` },
+            in_transit: { title: 'Driver en route',  body: `Your parcel is on the way to ${order.dropoff.name}.` },
+            delivered:  { title: 'Delivered! 🎉',    body: `Your parcel has been delivered to ${order.dropoff.name}.` },
           }
-        }
+          const n = notifMap[action.status]
+          if (n) {
+            await pushNotification({
+              event: action.status as any, audience: 'customer',
+              orderId: action.orderId, ...n,
+              customerId: order.customerId, driverId: snapshot.auth?.driverId,
+            })
+          }
+        })(),
 
-        await supabase.from('drivers').update({
-          status: 'available', current_order_id: null,
-          completed_orders: snapshot.auth.completedOrders + 1,
-        }).eq('id', snapshot.auth.driverId)
-      }
+        // Delivered: plausibility check + free driver row
+        (async () => {
+          if (action.status !== 'delivered' || !snapshot.auth) return
+
+          // Plausibility: minimum 90 s per km (≈ 40 km/h).
+          // snapshot.orders has the pre-delivered updatedAt (set at in_transit).
+          if (order) {
+            const elapsedSeconds = (Date.now() - new Date(order.updatedAt).getTime()) / 1000
+            const minSeconds     = order.distanceKm * 90
+            if (elapsedSeconds < minSeconds) {
+              const flagNote = {
+                id:         `integrity-${Date.now()}`,
+                text:       `⚠️ INTEGRITY FLAG: Delivered in ${Math.round(elapsedSeconds)}s for a ${order.distanceKm} km route (minimum expected: ${Math.round(minSeconds)}s). Possible GPS spoof or fraudulent completion. Driver: ${snapshot.auth.name}.`,
+                authorName: 'System',
+                createdAt:  now,
+              }
+              await supabase.from('orders')
+                .update({ notes: [...order.notes, flagNote] })
+                .eq('id', action.orderId)
+            }
+          }
+
+          await supabase.from('drivers').update({
+            status: 'available', current_order_id: null,
+            completed_orders: snapshot.auth.completedOrders + 1,
+          }).eq('id', snapshot.auth.driverId)
+        })(),
+      ])
       break
     }
 
@@ -373,14 +381,16 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
     return () => subscription.unsubscribe()
   }, [])
 
-  // Load orders when auth is established
+  // Load orders when auth is established — limit to 90 days to avoid full-table scan.
+  // Realtime subscription catches anything newer that arrives after this snapshot.
   useEffect(() => {
     if (!state.auth) return
     let cancelled = false
 
     async function load() {
+      const since = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString()
       try {
-        const orders = await fetchOrders()
+        const orders = await fetchOrders(since)
         if (!cancelled) baseDispatch({ type: '_HYDRATE_ORDERS', orders })
       } catch {
         if (!cancelled) baseDispatch({ type: '_HYDRATE_ORDERS', orders: getSharedOrders() })
@@ -408,7 +418,8 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
       // don't hammer the DB simultaneously when a network blip resolves.
       await new Promise(r => setTimeout(r, Math.random() * 2000))
       try {
-        const orders = await fetchOrders()
+        const since  = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString()
+        const orders = await fetchOrders(since)
         baseDispatch({ type: '_HYDRATE_ORDERS', orders })
       } catch (e) {
         console.warn('[DriverContext] re-fetch failed', e)

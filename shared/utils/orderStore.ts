@@ -63,13 +63,21 @@ export function orderToRow(order: Order): Record<string, any> {
 
 // ── Read (async) ──────────────────────────────────────────────────────────────
 
-export async function fetchOrders(): Promise<Order[]> {
+/**
+ * Fetch orders, optionally limited to those created on or after `since` (ISO string).
+ * Pass `since` to avoid pulling unbounded history on reconnect or initial driver load.
+ */
+export async function fetchOrders(since?: string): Promise<Order[]> {
   if (!isSupabaseConfigured) return getSharedOrders()
 
-  const { data, error } = await supabase
+  let query = supabase
     .from('orders')
     .select('*')
     .order('created_at', { ascending: false })
+
+  if (since) query = query.gte('created_at', since)
+
+  const { data, error } = await query
 
   if (error) {
     console.error('[orderStore] fetchOrders error', error)
@@ -78,16 +86,21 @@ export async function fetchOrders(): Promise<Order[]> {
   return (data ?? []).map(rowToOrder)
 }
 
-/** Fetch orders assigned to a specific driver. */
-export async function fetchDriverOrders(driverId: string): Promise<Order[]> {
+/** Fetch orders assigned to a specific driver, optionally limited by `since`. */
+export async function fetchDriverOrders(driverId: string, since?: string): Promise<Order[]> {
   if (!isSupabaseConfigured) {
     return getSharedOrders().filter(o => o.assignedDriverId === driverId)
   }
-  const { data, error } = await supabase
+
+  let query = supabase
     .from('orders')
     .select('*')
     .eq('assigned_driver_id', driverId)
     .order('created_at', { ascending: false })
+
+  if (since) query = query.gte('created_at', since)
+
+  const { data, error } = await query
 
   if (error) {
     console.error('[orderStore] fetchDriverOrders error', error)
