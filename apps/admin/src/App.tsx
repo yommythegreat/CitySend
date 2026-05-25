@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import type { AuthChangeEvent, Session } from '@supabase/supabase-js'
 import { AdminProvider } from './store/AdminContext'
 import { supabase, isSupabaseConfigured } from '@shared/lib/supabase'
@@ -31,8 +31,15 @@ const STUCK_THRESHOLD_MS = 2 * 60 * 60 * 1000
 const ACTIVE_STATUSES    = ['assigned', 'picked_up', 'in_transit']
 
 function AdminApp({ onLogout }: { onLogout: () => void }) {
-  const [screen, setScreen] = useState<AdminScreen>('dashboard')
+  const [screen,       setScreen]       = useState<AdminScreen>('dashboard')
+  const [ordersFilter, setOrdersFilter] = useState<'all' | 'stuck' | 'new' | string>('all')
   const { state } = useAdminStore()
+
+  // Wrap setScreen so direct sidebar/dashboard navigation resets the orders filter
+  const goToScreen = useCallback((s: AdminScreen) => {
+    if (s === 'orders') setOrdersFilter('all')
+    setScreen(s)
+  }, [])
 
   const orderCounts = {
     new:    state.orders.filter(o => o.status === 'new').length,
@@ -67,8 +74,8 @@ function AdminApp({ onLogout }: { onLogout: () => void }) {
 
   const renderScreen = () => {
     switch (screen) {
-      case 'dashboard':     return <DashboardScreen go={setScreen} />
-      case 'orders':        return <OrdersScreen />
+      case 'dashboard':     return <DashboardScreen go={goToScreen} />
+      case 'orders':        return <OrdersScreen key={ordersFilter} initialFilter={ordersFilter as any} />
       case 'drivers':       return <DriversScreen />
       case 'customers':     return <CustomersScreen />
       case 'billing':       return <BillingScreen />
@@ -82,7 +89,7 @@ function AdminApp({ onLogout }: { onLogout: () => void }) {
     <div className="admin-shell">
       <Sidebar
         screen={screen}
-        go={setScreen}
+        go={goToScreen}
         onLogout={onLogout}
         orderCounts={orderCounts}
         openIncidents={openIncidents}
@@ -100,7 +107,7 @@ function AdminApp({ onLogout }: { onLogout: () => void }) {
           <div style={{ flex: 1 }} />
           {stuckOrders > 0 && (
             <button
-              onClick={() => setScreen('orders')}
+              onClick={() => { setOrdersFilter('stuck'); setScreen('orders') }}
               style={{
                 padding: '5px 12px', border: 'none', borderRadius: 999,
                 background: '#fff3cd', color: '#856404',
@@ -112,7 +119,7 @@ function AdminApp({ onLogout }: { onLogout: () => void }) {
           )}
           {orderCounts.new > 0 && (
             <button
-              onClick={() => setScreen('orders')}
+              onClick={() => { setOrdersFilter('new'); setScreen('orders') }}
               style={{
                 padding: '5px 12px', border: 'none', borderRadius: 999,
                 background: 'var(--a-err-bg)', color: 'var(--a-err)',

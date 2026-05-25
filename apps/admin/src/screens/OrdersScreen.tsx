@@ -10,6 +10,12 @@ import { ORDER_STATUS_LABELS } from '@shared/types'
 
 const ALL_STATUSES: (OrderStatus | 'all')[] = ['all', 'new', 'assigned', 'picked_up', 'in_transit', 'delivered', 'cancelled']
 
+const STUCK_THRESHOLD_MS = 2 * 60 * 60 * 1000
+const STUCK_ACTIVE: readonly OrderStatus[] = ['assigned', 'picked_up', 'in_transit']
+const isStuck = (o: Order) =>
+  STUCK_ACTIVE.includes(o.status) &&
+  Date.now() - new Date(o.updatedAt).getTime() > STUCK_THRESHOLD_MS
+
 // ── Create Order Modal ────────────────────────────────────────────────────────
 
 function CreateOrderModal({ onClose }: { onClose: () => void }) {
@@ -230,16 +236,23 @@ function CreateOrderModal({ onClose }: { onClose: () => void }) {
 
 // ── Main screen ───────────────────────────────────────────────────────────────
 
-export function OrdersScreen() {
+type FilterValue = OrderStatus | 'all' | 'stuck'
+
+interface OrdersScreenProps {
+  initialFilter?: FilterValue
+}
+
+export function OrdersScreen({ initialFilter = 'all' }: OrdersScreenProps) {
   const { state } = useAdminStore()
-  const [filter,     setFilter]     = useState<OrderStatus | 'all'>('all')
+  const [filter,     setFilter]     = useState<FilterValue>(initialFilter)
   const [search,     setSearch]     = useState('')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [showCreate, setShowCreate] = useState(false)
 
   const filtered = useMemo(() => {
     let list = state.orders
-    if (filter !== 'all') list = list.filter(o => o.status === filter)
+    if (filter === 'stuck')     list = list.filter(isStuck)
+    else if (filter !== 'all')  list = list.filter(o => o.status === filter)
     const q = search.trim().toLowerCase()
     if (q) {
       list = list.filter(o =>
@@ -253,7 +266,7 @@ export function OrdersScreen() {
   }, [state.orders, filter, search])
 
   const counts = useMemo(() => {
-    const c: Record<string, number> = { all: state.orders.length }
+    const c: Record<string, number> = { all: state.orders.length, stuck: state.orders.filter(isStuck).length }
     for (const s of ALL_STATUSES) {
       if (s !== 'all') c[s] = state.orders.filter(o => o.status === s).length
     }
@@ -318,6 +331,25 @@ export function OrdersScreen() {
             </span>
           </button>
         ))}
+        {/* Stuck tab — only shown when there are stuck orders or it is currently active */}
+        {(counts.stuck > 0 || filter === 'stuck') && (
+          <button
+            onClick={() => setFilter('stuck')}
+            style={{
+              padding: '5px 12px', borderRadius: 999,
+              border: filter === 'stuck' ? 'none' : '1.5px solid #f59e0b',
+              background: filter === 'stuck' ? '#d97706' : '#fef3c7',
+              color: filter === 'stuck' ? '#fff' : '#92400e',
+              fontSize: 12, fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >
+            ⚠️ Stuck
+            <span style={{ marginLeft: 5, fontSize: 10, color: filter === 'stuck' ? 'rgba(255,255,255,0.7)' : '#b45309' }}>
+              {counts.stuck}
+            </span>
+          </button>
+        )}
       </div>
 
       {/* Table */}
@@ -348,7 +380,10 @@ export function OrdersScreen() {
               key={o.id}
               className="clickable"
               onClick={() => setSelectedId(o.id)}
-              style={{ opacity: o.status === 'cancelled' ? 0.6 : 1 }}
+              style={{
+                opacity: o.status === 'cancelled' ? 0.6 : 1,
+                borderLeft: isStuck(o) ? '3px solid #f59e0b' : '3px solid transparent',
+              }}
             >
               <td>
                 <span style={{ fontFamily: 'var(--a-mono)', fontSize: 12, fontWeight: 600 }}>{o.id}</span>
@@ -374,6 +409,11 @@ export function OrdersScreen() {
               <td style={{ fontFamily: 'var(--a-mono)', fontSize: 12 }}>{fmt(o.priceBreakdown.total)}</td>
               <td style={{ fontSize: 12, color: 'var(--a-muted)', whiteSpace: 'nowrap' }}>
                 {relativeTime(o.createdAt)}
+                {isStuck(o) && (
+                  <span style={{ display: 'inline-block', marginLeft: 6, padding: '1px 6px', borderRadius: 4, background: '#fef3c7', color: '#92400e', fontSize: 10, fontWeight: 700 }}>
+                    {Math.floor((Date.now() - new Date(o.updatedAt).getTime()) / 3_600_000)}h stuck
+                  </span>
+                )}
               </td>
               <td style={{ textAlign: 'right' }}>
                 <span style={{ color: 'var(--a-accent)', fontSize: 14 }}>›</span>

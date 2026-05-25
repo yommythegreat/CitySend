@@ -189,7 +189,10 @@ export function subscribeToOrders(
       { event: 'DELETE', schema: 'public', table: 'orders' },
       (payload: any) => onDelete(payload.old?.id),
     )
-    .subscribe()
+    .subscribe((status, err) => {
+      if (err) console.error('[orderStore] realtime subscription error:', err)
+      else if (status !== 'SUBSCRIBED') console.warn('[orderStore] realtime status:', status)
+    })
 
   return () => { supabase.removeChannel(channel) }
 }

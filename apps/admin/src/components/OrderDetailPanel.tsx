@@ -21,6 +21,68 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
   )
 }
 
+/** Extract labelled media URLs from POD note text.
+ *  Recognises "Door photo: <url>" and "Signature: <url>" tokens.
+ *  Returns the cleaned text (URLs removed) and an array of { label, url } items.
+ */
+function parseNoteMedia(text: string): { cleanText: string; media: { label: string; url: string }[] } {
+  const media: { label: string; url: string }[] = []
+  const tokens: { key: string; label: string }[] = [
+    { key: 'Door photo: ', label: 'Door photo' },
+    { key: 'Signature: ',  label: 'Signature'  },
+  ]
+  let cleanText = text
+  for (const { key, label } of tokens) {
+    const idx = cleanText.indexOf(key)
+    if (idx === -1) continue
+    const start = idx + key.length
+    // URL ends at next whitespace or end-of-string
+    const end   = cleanText.indexOf(' ', start)
+    const url   = end === -1 ? cleanText.slice(start) : cleanText.slice(start, end)
+    if (url.startsWith('http')) {
+      media.push({ label, url })
+      // Remove the token + url (plus leading space if present)
+      const full = cleanText.slice(idx === 0 ? 0 : idx - 1, end === -1 ? undefined : end)
+      cleanText  = (cleanText.slice(0, idx > 0 ? idx - 1 : idx) + (end === -1 ? '' : cleanText.slice(end))).trim()
+    }
+  }
+  return { cleanText, media }
+}
+
+function NoteCard({ note }: { note: { id: string; text: string; authorName: string; createdAt: string } }) {
+  const { cleanText, media } = parseNoteMedia(note.text)
+  return (
+    <div style={{ marginBottom: 10, paddingBottom: 10, borderBottom: '1px solid var(--a-border)' }}>
+      <div style={{ fontSize: 13, color: 'var(--a-ink2)', marginBottom: media.length ? 8 : 3, whiteSpace: 'pre-wrap' }}>
+        {cleanText}
+      </div>
+      {media.length > 0 && (
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 6 }}>
+          {media.map(({ label, url }) => (
+            <a key={label} href={url} target="_blank" rel="noopener noreferrer"
+               title={`Open ${label} full size`}
+               style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, textDecoration: 'none' }}>
+              <img
+                src={url}
+                alt={label}
+                style={{
+                  width: 96, height: 72, objectFit: 'cover', borderRadius: 6,
+                  border: '1px solid var(--a-border)', background: 'var(--a-bg)',
+                }}
+                onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
+              />
+              <span style={{ fontSize: 10, color: 'var(--a-muted)', fontWeight: 500 }}>{label}</span>
+            </a>
+          ))}
+        </div>
+      )}
+      <div style={{ fontSize: 11, color: 'var(--a-muted)' }}>
+        {note.authorName} · {fmtDateTime(note.createdAt)}
+      </div>
+    </div>
+  )
+}
+
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div style={{ marginBottom: 20 }}>
@@ -308,14 +370,7 @@ export function OrderDetailPanel({ orderId, onClose }: Props) {
             {order.notes.length === 0 && (
               <div style={{ fontSize: 13, color: 'var(--a-muted)', marginBottom: 10 }}>No notes yet.</div>
             )}
-            {order.notes.map(n => (
-              <div key={n.id} style={{ marginBottom: 10, paddingBottom: 10, borderBottom: '1px solid var(--a-border)' }}>
-                <div style={{ fontSize: 13, color: 'var(--a-ink2)', marginBottom: 3 }}>{n.text}</div>
-                <div style={{ fontSize: 11, color: 'var(--a-muted)' }}>
-                  {n.authorName} · {fmtDateTime(n.createdAt)}
-                </div>
-              </div>
-            ))}
+            {order.notes.map(n => <NoteCard key={n.id} note={n} />)}
             {order.status !== 'cancelled' && (
               <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
                 <input
