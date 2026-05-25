@@ -262,13 +262,23 @@ export function PaymentScreen({ go, state, draft, cityConfig, onPaymentComplete 
     return parts.length ? `Taxes: ${parts.join(' + ')} — applied to subtotal before tip.` : ''
   })()
 
-  // Fetch payment intent on mount or when total changes
+  // Fetch payment intent on mount or when tip changes.
+  // We send pricing inputs (not the computed total) so the server can
+  // recompute the authoritative charge amount independently — preventing
+  // a tampered client from paying an arbitrary amount.
   useEffect(() => {
     setIntentLoading(true)
     fetch('/api/create-payment-intent', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ amountCad: price.total }),
+      body: JSON.stringify({
+        cityId:     cityConfig.cityId,
+        distanceKm: distKm,
+        parcelSize: draft.parcel.size,
+        fragile:    draft.parcel.fragile,
+        tip,
+        amountCad:  price.total,  // fallback if server can't reach Supabase
+      }),
     })
       .then(r => r.json())
       .then(d => {

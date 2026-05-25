@@ -41,10 +41,14 @@ export async function uploadDeliveryPhoto(
       return null
     }
 
-    // Return a 1-hour signed URL — bucket is private so public URLs are blocked
+    // Long-lived signed URL (5 years) — bucket is private so this is the only
+    // way to access the file. Long expiry is intentional: photo URLs are stored
+    // in order notes for permanent admin audit access. The privacy guarantee
+    // comes from the bucket being private, not from URL expiry.
+    const FIVE_YEARS = 5 * 365 * 24 * 60 * 60
     const { data: signed, error: signErr } = await supabase.storage
       .from(BUCKET)
-      .createSignedUrl(path, 3600)
+      .createSignedUrl(path, FIVE_YEARS)
     if (signErr || !signed?.signedUrl) {
       console.warn('[photoStore] signed URL error:', signErr?.message)
       return null

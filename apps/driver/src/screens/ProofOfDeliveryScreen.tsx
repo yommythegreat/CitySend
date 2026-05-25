@@ -102,7 +102,8 @@ export function ProofOfDeliveryScreen({ orderId, onBack, onConfirmed }: Props) {
       const path = `signatures/${orderId}-${Date.now()}.png`
       const { error: upErr } = await supabase.storage.from('delivery-photos').upload(path, blob, { contentType: 'image/png', upsert: true })
       if (upErr) return null
-      const { data: signed, error: signErr } = await supabase.storage.from('delivery-photos').createSignedUrl(path, 3600)
+      const FIVE_YEARS = 5 * 365 * 24 * 60 * 60
+      const { data: signed, error: signErr } = await supabase.storage.from('delivery-photos').createSignedUrl(path, FIVE_YEARS)
       if (signErr || !signed?.signedUrl) return null
       return signed.signedUrl
     } catch { return null }
