@@ -25,6 +25,9 @@ import { fetchCityConfigs, subscribeToCityConfigs } from './utils/configStore'
 import { pushNewOrder, getCustomerOrders, type CustomerOrder } from './utils/orderStore'
 import { pushCustomerNotif, NOTIFS_STORAGE_KEY, subscribeToCustomerNotifs } from './utils/notificationStore'
 import { supabase, isSupabaseConfigured } from './lib/supabase'
+import { Capacitor } from '@capacitor/core'
+
+const IS_NATIVE = Capacitor.isNativePlatform()
 import { CITY_CONFIGS } from './config/cityConfig'
 import type { CityConfig } from './config/cityConfig'
 import type { ScreenName, Draft, AppState, NavOptions, AuthUser, CityId, Delivery } from './types'
@@ -165,7 +168,7 @@ export default function App() {
   // Initialise screen + trackingOrderId from the URL so that a hard-refresh
   // of /tracking/:orderId lands on the correct screen without a redirect.
   const [screen,          setScreen]          = useState<ScreenName>(() =>
-    parseTrackingId() ? 'tracking' : 'home',
+    parseTrackingId() ? 'tracking' : IS_NATIVE ? 'auth' : 'home',
   )
   const [state,           setState]           = useState<AppState>(INITIAL_STATE)
   const [draft,           setDraft]           = useState<Draft>(BLANK_DRAFT)
@@ -760,7 +763,9 @@ export default function App() {
     if (screen === 'auth') {
       return <div className="cs-shell"><AuthScreen onAuth={handleAuth} go={go} /></div>
     }
-    // Default: show the full-width marketing landing page
+    // Native app: skip marketing landing page, go straight to auth
+    if (IS_NATIVE) return <div className="cs-shell"><AuthScreen onAuth={handleAuth} go={go} /></div>
+    // Web: show the full-width marketing landing page
     return <LandingScreen go={go} />
   }
 
