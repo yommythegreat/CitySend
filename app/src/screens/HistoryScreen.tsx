@@ -153,7 +153,7 @@ export function HistoryScreen({ go, state, user }: Props) {
                   <Tag tone={statusTone(d.status)} icon={statusIcon(d.status)}>
                     {statusLabel(d.status)}
                   </Tag>
-                  <span style={{ fontFamily: 'var(--cs-mono)', fontSize: 12, color: 'var(--cs-slate-500)' }}>CS—{d.id}</span>
+                  <span style={{ fontFamily: 'var(--cs-mono)', fontSize: 12, color: 'var(--cs-slate-500)' }}>CS-{d.id}</span>
                 </div>
                 <div style={{ fontSize: 15, fontWeight: 500, color: 'var(--cs-ink)', letterSpacing: -0.2 }}>{d.to.name}</div>
                 <div style={{ fontSize: 13, color: 'var(--cs-slate-500)', marginTop: 2 }}>{d.to.address}</div>

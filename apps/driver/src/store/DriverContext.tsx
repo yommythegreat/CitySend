@@ -326,10 +326,27 @@ async function syncDriverAction(
     case 'HIDE_JOB_OFFER': {
       // accepted === true means the driver tapped Accept; false/undefined = decline or timeout
       if (!action.accepted && snapshot.auth && snapshot.jobOffer?.showModal) {
-        try {
-          const { data } = await supabase.from('drivers').select('offers_declined').eq('id', snapshot.auth.driverId).maybeSingle()
-          await supabase.from('drivers').update({ offers_declined: (data?.offers_declined ?? 0) + 1 }).eq('id', snapshot.auth.driverId)
-        } catch { /* non-critical */ }
+        const auth    = snapshot.auth
+        const offerId = snapshot.jobOffer.order?.id
+        await Promise.allSettled([
+          // Reset order so admin can reassign to another driver
+          offerId
+            ? supabase.from('orders').update({
+                status:               'new',
+                assigned_driver_id:   null,
+                assigned_driver_name: null,
+                updated_at:           new Date().toISOString(),
+              }).eq('id', offerId)
+            : Promise.resolve(),
+          // Increment decline counter on driver row
+          supabase.from('drivers')
+            .select('offers_declined').eq('id', auth.driverId).maybeSingle()
+            .then(({ data }) =>
+              supabase.from('drivers')
+                .update({ offers_declined: (data?.offers_declined ?? 0) + 1 })
+                .eq('id', auth.driverId),
+            ),
+        ])
       }
       break
     }

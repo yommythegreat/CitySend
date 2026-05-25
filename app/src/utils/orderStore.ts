@@ -151,10 +151,14 @@ export function subscribeToCustomerOrders(
 
   const channel = supabase
     .channel(`customer-orders-${customerId}`)
-    .on('postgres_changes',
+    .on('postgres_changes' as any,
+      { event: 'INSERT', schema: 'public', table: 'orders',
+        filter: `customer_id=eq.${customerId}` },
+      (payload: any) => onUpdate(rowToCustomerOrder(payload.new)))
+    .on('postgres_changes' as any,
       { event: 'UPDATE', schema: 'public', table: 'orders',
         filter: `customer_id=eq.${customerId}` },
-      (payload) => onUpdate(rowToCustomerOrder(payload.new as any)))
+      (payload: any) => onUpdate(rowToCustomerOrder(payload.new)))
     .subscribe()
 
   return () => { supabase.removeChannel(channel) }

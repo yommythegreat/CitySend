@@ -21,27 +21,6 @@ export function newHandoffCode(): string {
 }
 
 /**
- * Write a freshly-generated handoff code to the orders row.
- * Call this once when the order is created/confirmed.
- *
- * @returns The generated code (so it can be included in the confirmation email/notification)
- */
-export async function generateHandoffCode(orderId: string): Promise<string> {
-  const code = newHandoffCode()
-
-  if (isSupabaseConfigured) {
-    const { error } = await supabase
-      .from('orders')
-      .update({ handoff_code: code, updated_at: new Date().toISOString() })
-      .eq('id', orderId)
-
-    if (error) console.warn('[handoffCodeStore] write error:', error.message)
-  }
-
-  return code
-}
-
-/**
  * Validate the code entered by the driver via a server-side RPC.
  *
  * The RPC (validate_handoff_code) runs SECURITY DEFINER so:
