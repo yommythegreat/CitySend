@@ -3,6 +3,7 @@ import { IconButton } from '../components/IconButton'
 import { Back, Bell, Card, Lock, Chevron, Check, Plus, X } from '../components/Icons'
 import { AddrIcon, ADDR_ICONS, ICON_LABELS } from '../components/AddrIcon'
 import { getAllCities } from '../utils/serviceAvailability'
+import { supabase, isSupabaseConfigured } from '../lib/supabase'
 import type { CityConfig } from '../config/cityConfig'
 import type { AppState, AuthUser, CityId, PaymentMethod, SavedAddress, ScreenName } from '../types'
 
@@ -358,10 +359,17 @@ function SecurityPanel({ onBack, goForgot }: { onBack: () => void; goForgot: () 
     if (next !== confirm)         { setErr('Passwords do not match.'); return }
     if (next === current)         { setErr('New password must be different from current.'); return }
     setLoading(true)
-    await new Promise(r => setTimeout(r, 800))
+    try {
+      if (isSupabaseConfigured) {
+        const { error } = await supabase.auth.updateUser({ password: next })
+        if (error) { setErr(error.message); setLoading(false); return }
+      }
+      setCurrent(''); setNext(''); setConfirm('')
+      setOk('Password changed successfully.')
+    } catch {
+      setErr('Could not change password. Try again.')
+    }
     setLoading(false)
-    setCurrent(''); setNext(''); setConfirm('')
-    setOk('Password changed successfully.')
   }
 
   const inputStyle: React.CSSProperties = {

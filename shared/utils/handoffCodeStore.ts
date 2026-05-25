@@ -8,16 +8,16 @@
  *      notification (see notificationStore).
  *   3. Driver calls `validateHandoffCode(orderId, enteredCode)` to verify.
  *
- * The code is a cryptographically random 4-digit string (0000–9999),
- * stored as a string to preserve leading zeros.
+ * The code is a 4-digit string (0000–9999), stored as a string to preserve
+ * leading zeros.
  */
 
 import { supabase, isSupabaseConfigured } from '../lib/supabase'
 
-/** Generate a random 6-digit code string, e.g. "084712" (1 million combinations) */
+/** Generate a random 4-digit code string, e.g. "0847" (10 000 combinations) */
 export function newHandoffCode(): string {
-  const n = Math.floor(Math.random() * 1000000)
-  return String(n).padStart(6, '0')
+  const n = Math.floor(Math.random() * 10000)
+  return String(n).padStart(4, '0')
 }
 
 /**
@@ -56,8 +56,8 @@ export async function validateHandoffCode(
   entered: string,
 ): Promise<boolean> {
   if (!isSupabaseConfigured) {
-    // Dev/demo mode — accept any 6-digit code
-    return /^\d{6}$/.test(entered)
+    // Dev/demo mode — accept any 4-digit code
+    return /^\d{4}$/.test(entered)
   }
 
   const { data, error } = await supabase.rpc('validate_handoff_code', {

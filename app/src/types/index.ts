@@ -45,6 +45,12 @@ export interface SavedAddress {
   phone?:  string
 }
 
+export interface DeliveryPriceBreakdown {
+  baseFee: number; distanceFee: number; sizeFee: number; fragileFee: number
+  subtotalPreTax: number; gst: number; pst: number; hst: number; qst: number
+  totalTax: number; subtotalWithTax: number; tip: number; total: number
+}
+
 export interface Delivery {
   id: string
   to: { name: string; address: string; phone?: string }
@@ -53,6 +59,8 @@ export interface Delivery {
   price: string
   status: 'delivered' | 'in-transit' | 'canceled'
   when: string
+  /** Server-verified price breakdown — available for orders fetched from Supabase */
+  priceBreakdown?: DeliveryPriceBreakdown
 }
 
 export interface PickupDraft {

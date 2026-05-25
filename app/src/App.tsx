@@ -149,12 +149,13 @@ function orderToDelivery(o: CustomerOrder): Delivery {
   const numericId = o.id.replace(/^CS-/, '')
 
   return {
-    id:     numericId,
-    to:     { name: o.dropoff.name, address: o.dropoff.address, phone: o.dropoff.phone },
+    id:             numericId,
+    to:             { name: o.dropoff.name, address: o.dropoff.address, phone: o.dropoff.phone },
     date,
-    price:  o.priceBreakdown?.total?.toFixed(2) ?? '0.00',
-    status: statusMap[o.status] ?? 'in-transit',
+    price:          o.priceBreakdown?.total?.toFixed(2) ?? '0.00',
+    status:         statusMap[o.status] ?? 'in-transit',
     when,
+    priceBreakdown: o.priceBreakdown,
   }
 }
 
@@ -537,11 +538,13 @@ export default function App() {
   }, [])
 
   // ── Payment completion ──────────────────────────────────────────────────────
-  const onPaymentComplete = useCallback(async (tip: number) => {
-    const now       = new Date().toISOString()
-    const orderId   = `CS-${Date.now().toString().slice(-5)}`
-    const cityConf  = getCityConfig(state.selectedCityId, configsRef.current)
-    const distKm    = draft.route ? Math.round(draft.route.distanceM / 100) / 10 : 5
+  const onPaymentComplete = useCallback(async (tip: number, authorizedTotal?: number) => {
+    const now      = new Date().toISOString()
+    // Collision-resistant ID: 6 random base-36 chars ≈ 2.2 billion combinations
+    const randPart = Math.random().toString(36).slice(2, 8).toUpperCase()
+    const orderId  = `CS-${randPart}`
+    const cityConf = getCityConfig(state.selectedCityId, configsRef.current)
+    const distKm   = draft.route ? Math.round(draft.route.distanceM / 100) / 10 : 5
     const breakdown = computeOrderPrice({
       cityConfig: cityConf,
       distKm,
@@ -549,6 +552,8 @@ export default function App() {
       fragile:    draft.parcel.fragile,
       tip,
     })
+    // If the server returned an authoritative total, trust it over the client-computed value
+    if (authorizedTotal !== undefined) breakdown.total = authorizedTotal
 
     const newDelivery: Delivery = {
       id:     orderId.replace(/^CS-/, ''),
@@ -557,10 +562,11 @@ export default function App() {
         address: draft.dropoff.address || '—',
         phone:   draft.dropoff.phone,
       },
-      date:   new Date().toLocaleDateString('en-CA', { month: 'short', day: 'numeric' }),
-      price:  breakdown.total.toFixed(2),
-      status: 'in-transit' as const,
-      when:   'Today',
+      date:           new Date().toLocaleDateString('en-CA', { month: 'short', day: 'numeric' }),
+      price:          breakdown.total.toFixed(2),
+      status:         'in-transit' as const,
+      when:           'Today',
+      priceBreakdown: breakdown,
     }
 
     // Set tracking order so the next go('tracking') call shows this order.
@@ -570,7 +576,8 @@ export default function App() {
     setTrackingOrderId(orderId)
     trackingOrderIdRef.current = orderId
 
-    // Write to shared order store (Supabase or localStorage)
+    // Write to shared order store (Supabase or localStorage).
+    // pushNewOrder throws on failure — the PaymentScreen caller catches and surfaces the error.
     await pushNewOrder({
       id: orderId,
       customerId:   user?.id ?? 'guest',

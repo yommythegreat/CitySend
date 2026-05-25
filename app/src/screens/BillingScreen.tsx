@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 import { IconButton } from '../components/IconButton'
 import { Back, Card, Receipt } from '../components/Icons'
 import { GuestGatedScreen } from '../components/GuestGatedScreen'
-import type { AppState, AuthUser, PaymentMethod, ScreenName } from '../types'
+import type { AppState, AuthUser, Delivery, DeliveryPriceBreakdown, PaymentMethod, ScreenName } from '../types'
 
 interface Props {
   go: (screen: ScreenName) => void
@@ -20,8 +20,17 @@ function fmt(n: number) {
   return n.toFixed(2)
 }
 
-function computeBreakdown(total: number) {
-  // Back-calculate from total-inclusive price: tax = total × 5/105
+/** Build a display breakdown from a stored DeliveryPriceBreakdown if available,
+ *  otherwise fall back to a rough GST back-calculation from the total. */
+function computeBreakdown(total: number, stored?: DeliveryPriceBreakdown) {
+  if (stored) {
+    return {
+      subtotal: stored.subtotalPreTax,
+      tax:      stored.totalTax,
+      tip:      stored.tip,
+    }
+  }
+  // Legacy fallback: back-calculate assuming 5% GST only
   const tax      = Math.round((total * 5 / 105) * 100) / 100
   const subtotal = Math.round((total - tax) * 100) / 100
   return { subtotal, tax, tip: 0 }
@@ -35,11 +44,12 @@ interface ReceiptViewProps {
   recipientName: string
   total: number
   cardLabel: string
+  priceBreakdown?: DeliveryPriceBreakdown
   onBack: () => void
 }
 
-function ReceiptView({ deliveryId, date, recipientName, total, cardLabel, onBack }: ReceiptViewProps) {
-  const { subtotal, tax, tip } = computeBreakdown(total)
+function ReceiptView({ deliveryId, date, recipientName, total, cardLabel, priceBreakdown, onBack }: ReceiptViewProps) {
+  const { subtotal, tax, tip } = computeBreakdown(total, priceBreakdown)
 
   return (
     <div className="cs-screen cs-enter-right">
@@ -76,9 +86,9 @@ function ReceiptView({ deliveryId, date, recipientName, total, cardLabel, onBack
           {/* Breakdown */}
           <div style={{ background: '#fff', borderRadius: 16, border: '1px solid var(--cs-slate-100)', overflow: 'hidden', marginBottom: 14 }}>
             {[
-              { label: 'Subtotal',  value: `$${fmt(subtotal)}` },
-              { label: 'GST (5%)', value: `$${fmt(tax)}`      },
-              { label: 'Tip',       value: `$${fmt(tip)}`      },
+              { label: 'Subtotal', value: `$${fmt(subtotal)}` },
+              { label: 'Taxes',    value: `$${fmt(tax)}`      },
+              { label: 'Tip',      value: `$${fmt(tip)}`      },
             ].map((row, i) => (
               <div
                 key={i}
@@ -169,6 +179,7 @@ export function BillingScreen({ go, state, user }: Props) {
         recipientName={d.to.name}
         total={parseFloat(d.price)}
         cardLabel={cardLabel}
+        priceBreakdown={d.priceBreakdown}
         onBack={() => setOpenId(null)}
       />
     )

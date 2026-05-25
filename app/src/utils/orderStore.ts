@@ -72,7 +72,7 @@ export async function pushNewOrder(order: CustomerOrder): Promise<void> {
     created_at:           order.createdAt,
     updated_at:           order.updatedAt,
   })
-  if (error) console.error('[orderStore] pushNewOrder error', error)
+  if (error) throw new Error(error.message)
 }
 
 // ── Read customer's orders ────────────────────────────────────────────────────

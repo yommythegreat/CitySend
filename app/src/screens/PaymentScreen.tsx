@@ -15,7 +15,7 @@ interface Props {
   state: AppState
   draft: Draft
   cityConfig: CityConfig
-  onPaymentComplete: (tip: number) => Promise<void>
+  onPaymentComplete: (tip: number, authorizedTotal?: number) => Promise<void>
 }
 
 // ── Card element styles matching CitySend design system ─────────────────────
@@ -238,9 +238,11 @@ export function PaymentScreen({ go, state, draft, cityConfig, onPaymentComplete 
   const [showCustom, setShowCustom]     = useState(false)
   const [customTipErr, setCustomTipErr] = useState('')
   const [taxTipOpen, setTaxTipOpen]     = useState(false)
-  const [clientSecret, setClientSecret] = useState<string | null>(null)
-  const [isMock, setIsMock]             = useState(false)
-  const [intentLoading, setIntentLoading] = useState(true)
+  const [clientSecret,    setClientSecret]    = useState<string | null>(null)
+  const [authorizedTotal, setAuthorizedTotal] = useState<number | undefined>(undefined)
+  const [isMock,          setIsMock]          = useState(false)
+  const [intentLoading,   setIntentLoading]   = useState(true)
+  const [orderError,      setOrderError]      = useState<string | null>(null)
 
   // ── Compute price using actual draft + cityConfig ──────────────────────────
   const distKm = draft.route ? draft.route.distanceM / 1000 : 0
@@ -287,6 +289,7 @@ export function PaymentScreen({ go, state, draft, cityConfig, onPaymentComplete 
           // In production, leave clientSecret null — CheckoutForm will show an error
         } else {
           setClientSecret(d.clientSecret)
+          if (typeof d.authorizedTotal === 'number') setAuthorizedTotal(d.authorizedTotal)
         }
       })
       .catch(() => {
@@ -297,8 +300,18 @@ export function PaymentScreen({ go, state, draft, cityConfig, onPaymentComplete 
   }, [tip])
 
   const handlePaymentComplete = async () => {
-    await onPaymentComplete(tip)
-    go('tracking')
+    setOrderError(null)
+    try {
+      await onPaymentComplete(tip, authorizedTotal)
+      go('tracking')
+    } catch (err: any) {
+      // Payment succeeded but order creation failed (e.g. not signed in).
+      // Show a recoverable error — the user must sign in and contact support.
+      setOrderError(
+        'Your payment was processed but we could not save your order. ' +
+        'Please sign in and contact support@citysend.ca with your receipt.'
+      )
+    }
   }
 
   // ── Custom tip handling ────────────────────────────────────────────────────
@@ -465,6 +478,18 @@ export function PaymentScreen({ go, state, draft, cityConfig, onPaymentComplete 
             </div>
           )}
         </div>
+
+        {/* Order creation error — payment succeeded but DB write failed */}
+        {orderError && (
+          <div style={{
+            padding: '12px 14px', background: '#fef2f2',
+            border: '1px solid #fca5a5', borderRadius: 12,
+            fontSize: 13, color: '#dc2626', lineHeight: 1.5, marginBottom: 16,
+          }}>
+            <strong>Payment processed — order not saved.</strong><br />
+            {orderError}
+          </div>
+        )}
 
         {/* Stripe Elements wrapper */}
         {intentLoading ? (

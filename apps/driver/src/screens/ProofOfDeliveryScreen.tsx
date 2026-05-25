@@ -28,13 +28,11 @@ export function ProofOfDeliveryScreen({ orderId, onBack, onConfirmed }: Props) {
   const [notes,          setNotes]          = useState('')
   const [signed,         setSigned]         = useState(false)
   const [sigUrl,         setSigUrl]         = useState<string | null>(null)
-  const [codeDigits,     setCodeDigits]     = useState(['', '', '', '', '', ''])
+  const [codeDigits,     setCodeDigits]     = useState(['', '', '', ''])
   const [submitting,     setSubmitting]     = useState(false)
   const [error,          setError]          = useState('')
 
   const codeRefs = [
-    useRef<HTMLInputElement>(null),
-    useRef<HTMLInputElement>(null),
     useRef<HTMLInputElement>(null),
     useRef<HTMLInputElement>(null),
     useRef<HTMLInputElement>(null),
@@ -312,7 +310,7 @@ export function ProofOfDeliveryScreen({ orderId, onBack, onConfirmed }: Props) {
           {secondaryTab === 'code' && (
             <div style={{ background: '#fff', border: '1.5px solid var(--d-border)', borderRadius: 16, padding: 20, display: 'flex', flexDirection: 'column', gap: 14, alignItems: 'center' }}>
               <div style={{ fontSize: 14, color: '#374151', textAlign: 'center', maxWidth: 280 }}>
-                Ask the recipient for the 6-digit code from their CitySend notification.
+                Ask the recipient for the 4-digit code from their CitySend notification.
               </div>
               <div style={{ display: 'flex', gap: 8 }}>
                 {codeDigits.map((digit, i) => (
@@ -325,7 +323,7 @@ export function ProofOfDeliveryScreen({ orderId, onBack, onConfirmed }: Props) {
                     onChange={e => {
                       const val = e.target.value.replace(/\D/g, '').slice(0, 1)
                       const next = [...codeDigits]; next[i] = val; setCodeDigits(next)
-                      if (val && i < 5) codeRefs[i + 1].current?.focus()
+                      if (val && i < 3) codeRefs[i + 1].current?.focus()
                     }}
                     onKeyDown={e => {
                       if (e.key === 'Backspace' && !digit && i > 0) codeRefs[i - 1].current?.focus()
@@ -340,7 +338,7 @@ export function ProofOfDeliveryScreen({ orderId, onBack, onConfirmed }: Props) {
                 ))}
               </div>
               <div style={{ fontFamily: 'monospace', fontSize: 11, color: 'var(--d-muted)', letterSpacing: 1, textTransform: 'uppercase' }}>
-                6-digit handoff code
+                4-digit handoff code
               </div>
               {codeComplete && <div style={{ fontSize: 12, color: '#22c55e', fontWeight: 500 }}>✓ Code entered</div>}
             </div>
