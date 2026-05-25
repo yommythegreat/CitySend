@@ -405,6 +405,19 @@ export default function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // ── Reconnect: re-fetch orders when coming back online ───────────────────────
+  // Jitter (0–2s) spreads the burst across concurrent tabs/users.
+  useEffect(() => {
+    const onOnline = async () => {
+      const authUser = userRef.current
+      if (!authUser || authUser.id === 'guest') return
+      await new Promise(r => setTimeout(r, Math.random() * 2000))
+      loadUserData(authUser).catch(() => {})
+    }
+    window.addEventListener('online', onOnline)
+    return () => window.removeEventListener('online', onOnline)
+  }, [loadUserData])
+
   // ── Geolocation city detection (non-blocking, runs once after configs load) ──
   useEffect(() => {
     // Pass current configs so detection aliases come from Supabase data

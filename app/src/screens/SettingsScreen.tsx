@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { IconButton } from '../components/IconButton'
 import { Back, Bell, Card, Lock, Chevron, Check, Plus, X } from '../components/Icons'
 import { AddrIcon, ADDR_ICONS, ICON_LABELS } from '../components/AddrIcon'
@@ -72,119 +72,29 @@ function StatusBanner({ msg, ok }: { msg: string; ok: boolean }) {
 const BRAND_LABELS: Record<PaymentMethod['brand'], string> = { visa: 'Visa', mastercard: 'Mastercard', amex: 'Amex' }
 
 // ── Payment panel ──────────────────────────────────────────────────────────
+// Cards are managed by Stripe — we never store card details locally.
+// This panel is informational only; card data lives in Stripe's vault.
 
-function PaymentPanel({ state, setState, onBack, goForgot }: { state: AppState; setState: Props['setState']; onBack: () => void; goForgot: () => void }) {
-  const [adding, setAdding] = useState(false)
-  const [brand,  setBrand]  = useState<PaymentMethod['brand']>('visa')
-  const [last4,  setLast4]  = useState('')
-  const [expiry, setExpiry] = useState('')
-  const [err,    setErr]    = useState<string | null>(null)
-  const [ok,     setOk]     = useState<string | null>(null)
-
-  const methods = state.paymentMethods
-
-  const setDefault = (id: string) => {
-    setState(s => ({ ...s, paymentMethods: s.paymentMethods.map(m => ({ ...m, isDefault: m.id === id })) }))
-    setOk('Default payment method updated.')
-    setTimeout(() => setOk(null), 2500)
-  }
-
-  const remove = (id: string) => {
-    const m = methods.find(m => m.id === id)
-    if (m?.isDefault) { setErr("Can't remove default card. Set another card as default first."); setTimeout(() => setErr(null), 3000); return }
-    setState(s => ({ ...s, paymentMethods: s.paymentMethods.filter(m => m.id !== id) }))
-  }
-
-  const addCard = () => {
-    const l = last4.replace(/\D/g, '')
-    const e = expiry.trim()
-    if (l.length !== 4) { setErr('Enter the last 4 digits of your card.'); return }
-    if (!/^\d{2}\/\d{2}$/.test(e)) { setErr('Enter expiry as MM/YY.'); return }
-    const newMethod: PaymentMethod = { id: `pm_${Date.now()}`, brand, last4: l, expiry: e, isDefault: methods.length === 0 }
-    setState(s => ({ ...s, paymentMethods: [...s.paymentMethods, newMethod] }))
-    setAdding(false); setLast4(''); setExpiry(''); setErr(null)
-    setOk('Card added.'); setTimeout(() => setOk(null), 2500)
-  }
-
+function PaymentPanel({ onBack }: { onBack: () => void }) {
   return (
     <div className="cs-screen cs-enter-right">
       <PanelHeader title="Payment methods" onBack={onBack} />
       <div style={{ flex: 1, padding: '0 20px', overflowY: 'auto', scrollbarWidth: 'none' }}>
         <div style={{ paddingTop: 24 }}>
-          {ok  && <StatusBanner msg={ok}  ok={true}  />}
-          {err && <StatusBanner msg={err} ok={false} />}
-
-          {/* Saved cards */}
-          {methods.length > 0 && (
-            <>
-              <SectionHeader label="Saved cards" />
-              <div style={{ background: '#fff', borderRadius: 16, border: '1px solid var(--cs-slate-100)', overflow: 'hidden', marginBottom: 16 }}>
-                {methods.map((m, i) => (
-                  <div key={m.id}>
-                    {i > 0 && <Divider />}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px' }}>
-                      <div style={{ width: 40, height: 28, borderRadius: 6, background: 'var(--cs-slate-100)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                        <Card size={16} />
-                      </div>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 15, fontWeight: 500, color: 'var(--cs-ink)', display: 'flex', alignItems: 'center', gap: 8 }}>
-                          {BRAND_LABELS[m.brand]} •••• {m.last4}
-                          {m.isDefault && <span style={{ fontSize: 11, fontFamily: 'var(--cs-mono)', background: 'var(--cs-ink)', color: '#fff', padding: '2px 7px', borderRadius: 99, letterSpacing: 0.5 }}>DEFAULT</span>}
-                        </div>
-                        <div style={{ fontSize: 13, color: 'var(--cs-slate-500)', marginTop: 1 }}>Expires {m.expiry}</div>
-                      </div>
-                      <div style={{ display: 'flex', gap: 8 }}>
-                        {!m.isDefault && (
-                          <button onClick={() => setDefault(m.id)} style={{ fontSize: 12, padding: '5px 10px', borderRadius: 99, border: '1px solid var(--cs-slate-200)', background: '#fff', cursor: 'pointer', fontFamily: 'var(--cs-font)', color: 'var(--cs-ink)', whiteSpace: 'nowrap' }}>
-                            Set default
-                          </button>
-                        )}
-                        <button onClick={() => remove(m.id)} style={{ width: 28, height: 28, borderRadius: 14, border: 'none', background: 'rgba(179,38,30,.08)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                          <X size={13} color="var(--cs-err)" />
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </>
-          )}
-
-          {/* Add card */}
-          <SectionHeader label="Add new card" />
-          {!adding ? (
-            <button onClick={() => setAdding(true)} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', background: '#fff', border: '1px dashed var(--cs-slate-200)', borderRadius: 16, cursor: 'pointer', fontFamily: 'var(--cs-font)' }}>
-              <div style={{ width: 36, height: 36, borderRadius: 10, background: 'var(--cs-slate-100)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                <Plus size={16} />
-              </div>
-              <div style={{ fontSize: 15, color: 'var(--cs-slate-500)' }}>Add a card</div>
-            </button>
-          ) : (
-            <div style={{ background: '#fff', borderRadius: 16, border: '1px solid var(--cs-slate-100)', padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <div>
-                <div style={{ fontSize: 11, fontFamily: 'var(--cs-mono)', color: 'var(--cs-slate-500)', letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 6 }}>Card brand</div>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  {(['visa', 'mastercard', 'amex'] as PaymentMethod['brand'][]).map(b => (
-                    <button key={b} onClick={() => setBrand(b)} style={{ flex: 1, padding: '9px 0', border: `1.5px solid ${brand === b ? 'var(--cs-ink)' : 'var(--cs-slate-200)'}`, borderRadius: 10, background: brand === b ? 'var(--cs-ink)' : '#fff', color: brand === b ? '#fff' : 'var(--cs-ink)', fontFamily: 'var(--cs-font)', fontSize: 13, fontWeight: 500, cursor: 'pointer' }}>
-                      {BRAND_LABELS[b]}
-                    </button>
-                  ))}
-                </div>
+          <div style={{ background: '#fff', borderRadius: 16, border: '1px solid var(--cs-slate-100)', padding: '20px 16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{ width: 44, height: 44, borderRadius: 12, background: 'var(--cs-slate-100)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <Lock size={20} color="var(--cs-slate-500)" />
               </div>
               <div>
-                <div style={{ fontSize: 11, fontFamily: 'var(--cs-mono)', color: 'var(--cs-slate-500)', letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 6 }}>Last 4 digits</div>
-                <input value={last4} onChange={e => setLast4(e.target.value.replace(/\D/g,'').slice(0,4))} placeholder="4242" maxLength={4} style={{ width: '100%', padding: '11px 14px', border: '1.5px solid var(--cs-slate-200)', borderRadius: 10, fontSize: 15, fontFamily: 'var(--cs-font)', outline: 'none', boxSizing: 'border-box' }} />
-              </div>
-              <div>
-                <div style={{ fontSize: 11, fontFamily: 'var(--cs-mono)', color: 'var(--cs-slate-500)', letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 6 }}>Expiry (MM/YY)</div>
-                <input value={expiry} onChange={e => { let v = e.target.value.replace(/[^\d/]/g,''); if (v.length === 2 && !v.includes('/')) v += '/'; setExpiry(v.slice(0,5)) }} placeholder="12/27" maxLength={5} style={{ width: '100%', padding: '11px 14px', border: '1.5px solid var(--cs-slate-200)', borderRadius: 10, fontSize: 15, fontFamily: 'var(--cs-font)', outline: 'none', boxSizing: 'border-box' }} />
-              </div>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button onClick={() => { setAdding(false); setErr(null) }} style={{ flex: 1, padding: '12px 0', border: '1.5px solid var(--cs-slate-200)', borderRadius: 12, background: '#fff', fontFamily: 'var(--cs-font)', fontSize: 14, fontWeight: 500, cursor: 'pointer', color: 'var(--cs-slate-600)' }}>Cancel</button>
-                <button onClick={addCard} style={{ flex: 2, padding: '12px 0', border: 'none', borderRadius: 12, background: 'var(--cs-ink)', fontFamily: 'var(--cs-font)', fontSize: 14, fontWeight: 500, cursor: 'pointer', color: '#fff' }}>Add card</button>
+                <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--cs-ink)' }}>Managed by Stripe</div>
+                <div style={{ fontSize: 13, color: 'var(--cs-slate-500)', marginTop: 2 }}>Your card details are stored securely by Stripe — not by CitySend.</div>
               </div>
             </div>
-          )}
+            <div style={{ fontSize: 13, color: 'var(--cs-slate-500)', lineHeight: 1.55, paddingTop: 4, borderTop: '1px solid var(--cs-slate-100)' }}>
+              To update or remove a saved card, use the secure payment form at checkout. CitySend never stores raw card numbers on its servers.
+            </div>
+          </div>
           <div style={{ height: 24 }} />
         </div>
       </div>
@@ -507,15 +417,43 @@ function CityPanel({
 
 // ── Main settings screen ───────────────────────────────────────────────────
 
+const notifPrefsKey = (userId: string) => `cs_notif_prefs_${userId}`
+
 export function SettingsScreen({ go, state, setState, onCityChange, configs, user }: Props) {
   const [panel, setPanel] = useState<Panel>('main')
+
+  // ── Notification preferences — persisted to user-scoped localStorage ────────
   const [notifDelivery, setNotifDelivery] = useState(true)
   const [notifPromos,   setNotifPromos]   = useState(false)
   const [notifSMS,      setNotifSMS]      = useState(true)
 
+  const userId = user?.id
+  useEffect(() => {
+    if (!userId || userId === 'guest') return
+    try {
+      const raw = localStorage.getItem(notifPrefsKey(userId))
+      if (raw) {
+        const p = JSON.parse(raw)
+        if (typeof p.delivery === 'boolean') setNotifDelivery(p.delivery)
+        if (typeof p.promos   === 'boolean') setNotifPromos(p.promos)
+        if (typeof p.sms      === 'boolean') setNotifSMS(p.sms)
+      }
+    } catch {}
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId])
+
+  const saveNotifPref = (key: 'delivery' | 'promos' | 'sms', value: boolean) => {
+    if (!userId || userId === 'guest') return
+    try {
+      const raw = localStorage.getItem(notifPrefsKey(userId))
+      const prev = raw ? JSON.parse(raw) : {}
+      localStorage.setItem(notifPrefsKey(userId), JSON.stringify({ ...prev, [key]: value }))
+    } catch {}
+  }
+
   const isGuest = user?.id === 'guest'
 
-  if (panel === 'payment')   return <PaymentPanel   state={state} setState={setState} onBack={() => setPanel('main')} goForgot={() => go('forgot-password')} />
+  if (panel === 'payment')   return <PaymentPanel   onBack={() => setPanel('main')} />
   if (panel === 'addresses') return <AddressesPanel state={state} setState={setState} onBack={() => setPanel('main')} />
   if (panel === 'security')  return <SecurityPanel  onBack={() => setPanel('main')} goForgot={() => go('forgot-password')} />
   if (panel === 'city')      return (
@@ -600,7 +538,7 @@ export function SettingsScreen({ go, state, setState, onCityChange, configs, use
                 <div style={{ fontSize: 15, fontWeight: 500, color: 'var(--cs-ink)' }}>Delivery updates</div>
                 <div style={{ fontSize: 13, color: 'var(--cs-slate-500)', marginTop: 1 }}>Pickup, transit, and delivery alerts</div>
               </div>
-              <Toggle on={notifDelivery} onToggle={() => setNotifDelivery(v => !v)} />
+              <Toggle on={notifDelivery} onToggle={() => { setNotifDelivery(v => { saveNotifPref('delivery', !v); return !v }) }} />
             </div>
             <Divider />
             <div style={{ display: 'flex', alignItems: 'center', padding: '14px 16px' }}>
@@ -608,7 +546,7 @@ export function SettingsScreen({ go, state, setState, onCityChange, configs, use
                 <div style={{ fontSize: 15, fontWeight: 500, color: 'var(--cs-ink)' }}>SMS notifications</div>
                 <div style={{ fontSize: 13, color: 'var(--cs-slate-500)', marginTop: 1 }}>Text messages to your phone</div>
               </div>
-              <Toggle on={notifSMS} onToggle={() => setNotifSMS(v => !v)} />
+              <Toggle on={notifSMS} onToggle={() => { setNotifSMS(v => { saveNotifPref('sms', !v); return !v }) }} />
             </div>
             <Divider />
             <div style={{ display: 'flex', alignItems: 'center', padding: '14px 16px' }}>
@@ -616,7 +554,7 @@ export function SettingsScreen({ go, state, setState, onCityChange, configs, use
                 <div style={{ fontSize: 15, fontWeight: 500, color: 'var(--cs-ink)' }}>Promotions</div>
                 <div style={{ fontSize: 13, color: 'var(--cs-slate-500)', marginTop: 1 }}>Deals and CitySend news</div>
               </div>
-              <Toggle on={notifPromos} onToggle={() => setNotifPromos(v => !v)} />
+              <Toggle on={notifPromos} onToggle={() => { setNotifPromos(v => { saveNotifPref('promos', !v); return !v }) }} />
             </div>
           </div>
 

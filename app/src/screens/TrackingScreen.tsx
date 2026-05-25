@@ -131,7 +131,12 @@ function ChatPanel({
       // Re-fetch immediately — don't rely on realtime alone
       await onRefresh()
     } catch (err: any) {
-      setSendError(err?.message ?? 'Failed to send message')
+      const isRateLimited = err?.hint === 'MESSAGE_RATE_LIMITED' || err?.code === 'P0001'
+      setSendError(
+        isRateLimited
+          ? 'Slow down — too many messages. Wait a moment and try again.'
+          : (err?.message ?? 'Failed to send message'),
+      )
       // Restore text so user can retry
       setInputText(text)
     }
