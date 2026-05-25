@@ -3,6 +3,9 @@ import react from '@vitejs/plugin-react'
 
 export default defineConfig({
   plugins: [react()],
+  // base: './' is required for Capacitor — assets must use relative paths
+  // inside the native WebView. Has no effect on web/Vercel builds.
+  base: './',
   server: {
     proxy: {
       '/api': {

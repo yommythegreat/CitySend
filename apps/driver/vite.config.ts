@@ -4,6 +4,9 @@ import path from 'path'
 
 export default defineConfig({
   plugins: [react()],
+  // base: './' is required for Capacitor — assets must use relative paths
+  // inside the native WebView. Has no effect on web builds.
+  base: './',
   server: { port: 5175 },
   resolve: {
     alias: {
