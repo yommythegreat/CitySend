@@ -95,7 +95,7 @@ export function NotificationsScreen({ go, user, notifVersion, onRead }: Props) {
   // Guests have no notifications — gate before effects run to avoid hook ordering issues
   if (user?.id === 'guest') return (
     <GuestGatedScreen
-      go={go} screenTitle="Notifications" backTarget="home" enterClass="cs-enter-up"
+      go={go} screenTitle="Notifications" backTarget="back" enterClass="cs-enter-up"
       promptTitle="Stay in the loop."
       promptMessage="Create a free CitySend account to get delivery updates, driver notifications, and receipts straight to your inbox."
     />

@@ -45,7 +45,7 @@ export function HistoryScreen({ go, state, user }: Props) {
   // Guests have no delivery history — show a signup prompt instead
   if (user?.id === 'guest') return (
     <GuestGatedScreen
-      go={go} screenTitle="History" backTarget="home" enterClass="cs-enter-up"
+      go={go} screenTitle="History" backTarget="back" enterClass="cs-enter-up"
       promptTitle="Keep your delivery history in one place."
       promptMessage="Create a free CitySend account to view receipts, track past deliveries, and reorder with one tap."
     />
