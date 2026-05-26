@@ -527,6 +527,9 @@ export default function App() {
         const prev = history[history.length - 1]
         navHistoryRef.current = history.slice(0, -1)
         setScreen(prev)
+      } else {
+        // No history (e.g. direct deep-link or root tab) — fall back to home
+        setScreen('home')
       }
       return
     }

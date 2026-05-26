@@ -553,7 +553,7 @@ export function TrackingScreen({ go, draft, cityConfig, orderId, user }: Props) 
           Place a new delivery to track it here.
         </div>
         <button
-          onClick={() => go('home')}
+          onClick={() => go('back')}
           style={{ marginTop: 8, padding: '12px 28px', background: 'var(--cs-ink)', color: '#fff', border: 'none', borderRadius: 12, fontFamily: 'var(--cs-font)', fontSize: 15, fontWeight: 600, cursor: 'pointer' }}
         >
           Back to home
@@ -581,7 +581,7 @@ export function TrackingScreen({ go, draft, cityConfig, orderId, user }: Props) 
           </span>
         </div>
         <button
-          onClick={() => go('home')}
+          onClick={() => go('back')}
           style={{ marginTop: 4, padding: '13px 32px', background: 'var(--cs-ink)', color: '#fff', border: 'none', borderRadius: 14, fontFamily: 'var(--cs-font)', fontSize: 15, fontWeight: 600, cursor: 'pointer' }}
         >
           Back to home
@@ -612,7 +612,7 @@ export function TrackingScreen({ go, draft, cityConfig, orderId, user }: Props) 
 
       {/* Top bar */}
       <div style={{ position: 'absolute', top: 0, left: 0, right: 0, padding: '56px 16px 0', display: 'flex', gap: 10, zIndex: 10 }}>
-        <IconButton onClick={() => go('home')} glass><Back /></IconButton>
+        <IconButton onClick={() => go('back')} glass><Back /></IconButton>
         <div style={{ flex: 1 }} />
         {order && (
           <div style={{ background: 'rgba(255,255,255,.9)', backdropFilter: 'blur(8px)', borderRadius: 20, padding: '8px 14px', display: 'flex', alignItems: 'center', gap: 6, border: '1px solid var(--cs-slate-100)' }}>
@@ -676,7 +676,7 @@ export function TrackingScreen({ go, draft, cityConfig, orderId, user }: Props) 
               </div>
             </div>
             <button
-              onClick={() => go('home')}
+              onClick={() => go('back')}
               style={{ width: '100%', marginTop: 14, padding: '14px 0', background: 'var(--cs-ink)', color: '#fff', border: 'none', borderRadius: 14, fontFamily: 'var(--cs-font)', fontSize: 16, fontWeight: 600, cursor: 'pointer' }}
             >
               Back to home

@@ -120,12 +120,20 @@ export async function markAllNotifsRead(customerId?: string): Promise<void> {
     }))
     return
   }
-  let q = supabase
-    .from('notifications')
-    .update({ read: true })
-    .or('audience.eq.customer,audience.eq.all')
-  if (customerId) q = (q as any).eq('customer_id', customerId)
-  await q
+  // Build filter explicitly so the chain stays strongly typed.
+  // RLS already scopes to the authed user's rows; customer_id filter is belt-and-braces.
+  if (customerId) {
+    await supabase
+      .from('notifications')
+      .update({ read: true })
+      .eq('customer_id', customerId)
+      .in('audience', ['customer', 'all'])
+  } else {
+    await supabase
+      .from('notifications')
+      .update({ read: true })
+      .in('audience', ['customer', 'all'])
+  }
 }
 
 // ── Realtime ──────────────────────────────────────────────────────────────────
