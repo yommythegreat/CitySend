@@ -2,6 +2,43 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import Stripe from 'stripe'
 import { createClient } from '@supabase/supabase-js'
 
+// ── Rate limiting ─────────────────────────────────────────────────────────────
+// Per-instance sliding-window rate limiter. Vercel reuses warm instances, so
+// this catches the vast majority of abuse without requiring external Redis.
+// Limits: 10 requests / 60 s per IP.
+
+const RATE_LIMIT      = 10
+const RATE_WINDOW_MS  = 60_000
+
+interface RateBucket { count: number; windowStart: number }
+const rateBuckets = new Map<string, RateBucket>()
+
+function checkRateLimit(ip: string): { allowed: boolean; remaining: number; resetMs: number } {
+  const now    = Date.now()
+  const bucket = rateBuckets.get(ip)
+
+  if (!bucket || now - bucket.windowStart >= RATE_WINDOW_MS) {
+    rateBuckets.set(ip, { count: 1, windowStart: now })
+    return { allowed: true, remaining: RATE_LIMIT - 1, resetMs: RATE_WINDOW_MS }
+  }
+
+  bucket.count++
+  const resetMs = RATE_WINDOW_MS - (now - bucket.windowStart)
+
+  if (bucket.count > RATE_LIMIT) {
+    return { allowed: false, remaining: 0, resetMs }
+  }
+  return { allowed: true, remaining: RATE_LIMIT - bucket.count, resetMs }
+}
+
+// Prune stale buckets every ~5 minutes to prevent unbounded memory growth
+setInterval(() => {
+  const cutoff = Date.now() - RATE_WINDOW_MS
+  for (const [ip, b] of rateBuckets) {
+    if (b.windowStart < cutoff) rateBuckets.delete(ip)
+  }
+}, 5 * 60_000)
+
 // ── Stripe ────────────────────────────────────────────────────────────────────
 
 let stripe: Stripe | null = null
@@ -72,6 +109,21 @@ async function computeServerTotal(inputs: PriceInputs): Promise<number | null> {
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' })
+  }
+
+  // ── Rate limit check ────────────────────────────────────────────────────────
+  const ip = (
+    (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() ||
+    (req as any).socket?.remoteAddress ||
+    'unknown'
+  )
+  const { allowed, remaining, resetMs } = checkRateLimit(ip)
+  res.setHeader('X-RateLimit-Limit',     String(RATE_LIMIT))
+  res.setHeader('X-RateLimit-Remaining', String(remaining))
+  res.setHeader('X-RateLimit-Reset',     String(Math.ceil(resetMs / 1000)))
+
+  if (!allowed) {
+    return res.status(429).json({ error: 'Too many requests. Please wait before trying again.' })
   }
 
   const body = (req.body ?? {}) as {
