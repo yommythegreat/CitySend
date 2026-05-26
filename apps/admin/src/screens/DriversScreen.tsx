@@ -558,8 +558,12 @@ export function DriversScreen() {
   }
 
   const handleRemoveFromOrder = () => {
-    if (!confirmRemove?.currentOrderId) return
-    dispatch({ type: 'UNASSIGN_DRIVER', orderId: confirmRemove.currentOrderId })
+    if (!confirmRemove) return
+    dispatch({
+      type: 'UNASSIGN_DRIVER',
+      orderId:  confirmRemove.currentOrderId ?? '',
+      driverId: confirmRemove.id,
+    })
     setConfirmRemove(null)
   }
 

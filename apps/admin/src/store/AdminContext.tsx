@@ -62,7 +62,7 @@ const initialState: AdminState = {
 
 type Action =
   | { type: 'ASSIGN_DRIVER';        orderId: string; driverId: string }
-  | { type: 'UNASSIGN_DRIVER';      orderId: string }
+  | { type: 'UNASSIGN_DRIVER';      orderId: string; driverId?: string }
   | { type: 'UPDATE_ORDER_STATUS';  orderId: string; status: OrderStatus }
   | { type: 'CANCEL_ORDER';         orderId: string; reason: string }
   | { type: 'ADD_NOTE';             orderId: string; note: AdminNote }
@@ -152,8 +152,8 @@ function reducer(state: AdminState, action: Action): AdminState {
     }
 
     case 'UNASSIGN_DRIVER': {
-      const order = state.orders.find(o => o.id === action.orderId)
-      if (!order) return state
+      const order     = state.orders.find(o => o.id === action.orderId)
+      const driverToReset = order?.assignedDriverId ?? action.driverId
       return {
         ...state,
         orders: state.orders.map(o =>
@@ -165,9 +165,9 @@ function reducer(state: AdminState, action: Action): AdminState {
             updatedAt:          new Date().toISOString(),
           }
         ),
-        drivers: order.assignedDriverId
+        drivers: driverToReset
           ? state.drivers.map(d =>
-              d.id !== order.assignedDriverId ? d : {
+              d.id !== driverToReset ? d : {
                 ...d, status: 'available', currentOrderId: undefined,
               }
             )
@@ -358,9 +358,10 @@ async function syncToSupabase(action: Action, snapshot: AdminState): Promise<voi
     }
 
     case 'UNASSIGN_DRIVER': {
-      const order = snapshot.orders.find(o => o.id === action.orderId)
-      const prevDriverName = order?.assignedDriverId
-        ? snapshot.drivers.find(d => d.id === order.assignedDriverId)?.name ?? 'driver'
+      const order         = snapshot.orders.find(o => o.id === action.orderId)
+      const driverToReset = order?.assignedDriverId ?? action.driverId
+      const prevDriverName = driverToReset
+        ? snapshot.drivers.find(d => d.id === driverToReset)?.name ?? 'driver'
         : 'driver'
       const auditNote: AdminNote = {
         id: `audit-${Date.now()}`,
@@ -374,10 +375,10 @@ async function syncToSupabase(action: Action, snapshot: AdminState): Promise<voi
           notes: [...(order?.notes ?? []), auditNote],
         }).eq('id', action.orderId)),
       ]
-      if (order?.assignedDriverId) {
+      if (driverToReset) {
         calls.push(q(supabase.from('drivers').update({
           status: 'available', current_order_id: null,
-        }).eq('id', order.assignedDriverId)))
+        }).eq('id', driverToReset)))
       }
       await Promise.all(calls)
       break

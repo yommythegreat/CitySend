@@ -3,6 +3,7 @@ import { IconButton } from '../components/IconButton'
 import { Back, Check } from '../components/Icons'
 import { GuestGatedScreen } from '../components/GuestGatedScreen'
 import { AddrIcon, ADDR_ICONS, ICON_LABELS } from '../components/AddrIcon'
+import { AddressField } from '../components/AddressField'
 import type { AppState, AuthUser, SavedAddress, ScreenName } from '../types'
 
 interface Props {
@@ -155,13 +156,12 @@ export function AddPlaceScreen({ go, setState, user }: Props) {
             {/* Address */}
             <div>
               <div style={sectionLabel}>Address</div>
-              <input
+              <AddressField
                 value={address}
-                onChange={e => setAddress(e.target.value)}
+                onChange={(val) => setAddress(val)}
                 onBlur={() => setAddrTouched(true)}
                 placeholder="123 Main St"
-                style={inputStyle(addrTouched && !!addressErr)}
-                autoComplete="street-address"
+                error={addrTouched && !!addressErr}
               />
               {addrTouched && <FieldError msg={addressErr} />}
             </div>

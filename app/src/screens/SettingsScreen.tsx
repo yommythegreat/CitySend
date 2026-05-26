@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { IconButton } from '../components/IconButton'
 import { Back, Bell, Card, Lock, Chevron, Check, Plus, X } from '../components/Icons'
 import { AddrIcon, ADDR_ICONS, ICON_LABELS } from '../components/AddrIcon'
+import { AddressField } from '../components/AddressField'
 import { getAllCities } from '../utils/serviceAvailability'
 import { supabase, isSupabaseConfigured } from '../lib/supabase'
 import type { CityConfig } from '../config/cityConfig'
@@ -171,7 +172,7 @@ function AddressesPanel({ state, setState, onBack }: { state: AppState; setState
       </div>
       <div>
         <div style={{ fontSize: 11, fontFamily: 'var(--cs-mono)', color: 'var(--cs-slate-500)', letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 6 }}>Address</div>
-        <input value={address} onChange={e => setAddress(e.target.value)} placeholder="134 Princess St" style={{ width: '100%', padding: '11px 14px', border: '1.5px solid var(--cs-slate-200)', borderRadius: 10, fontSize: 15, fontFamily: 'var(--cs-font)', outline: 'none', boxSizing: 'border-box' }} />
+        <AddressField value={address} onChange={(val) => setAddress(val)} placeholder="134 Princess St" />
       </div>
       {err && <div style={{ fontSize: 13, color: 'var(--cs-err)' }}>{err}</div>}
       <div style={{ display: 'flex', gap: 8 }}>
