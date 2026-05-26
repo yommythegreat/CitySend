@@ -476,7 +476,7 @@ export function SettingsScreen({ go, state, setState, onCityChange, configs, use
     return (
       <div className="cs-screen cs-enter-right">
         <div style={{ padding: '56px 20px 0', display: 'flex', alignItems: 'center', gap: 14, flexShrink: 0 }}>
-          <IconButton onClick={() => go('profile')}><Back /></IconButton>
+          <IconButton onClick={() => go('back')}><Back /></IconButton>
           <div style={{ flex: 1, fontSize: 17, fontWeight: 600, letterSpacing: -0.3 }}>Settings</div>
         </div>
 
@@ -531,7 +531,7 @@ export function SettingsScreen({ go, state, setState, onCityChange, configs, use
   return (
     <div className="cs-screen cs-enter-right">
       <div style={{ padding: '56px 20px 0', display: 'flex', alignItems: 'center', gap: 14, flexShrink: 0 }}>
-        <IconButton onClick={() => go('profile')}><Back /></IconButton>
+        <IconButton onClick={() => go('back')}><Back /></IconButton>
         <div style={{ flex: 1, fontSize: 17, fontWeight: 600, letterSpacing: -0.3 }}>Settings</div>
       </div>
 
