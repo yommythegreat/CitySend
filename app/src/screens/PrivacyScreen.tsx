@@ -15,7 +15,9 @@ const S = {
     position: 'sticky' as const, top: 0, zIndex: 10,
     background: 'rgba(250,251,252,.92)', backdropFilter: 'blur(12px)',
     borderBottom: '1px solid #e8eaee',
-    padding: '0 32px', height: 60,
+    paddingTop: 'env(safe-area-inset-top)',
+    paddingLeft: 24, paddingRight: 24,
+    minHeight: 60,
     display: 'flex', alignItems: 'center', justifyContent: 'space-between',
   },
   content: {
@@ -52,7 +54,7 @@ export function PrivacyScreen({ go }: Props) {
   return (
     <div style={S.wrap}>
       <nav style={S.nav}>
-        <button onClick={() => go('landing')} style={{
+        <button onClick={() => go('back')} style={{
           background: 'none', border: 'none', cursor: 'pointer', padding: 0,
           display: 'flex', alignItems: 'center', gap: 6,
           fontSize: 14, fontWeight: 600, color: '#0b1220',
