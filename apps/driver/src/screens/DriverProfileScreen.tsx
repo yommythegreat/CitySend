@@ -282,6 +282,24 @@ export function DriverProfileScreen({ onBack, onSignOut }: Props) {
           Sign out
         </button>
 
+        {/* Legal */}
+        <div style={{ display: 'flex', justifyContent: 'center', gap: 24, paddingTop: 8 }}>
+          {([
+            { label: 'Privacy Policy',   url: 'https://citysend.ca/privacy' },
+            { label: 'Terms of Service', url: 'https://citysend.ca/terms'   },
+          ] as const).map(({ label, url }) => (
+            <a
+              key={url}
+              href={url}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ fontSize: 12, color: 'var(--d-muted)', textDecoration: 'none', fontFamily: 'var(--d-font)' }}
+            >
+              {label}
+            </a>
+          ))}
+        </div>
+
         <div style={{ height: 32 }} />
       </div>
     </div>

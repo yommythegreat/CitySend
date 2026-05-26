@@ -504,7 +504,14 @@ export function SettingsScreen({ go, state, setState, onCityChange, configs, use
               </div>
             ))}
 
-            <div style={{ textAlign: 'center', marginTop: 20, marginBottom: 24 }}>
+            <SectionHeader label="Legal" />
+            <div style={{ background: '#fff', borderRadius: 16, border: '1px solid var(--cs-slate-100)', overflow: 'hidden', marginBottom: 16 }}>
+              <RowBtn label="Privacy Policy"   onClick={() => go('privacy')} />
+              <Divider />
+              <RowBtn label="Terms of Service" onClick={() => go('terms')} />
+            </div>
+
+            <div style={{ textAlign: 'center', marginTop: 4, marginBottom: 24 }}>
               <div style={{ fontSize: 11, color: 'var(--cs-slate-400)', fontFamily: 'var(--cs-mono)', letterSpacing: 0.8 }}>CITYSEND v1.1.0 · citysend.ca</div>
             </div>
           </div>
@@ -582,7 +589,14 @@ export function SettingsScreen({ go, state, setState, onCityChange, configs, use
             <RowBtn label="Two-factor authentication" sub="Not enabled" onClick={() => {}} />
           </div>
 
-          <div style={{ textAlign: 'center', marginTop: 16, marginBottom: 24 }}>
+          <SectionHeader label="Legal" />
+          <div style={{ background: '#fff', borderRadius: 16, border: '1px solid var(--cs-slate-100)', overflow: 'hidden', marginBottom: 16 }}>
+            <RowBtn label="Privacy Policy"   onClick={() => go('privacy')} />
+            <Divider />
+            <RowBtn label="Terms of Service" onClick={() => go('terms')} />
+          </div>
+
+          <div style={{ textAlign: 'center', marginTop: 4, marginBottom: 24 }}>
             <div style={{ fontSize: 11, color: 'var(--cs-slate-400)', fontFamily: 'var(--cs-mono)', letterSpacing: 0.8 }}>CITYSEND v1.1.0 · citysend.ca</div>
           </div>
         </div>

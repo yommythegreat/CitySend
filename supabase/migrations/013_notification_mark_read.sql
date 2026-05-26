@@ -28,7 +28,7 @@ create policy "drivers_update_own_notifications"
     and audience = 'driver'
     and exists (
       select 1 from public.drivers d
-      where d.auth_id = auth.uid()
+      where d.user_id = auth.uid()
       and   d.id      = public.notifications.driver_id
     )
   )
@@ -37,7 +37,7 @@ create policy "drivers_update_own_notifications"
     and audience = 'driver'
     and exists (
       select 1 from public.drivers d
-      where d.auth_id = auth.uid()
+      where d.user_id = auth.uid()
       and   d.id      = public.notifications.driver_id
     )
   );
