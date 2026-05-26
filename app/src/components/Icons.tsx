@@ -51,7 +51,10 @@ export const Search   = (p: IconProps) => <I {...p}><circle cx="9" cy="9" r="5"/
 export const Sparkle  = (p: IconProps) => <I {...p}><path d="M10 3v4M10 13v4M3 10h4M13 10h4"/><path d="M6 6l2 2M12 12l2 2M14 6l-2 2M8 12l-2 2"/></I>
 export const Menu     = (p: IconProps) => <I {...p}><path d="M4 6h12M4 10h12M4 14h12"/></I>
 export const Wallet   = (p: IconProps) => <I {...p}><rect x="3" y="5" width="14" height="11" rx="2"/><path d="M14 11h2"/></I>
-export const Settings = (p: IconProps) => <I {...p}><circle cx="10" cy="10" r="2.5"/><path d="M10 3v1.5M10 15.5V17M3 10h1.5M15.5 10H17M5.1 5.1l1 1M13.9 13.9l1 1M5.1 14.9l1-1M13.9 6.1l1-1"/></I>
+export const Settings = (p: IconProps) => <I {...p}>
+  <path d="M10 2.5a.8.8 0 0 0-.8.7l-.2 1.4a5 5 0 0 0-1.4.8L6.3 5a.8.8 0 0 0-1 .3l-.8 1.4a.8.8 0 0 0 .2 1l1.1.9v1.8L4.7 11.3a.8.8 0 0 0-.2 1l.8 1.4a.8.8 0 0 0 1 .3l1.3-.5a5 5 0 0 0 1.4.8l.2 1.4a.8.8 0 0 0 1.6 0l.2-1.4a5 5 0 0 0 1.4-.8l1.3.5a.8.8 0 0 0 1-.3l.8-1.4a.8.8 0 0 0-.2-1l-1.1-.9V8.6l1.1-.9a.8.8 0 0 0 .2-1L14.7 5.3a.8.8 0 0 0-1-.3l-1.3.5a5 5 0 0 0-1.4-.8l-.2-1.4A.8.8 0 0 0 10 2.5Z"/>
+  <circle cx="10" cy="10" r="2.3"/>
+</I>
 export const Eye      = (p: IconProps) => <I {...p}><path d="M2 10c0 0 3.5-6 8-6s8 6 8 6-3.5 6-8 6-8-6-8-6z"/><circle cx="10" cy="10" r="2.5"/></I>
 export const EyeOff   = (p: IconProps) => <I {...p}><path d="M2 10c0 0 3.5-6 8-6s8 6 8 6-3.5 6-8 6-8-6-8-6z"/><circle cx="10" cy="10" r="2.5"/><path d="M3 3l14 14"/></I>
 export const Back     = ({ size = 14, color = 'var(--cs-ink)' }: { size?: number; color?: string }) => (
