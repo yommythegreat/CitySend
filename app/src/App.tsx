@@ -141,6 +141,7 @@ function orderToDelivery(o: CustomerOrder): Delivery {
   // Map OrderStatus → legacy Delivery status
   const statusMap: Record<string, Delivery['status']> = {
     new:        'in-transit',
+    offered:    'in-transit',
     assigned:   'in-transit',
     picked_up:  'in-transit',
     in_transit: 'in-transit',
@@ -284,10 +285,33 @@ export default function App() {
     [state.selectedCityId, configs],
   )
 
-  // ── Load user-specific data (addresses from localStorage, orders from Supabase) ─
+  // ── Load user-specific data (addresses from Supabase, orders from Supabase) ──
   const loadUserData = useCallback(async (authUser: AuthUser) => {
-    // Addresses: user-scoped localStorage
-    const addresses = authUser.id !== 'guest' ? loadSavedAddresses(authUser.id) : []
+    // Addresses: Supabase is source of truth; localStorage is a fast fallback
+    let addresses: AppState['savedAddresses'] = []
+    if (authUser.id !== 'guest') {
+      if (isSupabaseConfigured) {
+        try {
+          const { data } = await supabase
+            .from('profiles')
+            .select('saved_addresses')
+            .eq('id', authUser.id)
+            .maybeSingle()
+          if (Array.isArray(data?.saved_addresses)) {
+            addresses = data.saved_addresses
+            // Keep local mirror in sync
+            localStorage.setItem(savedAddressesKey(authUser.id), JSON.stringify(addresses))
+          } else {
+            // Column not yet migrated — fall back to localStorage
+            addresses = loadSavedAddresses(authUser.id)
+          }
+        } catch {
+          addresses = loadSavedAddresses(authUser.id)
+        }
+      } else {
+        addresses = loadSavedAddresses(authUser.id)
+      }
+    }
 
     // Past deliveries: fetch from order store, map to legacy Delivery type
     let deliveries: Delivery[] = []
@@ -507,10 +531,21 @@ export default function App() {
     }
   }, [])
 
-  // ── Persist saved addresses to user-scoped localStorage ─────────────────────
+  // ── Persist saved addresses to Supabase + localStorage mirror ───────────────
   useEffect(() => {
     if (!user || user.id === 'guest') return
+    // Always keep a local mirror for instant reads on next launch
     localStorage.setItem(savedAddressesKey(user.id), JSON.stringify(state.savedAddresses))
+    // Sync to Supabase so the same account sees the same places on any device
+    if (isSupabaseConfigured) {
+      supabase
+        .from('profiles')
+        .update({ saved_addresses: state.savedAddresses })
+        .eq('id', user.id)
+        .then(({ error }) => {
+          if (error) console.warn('[savedAddresses] sync failed', error.message)
+        })
+    }
   }, [state.savedAddresses, user])
 
   // ── City change (called by HomeScreen / SettingsScreen pickers) ─────────────

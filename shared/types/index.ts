@@ -19,7 +19,8 @@ export type CityId =
 
 export type OrderStatus =
   | 'new'
-  | 'assigned'
+  | 'offered'   // admin assigned a driver; waiting for driver to accept
+  | 'assigned'  // driver accepted
   | 'picked_up'
   | 'in_transit'
   | 'delivered'
@@ -27,6 +28,7 @@ export type OrderStatus =
 
 export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
   new:        'New',
+  offered:    'Pending Accept',
   assigned:   'Assigned',
   picked_up:  'Picked Up',
   in_transit: 'In Transit',
@@ -36,7 +38,8 @@ export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
 
 /** Valid next statuses for a given current status (admin workflow). */
 export const NEXT_STATUSES: Partial<Record<OrderStatus, OrderStatus[]>> = {
-  new:        ['assigned', 'cancelled'],
+  new:        ['offered', 'assigned', 'cancelled'],
+  offered:    ['assigned', 'cancelled'],
   assigned:   ['picked_up', 'cancelled'],
   picked_up:  ['in_transit', 'cancelled'],
   in_transit: ['delivered', 'cancelled'],

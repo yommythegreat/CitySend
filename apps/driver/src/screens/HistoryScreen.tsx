@@ -43,7 +43,7 @@ function HistoryCard({ order, onSelect }: { order: Order; onSelect: () => void }
         {!isCancelled && (
           <div style={{ textAlign: 'right' }}>
             <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--d-ok)' }}>
-              {fmt(order.priceBreakdown.total)}
+              {fmt(driverPayout(order))}
             </div>
             {order.priceBreakdown.tip > 0 && (
               <div style={{ fontSize: 11, color: 'var(--d-muted)' }}>+{fmt(order.priceBreakdown.tip)} tip</div>

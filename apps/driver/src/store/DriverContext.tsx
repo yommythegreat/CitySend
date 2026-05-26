@@ -131,9 +131,10 @@ function reducer(state: DriverState, action: Action): DriverState {
         ? state.orders.map(o => o.id === action.order.id ? action.order : o)
         : [...state.orders, action.order]
 
-      // Auto-show job offer if new order is assigned to this driver
+      // Auto-show job offer when admin offers the job to this driver
+      // Triggers on 'offered' (new flow) or 'assigned' (backward-compat)
       let newJobOffer = state.jobOffer
-      if (!newJobOffer && action.order.status === 'assigned' &&
+      if (!newJobOffer && (action.order.status === 'offered' || action.order.status === 'assigned') &&
           action.order.assignedDriverId === state.auth?.driverId) {
         newJobOffer = {
           order: action.order,
@@ -304,12 +305,18 @@ async function syncDriverAction(
     }
 
     case 'ACCEPT_JOB': {
-      // Critical write — driver must be marked busy before starting pickup
+      // Critical write — mark driver busy AND flip order from 'offered' → 'assigned'
       await withRetry(async () => {
-        const { error } = await supabase.from('drivers').update({
-          status: 'busy', current_order_id: action.orderId,
-        }).eq('id', action.driverId)
-        if (error) throw error
+        const [driverRes, orderRes] = await Promise.all([
+          supabase.from('drivers').update({
+            status: 'busy', current_order_id: action.orderId,
+          }).eq('id', action.driverId),
+          supabase.from('orders').update({
+            status: 'assigned', updated_at: new Date().toISOString(),
+          }).eq('id', action.orderId).in('status', ['offered', 'new']),
+        ])
+        if (driverRes.error) throw driverRes.error
+        if (orderRes.error) throw orderRes.error
       })
       break
     }
@@ -346,6 +353,16 @@ async function syncDriverAction(
                 .update({ offers_declined: (data?.offers_declined ?? 0) + 1 })
                 .eq('id', auth.driverId),
             ),
+          // Notify admin so they can reassign
+          offerId
+            ? pushNotification({
+                event:    'issue_reported',
+                audience: 'admin',
+                orderId:  offerId,
+                title:    'Job offer not accepted — reassignment needed',
+                body:     `Driver ${auth.name || auth.driverId} did not accept the job offer. Order reset to New.`,
+              })
+            : Promise.resolve(),
         ])
       }
       break

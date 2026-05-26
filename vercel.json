@@ -1,0 +1,22 @@
+{
+  "buildCommand": "cd shared && npm install && cd ../apps/driver && npm install && npx vite build",
+  "outputDirectory": "apps/driver/dist",
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/index.html" }
+  ],
+  "headers": [
+    {
+      "source": "/assets/(.*)",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
+      ]
+    },
+    {
+      "source": "/index.html",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-store, must-revalidate" },
+        { "key": "Pragma",        "value": "no-cache"                  }
+      ]
+    }
+  ]
+}

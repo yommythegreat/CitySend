@@ -4,6 +4,7 @@ import { ORDER_STATUS_LABELS, DRIVER_STATUS_LABELS } from '@shared/types'
 
 const ORDER_COLORS: Record<OrderStatus, { bg: string; color: string }> = {
   new:        { bg: 'var(--a-info-bg)',   color: 'var(--a-info)'   },
+  offered:    { bg: '#fef3c7',            color: '#92400e'          },
   assigned:   { bg: 'var(--a-warn-bg)',   color: 'var(--a-warn)'   },
   picked_up:  { bg: 'var(--a-orange-bg)', color: 'var(--a-orange)' },
   in_transit: { bg: 'var(--a-purple-bg)', color: 'var(--a-purple)' },

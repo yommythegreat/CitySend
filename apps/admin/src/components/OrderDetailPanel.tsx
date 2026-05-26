@@ -98,7 +98,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   )
 }
 
-const STATUS_PIPELINE: OrderStatus[] = ['new', 'assigned', 'picked_up', 'in_transit', 'delivered']
+const STATUS_PIPELINE: OrderStatus[] = ['new', 'offered', 'assigned', 'picked_up', 'in_transit', 'delivered']
 
 export function OrderDetailPanel({ orderId, onClose }: Props) {
   const { state, dispatch } = useAdminStore()

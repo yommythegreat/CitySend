@@ -139,7 +139,7 @@ function reducer(state: AdminState, action: Action): AdminState {
             ...o,
             assignedDriverId:   action.driverId,
             assignedDriverName: driver.name,
-            status:             o.status === 'new' ? 'assigned' : o.status,
+            status:             o.status === 'new' ? 'offered' : o.status,
             updatedAt:          new Date().toISOString(),
           }
         ),
@@ -325,7 +325,7 @@ async function syncToSupabase(action: Action, snapshot: AdminState): Promise<voi
       const driver = snapshot.drivers.find(d => d.id === action.driverId)
       const order  = snapshot.orders.find(o => o.id === action.orderId)
       if (!driver || !order) return
-      const newStatus = order.status === 'new' ? 'assigned' : order.status
+      const newStatus = order.status === 'new' ? 'offered' : order.status
       const auditNote: AdminNote = {
         id: `audit-${Date.now()}`,
         text: `🔧 ${adminLabel}: Assigned driver ${driver.name}.`,

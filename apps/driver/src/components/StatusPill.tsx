@@ -3,6 +3,7 @@ import type { OrderStatus, DriverStatus } from '@shared/types'
 
 const ORDER_LABELS: Record<OrderStatus, string> = {
   new:        'New',
+  offered:    'Pending Accept',
   assigned:   'Assigned',
   picked_up:  'Picked Up',
   in_transit: 'In Transit',
@@ -12,6 +13,7 @@ const ORDER_LABELS: Record<OrderStatus, string> = {
 
 const ORDER_DOTS: Record<OrderStatus, string> = {
   new:        '○',
+  offered:    '○',
   assigned:   '○',
   picked_up:  '◐',
   in_transit: '◑',

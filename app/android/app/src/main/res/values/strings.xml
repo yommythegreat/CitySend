@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">CitySend</string>
+    <string name="title_activity_main">CitySend</string>
+    <string name="package_name">com.citysend.customer</string>
+    <string name="custom_url_scheme">com.citysend.customer</string>
+</resources>
