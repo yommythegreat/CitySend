@@ -29,7 +29,7 @@ export function AddPlaceScreen({ go, setState, user }: Props) {
   // Guests cannot save places — gate immediately
   if (user?.id === 'guest') return (
     <GuestGatedScreen
-      go={go} screenTitle="Save a place" backTarget="home"
+      go={go} screenTitle="Save a place" backTarget="back"
       promptTitle="Your future self will thank you."
       promptMessage="Create a free CitySend account to save Home, Work, and your other frequent stops — one tap to autofill on your next send."
     />
@@ -77,14 +77,14 @@ export function AddPlaceScreen({ go, setState, user }: Props) {
     }))
 
     setSaved(true)
-    setTimeout(() => go('home'), 1100)
+    setTimeout(() => go('back'), 1100)
   }
 
   return (
     <div className="cs-screen cs-enter-up">
       {/* Top bar */}
       <div style={{ padding: '56px 20px 0', display: 'flex', alignItems: 'center', gap: 14, flexShrink: 0 }}>
-        <IconButton onClick={() => go('home')}><Back /></IconButton>
+        <IconButton onClick={() => go('back')}><Back /></IconButton>
         <div style={{ flex: 1, fontSize: 17, fontWeight: 600, letterSpacing: -0.3 }}>Add a place</div>
       </div>
 
@@ -100,7 +100,7 @@ export function AddPlaceScreen({ go, setState, user }: Props) {
               fontWeight: 500, marginBottom: 20,
             }}>
               <Check size={16} color="var(--cs-ok)" />
-              Place saved! Taking you home…
+              Place saved! Going back…
             </div>
           )}
 
@@ -240,7 +240,7 @@ export function AddPlaceScreen({ go, setState, user }: Props) {
           {/* Cancel */}
           {!saved && (
             <button
-              onClick={() => go('home')}
+              onClick={() => go('back')}
               style={{
                 width: '100%', marginTop: 10, padding: '14px 0',
                 border: '1.5px solid var(--cs-slate-200)', borderRadius: 14,

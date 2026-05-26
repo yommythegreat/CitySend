@@ -23,7 +23,7 @@ import { BLANK_DRAFT, INITIAL_STATE } from './data/mock'
 import { getCityConfig, getCityConfigByDetectedName, computeOrderPrice, canStartOrder } from './utils/serviceAvailability'
 import { fetchCityConfigs, subscribeToCityConfigs } from './utils/configStore'
 import { pushNewOrder, getCustomerOrders, type CustomerOrder } from './utils/orderStore'
-import { pushCustomerNotif, NOTIFS_STORAGE_KEY, subscribeToCustomerNotifs } from './utils/notificationStore'
+import { pushCustomerNotif, NOTIFS_STORAGE_KEY, subscribeToCustomerNotifs, fetchCustomerNotifs } from './utils/notificationStore'
 import { supabase, isSupabaseConfigured } from './lib/supabase'
 import { Capacitor } from '@capacitor/core'
 
@@ -200,9 +200,14 @@ export default function App() {
   // without waiting for a useEffect — required for the payment-flow handoff where
   // onPaymentComplete sets the ID and go('tracking') fires synchronously after.
   const trackingOrderIdRef = useRef<string | undefined>(parseTrackingId())
+  // Navigation history stack — enables go('back') to return to the previous screen.
+  // Stored in a ref (not state) so go() reads/writes it without stale-closure issues.
+  const screenRef      = useRef<ScreenName>(screen)
+  const navHistoryRef  = useRef<ScreenName[]>([])
   useEffect(() => { userRef.current    = user },                       [user])
   useEffect(() => { selectedCityRef.current = state.selectedCityId },  [state.selectedCityId])
   useEffect(() => { trackingOrderIdRef.current = trackingOrderId },    [trackingOrderId])
+  useEffect(() => { screenRef.current = screen },                      [screen])
 
   // ── City configs — Supabase as single source of truth ───────────────────────
   // Initialised with compile-time defaults so the UI renders immediately.
@@ -210,8 +215,19 @@ export default function App() {
   const [configs, setConfigs] = useState<CityConfig[]>(CITY_CONFIGS)
   useEffect(() => { configsRef.current = configs }, [configs])
 
-  // notifVersion bumps whenever new notifications arrive (cross-tab / realtime)
+  // notifVersion bumps whenever new notifications arrive OR are marked as read
   const [notifVersion, setNotifVersion] = useState(0)
+  const [unreadCount,  setUnreadCount]  = useState(0)
+
+  // ── Unread notification count ─────────────────────────────────────────────────
+  // Re-fetched whenever a new notification arrives OR the user marks one as read.
+  useEffect(() => {
+    const uid = userRef.current?.id
+    if (!uid || uid === 'guest') { setUnreadCount(0); return }
+    fetchCustomerNotifs(uid).then(notifs => {
+      setUnreadCount(notifs.filter(n => !n.read).length)
+    }).catch(() => {})
+  }, [notifVersion, user?.id])
 
   // ── Browser back / forward navigation ───────────────────────────────────────
   useEffect(() => {
@@ -304,10 +320,12 @@ export default function App() {
   //
   useEffect(() => {
     // Shared helper: apply a saved booking session if one exists.
-    // Only called on initial session restore, not on fresh sign-in.
+    // On native (initial screen = 'auth'), always land on 'home' after session
+    // restore so the user doesn't see the auth screen when already signed in.
     const applyRestoredSession = () => {
       const saved = restoreBookingSession()
       if (saved) { setScreen(saved.screen); setDraft(saved.draft) }
+      else if (IS_NATIVE) setScreen('home')
     }
 
     if (!isSupabaseConfigured) {
@@ -467,6 +485,8 @@ export default function App() {
     setState(INITIAL_STATE)
     setDraft(BLANK_DRAFT)
     setScreen('home')
+    setUnreadCount(0)
+    navHistoryRef.current = []
     clearBookingSession()
 
     if (wasGuest) {
@@ -500,6 +520,24 @@ export default function App() {
 
   // ── Navigation ──────────────────────────────────────────────────────────────
   const go = useCallback((next: ScreenName, opts?: NavOptions) => {
+    // ── Back navigation: pop the history stack ───────────────────────────────
+    if (next === 'back') {
+      const history = navHistoryRef.current
+      if (history.length > 0) {
+        const prev = history[history.length - 1]
+        navHistoryRef.current = history.slice(0, -1)
+        setScreen(prev)
+      }
+      return
+    }
+
+    // Push current screen onto the history stack before navigating forward.
+    // Skip pushing if navigating to the same screen (avoids stack pollution).
+    const current = screenRef.current
+    if (current !== next && current !== 'back') {
+      navHistoryRef.current = [...navHistoryRef.current, current]
+    }
+
     // City gate — block new-1 for non-live cities using live Supabase configs
     if (next === 'new-1' && !canStartOrder(selectedCityRef.current, configsRef.current)) {
       setScreen('city-blocked')
@@ -657,6 +695,7 @@ export default function App() {
             cityConfig={cityConfig}
             configs={configs}
             onCityChange={handleCityChange}
+            unreadCount={unreadCount}
           />
         )
       case 'new-1':
@@ -691,7 +730,14 @@ export default function App() {
       case 'billing':
         return <BillingScreen go={go} state={state} user={user} />
       case 'notifications':
-        return <NotificationsScreen go={go} user={user} notifVersion={notifVersion} />
+        return (
+          <NotificationsScreen
+            go={go}
+            user={user}
+            notifVersion={notifVersion}
+            onRead={() => setNotifVersion(v => v + 1)}
+          />
+        )
       case 'profile':
         return <ProfileScreen go={go} user={user!} state={state} onLogout={handleLogout} />
       case 'settings':
@@ -777,7 +823,7 @@ export default function App() {
   return (
     <div className="cs-shell">
       {renderScreen()}
-      {TAB_SCREENS.includes(screen) && <TabBar screen={screen} go={go} />}
+      {TAB_SCREENS.includes(screen) && <TabBar screen={screen} go={go} unreadCount={unreadCount} />}
     </div>
   )
 }

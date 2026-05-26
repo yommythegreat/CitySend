@@ -43,6 +43,7 @@ interface Props {
   cityConfig: CityConfig
   configs: CityConfig[]
   onCityChange: (cityId: CityId) => void
+  unreadCount?: number
 }
 
 // ── City picker sheet ─────────────────────────────────────────────────────────
@@ -147,7 +148,7 @@ function CityPickerSheet({
 
 // ── HomeScreen ────────────────────────────────────────────────────────────────
 
-export function HomeScreen({ go, state, user, cityConfig, configs, onCityChange }: Props) {
+export function HomeScreen({ go, state, user, cityConfig, configs, onCityChange, unreadCount = 0 }: Props) {
   const [showPicker,   setShowPicker]   = useState(false)
   const [trackOrders,  setTrackOrders]  = useState<CustomerOrder[]>([])
   const [trackLoading, setTrackLoading] = useState(false)
@@ -219,11 +220,13 @@ export function HomeScreen({ go, state, user, cityConfig, configs, onCityChange 
         <div style={{ display: 'flex', gap: 8 }}>
           <IconButton onClick={() => go('notifications')} style={{ position: 'relative' }}>
             <Bell size={18} />
-            <span style={{
-              position: 'absolute', top: 8, right: 8, width: 7, height: 7,
-              background: 'var(--cs-accent)', borderRadius: '50%',
-              border: '1.5px solid var(--cs-paper)',
-            }} />
+            {unreadCount > 0 && (
+              <span style={{
+                position: 'absolute', top: 8, right: 8, width: 7, height: 7,
+                background: 'var(--cs-accent)', borderRadius: '50%',
+                border: '1.5px solid var(--cs-paper)',
+              }} />
+            )}
           </IconButton>
           <IconButton onClick={() => go('profile')}>
             <User size={18} />

@@ -34,6 +34,7 @@ export type ScreenName =
   | 'privacy'
   | 'terms'
   | 'about'
+  | 'back'  // special: pops the navigation history stack
 
 export interface SavedAddress {
   label:   string

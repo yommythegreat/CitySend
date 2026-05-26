@@ -74,7 +74,7 @@ export function HistoryScreen({ go, state, user }: Props) {
     <div className="cs-screen cs-enter-up">
       {/* Top bar */}
       <div style={{ padding: '56px 20px 0', display: 'flex', alignItems: 'center', gap: 14, flexShrink: 0 }}>
-        <IconButton onClick={() => go('home')}><Back /></IconButton>
+        <IconButton onClick={() => go('back')}><Back /></IconButton>
         <div style={{ flex: 1, fontSize: 17, fontWeight: 600, letterSpacing: -0.3 }}>History</div>
         {searchOpen
           ? <IconButton onClick={closeSearch}><X size={18} /></IconButton>

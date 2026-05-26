@@ -8,7 +8,8 @@
     "build": "tsc && vite build",
     "cap:sync": "npm run build && npx cap sync",
     "cap:ios": "npm run build && npx cap sync ios && npx cap open ios",
-    "cap:android": "npm run build && npx cap sync android && npx cap open android"
+    "cap:android": "npm run build && npx cap sync android && npx cap open android",
+    "icon:generate": "node ../../generate-icons.mjs && npx @capacitor/assets generate"
   },
   "dependencies": {
     "@capacitor/android": "^8.3.4",
@@ -26,6 +27,8 @@
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
+    "@resvg/resvg-js": "^2.6.2",
     "@types/react": "^18.3.1",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.1",

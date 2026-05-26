@@ -5,6 +5,7 @@ import type { ScreenName } from '../types'
 interface TabBarProps {
   screen: ScreenName
   go: (screen: ScreenName) => void
+  unreadCount?: number
 }
 
 const TABS: { k: ScreenName; l: string; Icon: React.FC<{ size?: number }> }[] = [
@@ -13,7 +14,7 @@ const TABS: { k: ScreenName; l: string; Icon: React.FC<{ size?: number }> }[] = 
   { k: 'notifications', l: 'Alerts', Icon: Bell },
 ]
 
-export function TabBar({ screen, go }: TabBarProps) {
+export function TabBar({ screen, go, unreadCount = 0 }: TabBarProps) {
   return (
     <div style={{
       position: 'absolute',
@@ -30,6 +31,7 @@ export function TabBar({ screen, go }: TabBarProps) {
     }}>
       {TABS.map((t) => {
         const active = screen === t.k
+        const showDot = t.k === 'notifications' && unreadCount > 0 && !active
         return (
           <button
             key={t.k}
@@ -49,10 +51,20 @@ export function TabBar({ screen, go }: TabBarProps) {
               fontWeight: 500,
               transition: 'all .18s',
               whiteSpace: 'nowrap',
+              position: 'relative',
             }}
           >
             <t.Icon size={17} />
             {active && <span>{t.l}</span>}
+            {showDot && (
+              <span style={{
+                position: 'absolute',
+                top: 8, right: active ? 10 : 8,
+                width: 7, height: 7, borderRadius: '50%',
+                background: 'var(--cs-accent)',
+                border: '1.5px solid var(--cs-ink)',
+              }} />
+            )}
           </button>
         )
       })}

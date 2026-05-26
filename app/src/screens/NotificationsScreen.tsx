@@ -13,6 +13,7 @@ interface Props {
   go:           (screen: ScreenName, opts?: NavOptions) => void
   user:         AuthUser | null
   notifVersion: number
+  onRead?:      () => void
 }
 
 type ToneKey = 'ok' | 'ink' | 'neutral' | 'accent'
@@ -87,7 +88,7 @@ function groupByDay(notifs: CustomerNotif[]): { day: string; items: CustomerNoti
 
 // ── Screen ───────────────────────────────────────────────────────────────────
 
-export function NotificationsScreen({ go, user, notifVersion }: Props) {
+export function NotificationsScreen({ go, user, notifVersion, onRead }: Props) {
   const [liveNotifs, setLiveNotifs] = useState<CustomerNotif[]>([])
   const [tick,       setTick]       = useState(0)
 
@@ -117,7 +118,7 @@ export function NotificationsScreen({ go, user, notifVersion }: Props) {
   const unreadCount = allNotifs.filter(n => !n.read).length
 
   const handleMarkRead = (notif: CustomerNotif) => {
-    markNotifRead(notif.id).then(() => setTick(t => t + 1))
+    markNotifRead(notif.id).then(() => { setTick(t => t + 1); onRead?.() })
     // Navigate to tracking if the notification is order-related and has an orderId
     const trackableEvents: NotifEvent[] = [
       'driver_assigned', 'driver_en_route', 'picked_up', 'in_transit', 'delivered',
@@ -128,14 +129,14 @@ export function NotificationsScreen({ go, user, notifVersion }: Props) {
   }
 
   const handleMarkAllRead = () => {
-    markAllNotifsRead(user?.id).then(() => setTick(t => t + 1))
+    markAllNotifsRead(user?.id).then(() => { setTick(t => t + 1); onRead?.() })
   }
 
   return (
     <div className="cs-screen cs-enter-up">
       {/* Top bar */}
       <div style={{ padding: '56px 20px 0', display: 'flex', alignItems: 'center', gap: 14, flexShrink: 0 }}>
-        <IconButton onClick={() => go('home')}><Back /></IconButton>
+        <IconButton onClick={() => go('back')}><Back /></IconButton>
         <div style={{ flex: 1, fontSize: 17, fontWeight: 600, letterSpacing: -0.3 }}>Notifications</div>
         <button
           onClick={handleMarkAllRead}
