@@ -128,11 +128,11 @@ function DriverApp() {
   }
 
   const handleDeclineOffer = () => {
-    dispatch({ type: 'HIDE_JOB_OFFER' })
+    dispatch({ type: 'HIDE_JOB_OFFER', reason: 'declined' })
   }
 
   const handleOfferTimeout = () => {
-    dispatch({ type: 'HIDE_JOB_OFFER' })
+    dispatch({ type: 'HIDE_JOB_OFFER', reason: 'timeout' })
   }
 
   // ── Topbar (dashboard + history only — delivery/earnings are fullscreen) ──

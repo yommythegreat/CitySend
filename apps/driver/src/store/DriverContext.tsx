@@ -85,7 +85,7 @@ type Action =
   | { type: '_HYDRATE_ORDERS';     orders: Order[] }
   | { type: '_UPSERT_ORDER';       order: Order }
   | { type: 'SHOW_JOB_OFFER';      order: Order }
-  | { type: 'HIDE_JOB_OFFER'; accepted?: boolean }
+  | { type: 'HIDE_JOB_OFFER'; accepted?: boolean; reason?: 'declined' | 'timeout' }
   | { type: 'TICK_JOB_OFFER_TIMER' }
   | { type: 'ACCEPT_JOB'; orderId: string; driverId: string }
 
@@ -306,13 +306,21 @@ async function syncDriverAction(
 
     case 'ACCEPT_JOB': {
       // Critical write — mark driver busy AND flip order from 'offered' → 'assigned'
+      const acceptNote: AdminNote = {
+        id:         `driver-${Date.now()}`,
+        text:       `✅ Driver ${snapshot.auth?.name ?? action.driverId}: Accepted job offer.`,
+        authorName: 'Driver',
+        createdAt:  now,
+      }
+      const acceptOrder = snapshot.orders.find(o => o.id === action.orderId)
       await withRetry(async () => {
         const [driverRes, orderRes] = await Promise.all([
           supabase.from('drivers').update({
             status: 'busy', current_order_id: action.orderId,
           }).eq('id', action.driverId),
           supabase.from('orders').update({
-            status: 'assigned', updated_at: new Date().toISOString(),
+            status: 'assigned', updated_at: now,
+            notes: [...(acceptOrder?.notes ?? []), acceptNote],
           }).eq('id', action.orderId).in('status', ['offered', 'new']),
         ])
         if (driverRes.error) throw driverRes.error
@@ -333,18 +341,34 @@ async function syncDriverAction(
     case 'HIDE_JOB_OFFER': {
       // accepted === true means the driver tapped Accept; false/undefined = decline or timeout
       if (!action.accepted && snapshot.auth && snapshot.jobOffer?.showModal) {
-        const auth    = snapshot.auth
-        const offerId = snapshot.jobOffer.order?.id
+        const auth      = snapshot.auth
+        const offerId   = snapshot.jobOffer.order?.id
+        const offerOrder = offerId ? snapshot.orders.find(o => o.id === offerId) : undefined
+        const isTimeout = action.reason === 'timeout'
+        const noteText  = isTimeout
+          ? `⏱ Driver ${auth.name}: Job offer expired (no response within time limit) — order returned to New.`
+          : `❌ Driver ${auth.name}: Declined job offer — order returned to New.`
+        const declineNote: AdminNote = {
+          id:         `driver-${Date.now()}`,
+          text:       noteText,
+          authorName: 'Driver',
+          createdAt:  now,
+        }
         await Promise.allSettled([
-          // Reset order so admin can reassign to another driver
+          // Reset order + append note so admin can reassign to another driver
           offerId
             ? supabase.from('orders').update({
                 status:               'new',
                 assigned_driver_id:   null,
                 assigned_driver_name: null,
-                updated_at:           new Date().toISOString(),
+                updated_at:           now,
+                notes:                [...(offerOrder?.notes ?? []), declineNote],
               }).eq('id', offerId)
             : Promise.resolve(),
+          // Reset driver back to available (admin set them busy on assignment)
+          supabase.from('drivers').update({
+            status: 'available', current_order_id: null,
+          }).eq('id', auth.driverId),
           // Increment decline counter on driver row
           supabase.from('drivers')
             .select('offers_declined').eq('id', auth.driverId).maybeSingle()
@@ -359,8 +383,8 @@ async function syncDriverAction(
                 event:    'issue_reported',
                 audience: 'admin',
                 orderId:  offerId,
-                title:    'Job offer not accepted — reassignment needed',
-                body:     `Driver ${auth.name || auth.driverId} did not accept the job offer. Order reset to New.`,
+                title:    isTimeout ? 'Job offer timed out — reassignment needed' : 'Driver declined — reassignment needed',
+                body:     `Driver ${auth.name || auth.driverId} ${isTimeout ? 'did not respond in time' : 'declined the job offer'}. Order reset to New.`,
               })
             : Promise.resolve(),
         ])
