@@ -40,7 +40,7 @@ export function JobOfferModal({ order, onAccept, onDecline, onTimeout }: Props) 
 
   return (
     <div style={{
-      position: 'fixed', inset: 0, zIndex: 300,
+      position: 'absolute', inset: 0, zIndex: 300,
       background: '#111827',
       display: 'flex', flexDirection: 'column', justifyContent: 'flex-end',
     }}>

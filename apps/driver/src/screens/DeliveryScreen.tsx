@@ -71,7 +71,7 @@ function ReportIssueSheet({
   const [detail,   setDetail]   = useState('')
 
   return (
-    <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 200, background: 'rgba(0,0,0,0.5)' }}>
+    <div onClick={onClose} style={{ position: 'absolute', inset: 0, zIndex: 200, background: 'rgba(0,0,0,0.5)' }}>
       <div onClick={e => e.stopPropagation()} style={{
         position: 'absolute', bottom: 0, left: 0, right: 0,
         background: '#fff', borderRadius: '20px 20px 0 0',
@@ -137,7 +137,7 @@ function ChatPanel({ order, myId, messages, fetchError, sending, inputText, call
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages.length])
 
   return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 150, background: 'var(--d-surface)', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ position: 'absolute', inset: 0, zIndex: 150, background: 'var(--d-surface)', display: 'flex', flexDirection: 'column' }}>
       <div style={{ padding: '12px 16px', paddingTop: 'max(12px, env(safe-area-inset-top))', background: 'var(--d-accent)', display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
         <button onClick={onClose} style={{ width: 36, height: 36, borderRadius: '50%', border: 'none', background: 'rgba(255,255,255,0.18)', color: '#fff', fontSize: 18, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>←</button>
         <div style={{ flex: 1 }}>
@@ -274,7 +274,7 @@ export function DeliveryScreen({ orderId, onBack, onComplete, initialChatOpen = 
 
   if (!order) {
     return (
-      <div style={{ position: 'fixed', inset: 0, background: 'var(--d-bg)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 32, textAlign: 'center' }}>
+      <div style={{ position: 'absolute', inset: 0, background: 'var(--d-bg)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 32, textAlign: 'center' }}>
         <div style={{ fontSize: 32, marginBottom: 12 }}>📦</div>
         <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--d-ink)', marginBottom: 6 }}>Loading order…</div>
         <div style={{ fontSize: 13, color: 'var(--d-muted)', marginBottom: 24 }}>{orderId}</div>
@@ -397,7 +397,7 @@ export function DeliveryScreen({ orderId, onBack, onComplete, initialChatOpen = 
 
   if (step === 'at_pickup') {
     return (
-      <div style={{ position: 'fixed', inset: 0, background: 'var(--d-bg)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <div style={{ position: 'absolute', inset: 0, background: 'var(--d-bg)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
 
         {/* Dark header */}
         <div style={{ background: '#111827', paddingTop: 'max(52px, env(safe-area-inset-top, 52px))', paddingBottom: 16, paddingLeft: 20, paddingRight: 20, flexShrink: 0 }}>
@@ -594,7 +594,7 @@ export function DeliveryScreen({ orderId, onBack, onComplete, initialChatOpen = 
   )
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: '#e5e5e5', overflow: 'hidden' }}>
+    <div style={{ position: 'absolute', inset: 0, background: '#e5e5e5', overflow: 'hidden' }}>
 
       {/* Map */}
       <iframe

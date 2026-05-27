@@ -42,7 +42,7 @@ export function EarningsScreen({ order, onContinue }: Props) {
 
   return (
     <div style={{
-      background: '#111827', minHeight: '100vh',
+      background: '#111827', minHeight: '100%',
       display: 'flex', flexDirection: 'column',
       overflowY: 'auto',
     }}>

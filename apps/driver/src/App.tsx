@@ -234,10 +234,8 @@ function DriverApp() {
     }
   }
 
-  const isFullscreen = screen.name === 'delivery' || screen.name === 'earnings'
-
   return (
-    <div className={isFullscreen ? undefined : 'd-shell'}>
+    <div className="d-shell">
       {renderTopBar()}
       {renderScreen()}
 
@@ -254,7 +252,7 @@ function DriverApp() {
       {/* ── Sync error banner (write failed after 3 retries) ─────────────── */}
       {syncError && (
         <div style={{
-          position: 'fixed', top: 0, left: 0, right: 0, zIndex: 999,
+          position: 'absolute', top: 0, left: 0, right: 0, zIndex: 999,
           background: '#dc2626', color: '#fff',
           padding: '12px 16px',
           paddingTop: 'max(12px, env(safe-area-inset-top, 12px))',
