@@ -26,6 +26,7 @@ interface PhaseInfo { step: number; label: string; desc: string; terminal: boole
 
 const PHASE_MAP: Record<OrderStatus, PhaseInfo> = {
   new:        { step: 0, label: 'Finding driver',    desc: 'Looking for a courier nearby',         terminal: false },
+  offered:    { step: 0, label: 'Finding driver',    desc: 'Looking for a courier nearby',         terminal: false },
   assigned:   { step: 1, label: 'Driver assigned',   desc: 'Your driver is heading to pickup',      terminal: false },
   picked_up:  { step: 2, label: 'Picked up',         desc: 'Your parcel is on its way',             terminal: false },
   in_transit: { step: 3, label: 'In transit',        desc: 'Almost at the drop-off',               terminal: false },
@@ -528,10 +529,11 @@ export function TrackingScreen({ go, draft, cityConfig, orderId, user }: Props) 
   const distKm    = routeInfo ? (routeInfo.distanceM / 1000).toFixed(1) : '—'
   const etaMins   = routeInfo ? Math.max(2, Math.round(routeInfo.durationS / 60 * (1 - progressRef.current))) : null
 
-  const driverName     = order?.assignedDriverName
+  const driverPending  = status === 'new' || status === 'offered'
+  const driverName     = (!driverPending && order?.assignedDriverName)
     ? abbreviateName(order.assignedDriverName)
-    : (status === 'new' ? 'Matching…' : 'CitySend Courier')
-  const driverInitials = order?.assignedDriverName ? getInitials(order.assignedDriverName) : '?'
+    : (driverPending ? 'Matching…' : 'CitySend Courier')
+  const driverInitials = (!driverPending && order?.assignedDriverName) ? getInitials(order.assignedDriverName) : '?'
 
   const pickupAddr  = order?.pickup.address  || draft.pickup.address  || '—'
   const dropoffAddr = order?.dropoff.address || draft.dropoff.address || '—'
@@ -711,18 +713,18 @@ export function TrackingScreen({ go, draft, cityConfig, orderId, user }: Props) 
             <div style={{ padding: '18px 20px 0' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: 14, background: 'var(--cs-paper)', borderRadius: 16 }}>
                 <div style={{ width: 52, height: 52, borderRadius: 26, background: 'linear-gradient(135deg,#2b3548,#5b657a)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, fontWeight: 600, color: '#fff', flexShrink: 0 }}>
-                  {status === 'new' ? '…' : driverInitials}
+                  {driverPending ? '…' : driverInitials}
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--cs-ink)', letterSpacing: -0.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                     {driverName}
                   </div>
                   <div style={{ fontSize: 12, color: 'var(--cs-slate-500)', marginTop: 2, display: 'flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}>
-                    {status !== 'new' && <Star size={11} color="var(--cs-accent)" fill="var(--cs-accent)" />}
-                    {status !== 'new' ? '5.0 · CitySend Courier' : 'CitySend Courier'}
+                    {!driverPending && <Star size={11} color="var(--cs-accent)" fill="var(--cs-accent)" />}
+                    {!driverPending ? '5.0 · CitySend Courier' : 'CitySend Courier'}
                   </div>
                 </div>
-                {status !== 'new' && (
+                {!driverPending && (
                   <div style={{ display: 'flex', gap: 8, flexShrink: 0, alignItems: 'center' }}>
                     {/* Phone — compact circle, redirects to messaging with notice */}
                     <button
