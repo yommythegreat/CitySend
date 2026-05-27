@@ -14,7 +14,8 @@ interface Props {
  * Design matches DOfferScreen from driver-screens.jsx prototype.
  */
 export function JobOfferModal({ order, onAccept, onDecline, onTimeout }: Props) {
-  const [t, setT] = useState(120)
+  const [t, setT]                   = useState(120)
+  const [confirmDecline, setConfirmDecline] = useState(false)
 
   useEffect(() => {
     if (t <= 0) { onTimeout(); return }
@@ -92,6 +93,7 @@ export function JobOfferModal({ order, onAccept, onDecline, onTimeout }: Props) 
           padding: '24px 20px', paddingBottom: 'max(28px, env(safe-area-inset-bottom, 28px))',
           boxShadow: '0 -20px 50px -20px rgba(0,0,0,.5)',
           display: 'flex', flexDirection: 'column', gap: 18,
+          position: 'relative',
         }}>
           {/* NEW tag + order ID */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -153,7 +155,7 @@ export function JobOfferModal({ order, onAccept, onDecline, onTimeout }: Props) 
           {/* Actions */}
           <div style={{ display: 'flex', gap: 10 }}>
             <button
-              onClick={onDecline}
+              onClick={() => setConfirmDecline(true)}
               style={{
                 flex: 1, height: 52, borderRadius: 26, cursor: 'pointer',
                 background: '#f3f4f6', border: 'none', color: '#111827',
@@ -176,6 +178,48 @@ export function JobOfferModal({ order, onAccept, onDecline, onTimeout }: Props) 
               </svg>
             </button>
           </div>
+
+          {/* Decline confirmation overlay */}
+          {confirmDecline && (
+            <div style={{
+              position: 'absolute', inset: 0, borderRadius: '24px 24px 0 0',
+              background: 'rgba(17,24,39,0.55)', backdropFilter: 'blur(4px)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              padding: 24, zIndex: 10,
+            }}>
+              <div style={{
+                background: '#fff', borderRadius: 20, padding: 24,
+                width: '100%', maxWidth: 320, textAlign: 'center',
+                boxShadow: '0 20px 60px -10px rgba(0,0,0,0.4)',
+              }}>
+                <div style={{ fontSize: 36, marginBottom: 12 }}>🚫</div>
+                <div style={{ fontSize: 17, fontWeight: 700, color: '#111827', marginBottom: 8, letterSpacing: -0.3 }}>
+                  Decline this job?
+                </div>
+                <div style={{ fontSize: 13, color: '#6b7280', lineHeight: 1.5, marginBottom: 22 }}>
+                  The order will be returned to the queue and the admin will be notified to reassign.
+                </div>
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <button
+                    onClick={() => setConfirmDecline(false)}
+                    style={{
+                      flex: 1, height: 48, borderRadius: 24, cursor: 'pointer',
+                      background: '#f3f4f6', border: 'none', color: '#374151',
+                      fontFamily: 'inherit', fontSize: 15, fontWeight: 500,
+                    }}
+                  >Cancel</button>
+                  <button
+                    onClick={onDecline}
+                    style={{
+                      flex: 1, height: 48, borderRadius: 24, cursor: 'pointer',
+                      background: '#111827', border: 'none', color: '#fff',
+                      fontFamily: 'inherit', fontSize: 15, fontWeight: 600,
+                    }}
+                  >Yes, decline</button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

@@ -81,6 +81,7 @@ type Action =
   | { type: '_HYDRATE_CONFIGS';     configs: CityConfig[] }
   | { type: '_SET_LOADING';         value: boolean }
   | { type: '_UPSERT_ORDER';        order: Order }
+  | { type: '_UPSERT_DRIVER';       driver: Driver }
   | { type: '_UPSERT_INCIDENT';     incident: IncidentReport }
 
 // ── Reducer ───────────────────────────────────────────────────────────────────
@@ -96,6 +97,16 @@ function reducer(state: AdminState, action: Action): AdminState {
 
     case '_HYDRATE_DRIVERS':
       return { ...state, drivers: action.drivers }
+
+    case '_UPSERT_DRIVER': {
+      const exists = state.drivers.some(d => d.id === action.driver.id)
+      return {
+        ...state,
+        drivers: exists
+          ? state.drivers.map(d => d.id === action.driver.id ? action.driver : d)
+          : [...state.drivers, action.driver],
+      }
+    }
 
     case '_HYDRATE_USERS':
       return { ...state, users: action.users }
@@ -666,6 +677,37 @@ export function AdminProvider({ children }: { children: React.ReactNode }) {
       baseDispatch({ type: 'UPDATE_CITY_CONFIG', cityId: config.cityId, patch: config })
     })
 
+    // Drivers realtime — keeps status/currentOrderId live without a full re-fetch
+    // Necessary because driver status changes (accept/decline) are written by the
+    // driver app and are never received through any other admin subscription.
+    let driversChannel: ReturnType<typeof supabase.channel> | null = null
+    if (isSupabaseConfigured) {
+      driversChannel = supabase
+        .channel('admin_drivers_realtime')
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'drivers' }, (payload) => {
+          const r = payload.new as any
+          baseDispatch({
+            type: '_UPSERT_DRIVER',
+            driver: {
+              id:              r.id,
+              name:            r.name,
+              initials:        r.initials,
+              phone:           r.phone,
+              email:           r.email,
+              vehicle:         r.vehicle,
+              status:          r.status,
+              currentOrderId:  r.current_order_id ?? undefined,
+              rating:          Number(r.rating),
+              completedOrders: r.completed_orders,
+              offersReceived:  r.offers_received ?? 0,
+              offersDeclined:  r.offers_declined ?? 0,
+              joinedAt:        r.joined_at,
+            },
+          })
+        })
+        .subscribe()
+    }
+
     // Legacy StorageEvent listener (when Supabase is not configured)
     const legacyHandler = (e: StorageEvent) => {
       if (isSupabaseConfigured) return
@@ -683,6 +725,7 @@ export function AdminProvider({ children }: { children: React.ReactNode }) {
       unsubIncidents()
       unsubReceipts()
       unsubConfigs()
+      driversChannel?.unsubscribe()
       window.removeEventListener('storage', legacyHandler)
     }
   }, [])
