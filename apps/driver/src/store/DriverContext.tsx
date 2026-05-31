@@ -136,6 +136,20 @@ function reducer(state: DriverState, action: Action): DriverState {
       // accepted, so the realtime echo of ACCEPT_JOB's status='assigned' write
       // must not re-pop the modal (the "double-accept" bug).
       let newJobOffer = state.jobOffer
+
+      // Dismiss a currently-shown offer if the realtime echo shows the order
+      // is no longer offered to this driver. Covers admin unassigning,
+      // reassigning to another driver, cancelling, or progressing the order.
+      // Without this, the modal sits stale and Accept can write through.
+      if (newJobOffer && newJobOffer.order.id === action.order.id) {
+        const stillOfferedToMe =
+          action.order.status === 'offered' &&
+          action.order.assignedDriverId === state.auth?.driverId
+        if (!stillOfferedToMe) {
+          newJobOffer = null
+        }
+      }
+
       if (!newJobOffer && action.order.status === 'offered' &&
           action.order.assignedDriverId === state.auth?.driverId) {
         newJobOffer = {
