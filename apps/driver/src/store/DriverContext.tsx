@@ -122,8 +122,34 @@ function reducer(state: DriverState, action: Action): DriverState {
       return { ...state, orders: updated }
     }
 
-    case '_HYDRATE_ORDERS':
-      return { ...state, orders: action.orders }
+    case '_HYDRATE_ORDERS': {
+      // On reload, restore the offer modal if there's still a pending offer for
+      // this driver. Without this, refresh during the countdown loses the modal
+      // and the order appears as a normal "active job" — tapping it would skip
+      // straight to delivery without going through accept.
+      let newJobOffer = state.jobOffer
+      if (!newJobOffer && state.auth) {
+        const myId = state.auth.driverId
+        const offered = action.orders.find(
+          o => o.status === 'offered' && o.assignedDriverId === myId
+        )
+        if (offered) {
+          const elapsedSec = Math.floor(
+            (Date.now() - new Date(offered.updatedAt).getTime()) / 1000
+          )
+          const remaining = 120 - elapsedSec
+          // Only restore if the offer is still meaningfully open (>5s left).
+          if (remaining > 5) {
+            newJobOffer = {
+              order: offered,
+              showModal: true,
+              timeRemaining: remaining,
+            }
+          }
+        }
+      }
+      return { ...state, orders: action.orders, jobOffer: newJobOffer }
+    }
 
     case '_UPSERT_ORDER': {
       const exists = state.orders.some(o => o.id === action.order.id)
