@@ -156,18 +156,15 @@ export function subscribeToNotifications(
     return () => window.removeEventListener('storage', handler)
   }
 
-  // Build a filter that matches exactly what the RLS policy checks for each role:
-  //   customers: audience=customer AND customer_id=<id>
-  //   drivers:   audience=driver   AND driver_id=<id>
-  //   admin:     audience=admin    (full access via is_admin())
-  // Without the id column in the filter, Supabase realtime evaluates the RLS
-  // policy against the connected user but has no way to confirm the specific-row
-  // match, so it silently drops the INSERT event on prod.
+  // Supabase postgres_changes supports only ONE filter condition.
+  // Use the id column (customer_id / driver_id) as the single filter so
+  // Supabase can confirm row visibility against the RLS policy.
+  // audience + event-type filtering is done client-side in the onNew callback.
   let filter: string
   if (customerId) {
-    filter = `audience=eq.${audience}&customer_id=eq.${customerId}`
+    filter = `customer_id=eq.${customerId}`
   } else if (driverId) {
-    filter = `audience=eq.${audience}&driver_id=eq.${driverId}`
+    filter = `driver_id=eq.${driverId}`
   } else {
     filter = `audience=eq.${audience}`
   }
