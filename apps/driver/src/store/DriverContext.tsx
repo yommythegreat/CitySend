@@ -13,10 +13,10 @@ import type { Order, Driver, OrderStatus, AdminNote } from '@shared/types'
 import type { AuthChangeEvent, Session } from '@supabase/supabase-js'
 import { supabase, isSupabaseConfigured } from '@shared/lib/supabase'
 import {
-  fetchOrders, subscribeToOrders,
+  fetchOrders, fetchDriverOrders, subscribeToOrders,
   getSharedOrders, setSharedOrders, ORDERS_STORAGE_KEY,
 } from '@shared/utils/orderStore'
-import { pushNotification } from '@shared/utils/notificationStore'
+import { pushNotification, subscribeToNotifications } from '@shared/utils/notificationStore'
 import {
   startLocationBroadcast,
   stopLocationBroadcast,
@@ -531,6 +531,44 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [subscribeKey])
+
+  // Robust job-offer delivery via the notifications channel.
+  //
+  // An offer arriving over the ORDERS realtime feed is an UPDATE that flips
+  // assigned_driver_id from null to this driver — a row "becoming visible" —
+  // which Supabase realtime drops once RLS is enforced on orders. The
+  // driver_assigned notification, by contrast, is INSERTed already belonging to
+  // this driver (no visibility transition), so realtime delivers it reliably
+  // even under RLS. On that notification we fetch the order and show the offer.
+  //
+  // This runs ALONGSIDE the orders-feed path; the guard below prevents showing
+  // the same offer twice. The console.log lets us confirm this channel is the
+  // one delivering the offer while cs_open_access is still in place (so the
+  // orders-feed path can't mask whether this works).
+  useEffect(() => {
+    const driverId = state.auth?.driverId
+    if (!driverId || !isSupabaseConfigured) return
+
+    const unsub = subscribeToNotifications('driver', async (notif) => {
+      if (notif.driverId !== driverId) return
+      if (notif.event !== 'driver_assigned' || !notif.orderId) return
+      // Already on screen → don't reset its countdown.
+      if (snapshotRef.current.jobOffer?.order.id === notif.orderId) return
+      try {
+        const orders = await fetchDriverOrders(driverId)
+        const order  = orders.find(o => o.id === notif.orderId)
+        if (order && (order.status === 'offered' || order.status === 'assigned')) {
+          console.log('[DriverContext] job offer delivered via NOTIFICATION channel:', notif.orderId)
+          baseDispatch({ type: 'SHOW_JOB_OFFER', order })
+        }
+      } catch (e) {
+        console.warn('[DriverContext] notification offer fetch failed', e)
+      }
+    })
+
+    return unsub
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.auth?.driverId])
 
   // Job offer countdown timer
   useEffect(() => {
