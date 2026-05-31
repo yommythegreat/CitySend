@@ -139,6 +139,7 @@ export function subscribeToNotifications(
   audience: NotificationAudience,
   onNew: (notif: AppNotification) => void,
   customerId?: string,
+  driverId?: string,
 ): () => void {
   if (!isSupabaseConfigured) {
     const handler = (e: StorageEvent) => {
@@ -155,18 +156,37 @@ export function subscribeToNotifications(
     return () => window.removeEventListener('storage', handler)
   }
 
-  const filter = customerId
-    ? `audience=eq.${audience},customer_id=eq.${customerId}`
-    : `audience=eq.${audience}`
+  // Build a filter that matches exactly what the RLS policy checks for each role:
+  //   customers: audience=customer AND customer_id=<id>
+  //   drivers:   audience=driver   AND driver_id=<id>
+  //   admin:     audience=admin    (full access via is_admin())
+  // Without the id column in the filter, Supabase realtime evaluates the RLS
+  // policy against the connected user but has no way to confirm the specific-row
+  // match, so it silently drops the INSERT event on prod.
+  let filter: string
+  if (customerId) {
+    filter = `audience=eq.${audience}&customer_id=eq.${customerId}`
+  } else if (driverId) {
+    filter = `audience=eq.${audience}&driver_id=eq.${driverId}`
+  } else {
+    filter = `audience=eq.${audience}`
+  }
 
+  const channelKey = driverId ?? customerId ?? 'all'
   const channel: RealtimeChannel = supabase
-    .channel(`notifications-${audience}-${customerId ?? 'all'}`)
+    .channel(`notifications-${audience}-${channelKey}`)
     .on(
       'postgres_changes' as any,
       { event: 'INSERT', schema: 'public', table: 'notifications', filter },
       (payload: any) => onNew(rowToNotif(payload.new)),
     )
-    .subscribe()
+    .subscribe((status: string, err?: Error) => {
+      if (err) {
+        console.error('[notificationStore] subscribe error', status, err)
+      } else {
+        console.log('[notificationStore] notifications channel status:', status)
+      }
+    })
 
   return () => { supabase.removeChannel(channel) }
 }

@@ -565,6 +565,8 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
     const driverId = state.auth?.driverId
     if (!driverId || !isSupabaseConfigured) return
 
+    // Pass driverId so the realtime filter is `audience=eq.driver&driver_id=eq.<id>`,
+    // which matches the RLS policy exactly and lets Supabase deliver the INSERT event.
     const unsub = subscribeToNotifications('driver', async (notif) => {
       if (notif.driverId !== driverId) return
       if (notif.event !== 'driver_assigned' || !notif.orderId) return
@@ -582,7 +584,7 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
       } catch (e) {
         console.warn('[DriverContext] notification offer fetch failed', e)
       }
-    })
+    }, undefined, driverId)
 
     return unsub
   // eslint-disable-next-line react-hooks/exhaustive-deps
