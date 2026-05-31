@@ -157,11 +157,23 @@ function reducer(state: DriverState, action: Action): DriverState {
         ? state.orders.map(o => o.id === action.order.id ? action.order : o)
         : [...state.orders, action.order]
 
+      let newJobOffer = state.jobOffer
+      const myId = state.auth?.driverId
+
+      // Dismiss a stale offer: if the modal is showing for THIS order and the
+      // updated row no longer has it offered to this driver (admin reassigned,
+      // unassigned, cancelled, etc.), clear the modal. Without this, the offer
+      // sits on screen and the driver can still tap Accept on a dead offer.
+      if (newJobOffer && newJobOffer.order.id === action.order.id) {
+        const stillMine = action.order.status === 'offered'
+                       && action.order.assignedDriverId === myId
+        if (!stillMine) newJobOffer = null
+      }
+
       // Auto-show job offer when admin offers the job to this driver
       // Triggers on 'offered' (new flow) or 'assigned' (backward-compat)
-      let newJobOffer = state.jobOffer
       if (!newJobOffer && (action.order.status === 'offered' || action.order.status === 'assigned') &&
-          action.order.assignedDriverId === state.auth?.driverId) {
+          action.order.assignedDriverId === myId) {
         newJobOffer = {
           order: action.order,
           showModal: true,
