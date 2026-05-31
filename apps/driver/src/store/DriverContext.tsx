@@ -131,10 +131,12 @@ function reducer(state: DriverState, action: Action): DriverState {
         ? state.orders.map(o => o.id === action.order.id ? action.order : o)
         : [...state.orders, action.order]
 
-      // Auto-show job offer when admin offers the job to this driver
-      // Triggers on 'offered' (new flow) or 'assigned' (backward-compat)
+      // Auto-show job offer when admin offers the job to this driver.
+      // Only trigger on 'offered' — 'assigned' means the driver has already
+      // accepted, so the realtime echo of ACCEPT_JOB's status='assigned' write
+      // must not re-pop the modal (the "double-accept" bug).
       let newJobOffer = state.jobOffer
-      if (!newJobOffer && (action.order.status === 'offered' || action.order.status === 'assigned') &&
+      if (!newJobOffer && action.order.status === 'offered' &&
           action.order.assignedDriverId === state.auth?.driverId) {
         newJobOffer = {
           order: action.order,
@@ -557,7 +559,9 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
       try {
         const orders = await fetchDriverOrders(driverId)
         const order  = orders.find(o => o.id === notif.orderId)
-        if (order && (order.status === 'offered' || order.status === 'assigned')) {
+        // Only show on 'offered' — 'assigned' means the driver already accepted,
+        // so a late-arriving notification must not re-pop the modal.
+        if (order && order.status === 'offered') {
           console.log('[DriverContext] job offer delivered via NOTIFICATION channel:', notif.orderId)
           baseDispatch({ type: 'SHOW_JOB_OFFER', order })
         }
