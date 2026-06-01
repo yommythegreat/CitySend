@@ -131,13 +131,25 @@ function reducer(state: DriverState, action: Action): DriverState {
         ? state.orders.map(o => o.id === action.order.id ? action.order : o)
         : [...state.orders, action.order]
 
+      let newJobOffer = state.jobOffer
+      const myId = state.auth?.driverId
+
+      // Dismiss a stale offer modal: if the modal is showing for THIS order
+      // and the updated row is no longer offered to this driver (admin
+      // unassigned, reassigned, or cancelled), clear the modal. Without this
+      // the driver could still tap Accept on a dead offer.
+      if (newJobOffer && newJobOffer.order.id === action.order.id) {
+        const stillMine = action.order.status === 'offered'
+                       && action.order.assignedDriverId === myId
+        if (!stillMine) newJobOffer = null
+      }
+
       // Auto-show job offer when admin offers the job to this driver.
       // Only trigger on 'offered' — 'assigned' is the result of the driver
       // accepting, so the realtime echo of ACCEPT_JOB's write must not re-pop
       // the modal (was: "double-accept" bug, driver had to tap Accept twice).
-      let newJobOffer = state.jobOffer
       if (!newJobOffer && action.order.status === 'offered' &&
-          action.order.assignedDriverId === state.auth?.driverId) {
+          action.order.assignedDriverId === myId) {
         newJobOffer = {
           order: action.order,
           showModal: true,
