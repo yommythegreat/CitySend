@@ -354,6 +354,16 @@ export function DeliveryScreen({ orderId, onBack, onComplete, initialChatOpen = 
       setTimeout(() => setToast(''), 4000)
       return
     }
+    if (result.status === 'geocode_failed') {
+      setToast("Couldn't verify the pickup address. Try again with location enabled.")
+      setTimeout(() => setToast(''), 5000)
+      return
+    }
+    if (result.status === 'location_error') {
+      setToast('GPS error. Make sure location is enabled and try again.')
+      setTimeout(() => setToast(''), 4000)
+      return
+    }
 
     dispatch({ type: 'SET_SUBSTEP', orderId, substep: 'at_pickup' })
     setToast('Arrived at pickup! Confirm the parcel.')
@@ -395,6 +405,16 @@ export function DeliveryScreen({ orderId, onBack, onComplete, initialChatOpen = 
     }
     if (result.status === 'location_denied') {
       setToast('Location access is off. Enable it in Settings to verify arrival.')
+      setTimeout(() => setToast(''), 4000)
+      return
+    }
+    if (result.status === 'geocode_failed') {
+      setToast("Couldn't verify the drop-off address. Try again with location enabled.")
+      setTimeout(() => setToast(''), 5000)
+      return
+    }
+    if (result.status === 'location_error') {
+      setToast('GPS error. Make sure location is enabled and try again.')
       setTimeout(() => setToast(''), 4000)
       return
     }
