@@ -9,9 +9,13 @@ interface Props {
   orderId:     string
   onBack:      () => void
   onConfirmed: () => void
+  /** Called after "Recipient unavailable" flow completes. Should navigate
+   *  to dashboard, NOT delivery (which would loop the driver back to the
+   *  pickup step of a cancelled order). Falls back to onBack if omitted. */
+  onUnavailable?: () => void
 }
 
-export function ProofOfDeliveryScreen({ orderId, onBack, onConfirmed }: Props) {
+export function ProofOfDeliveryScreen({ orderId, onBack, onConfirmed, onUnavailable }: Props) {
   const { state, dispatch, completedOrders } = useDriver()
   const order = state.orders.find(o => o.id === orderId)
 
@@ -169,7 +173,9 @@ export function ProofOfDeliveryScreen({ orderId, onBack, onConfirmed }: Props) {
       },
     })
     dispatch({ type: 'UPDATE_STATUS', orderId, status: 'cancelled' })
-    onBack()
+    // Route to dashboard, not onBack — onBack goes to DeliveryScreen which
+    // would resolve the cancelled order back to the pickup step and loop.
+    ;(onUnavailable ?? onBack)()
   }
 
   // ── Render ────────────────────────────────────────────────────────────────

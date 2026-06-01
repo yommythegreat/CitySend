@@ -196,6 +196,7 @@ function DriverApp() {
             orderId={screen.orderId}
             onBack={() => navigateTo({ name: 'delivery', orderId: screen.orderId })}
             onConfirmed={() => navigateTo({ name: 'earnings', orderId: screen.orderId })}
+            onUnavailable={() => navigateTo({ name: 'dashboard' })}
           />
         )
 
