@@ -86,7 +86,6 @@ type Action =
   | { type: '_UPSERT_ORDER';       order: Order }
   | { type: 'SHOW_JOB_OFFER';      order: Order }
   | { type: 'HIDE_JOB_OFFER'; accepted?: boolean; reason?: 'declined' | 'timeout' }
-  | { type: 'TICK_JOB_OFFER_TIMER' }
   | { type: 'ACCEPT_JOB'; orderId: string; driverId: string }
 
 // ── Reducer ───────────────────────────────────────────────────────────────────
@@ -122,8 +121,34 @@ function reducer(state: DriverState, action: Action): DriverState {
       return { ...state, orders: updated }
     }
 
-    case '_HYDRATE_ORDERS':
-      return { ...state, orders: action.orders }
+    case '_HYDRATE_ORDERS': {
+      // On reload, restore the offer modal if there's still a pending offer
+      // for this driver. Without this, refresh during the countdown loses the
+      // modal — the order then appears in the "Active Jobs" list and tapping
+      // it skips straight to delivery, looking like an auto-accept.
+      let newJobOffer = state.jobOffer
+      if (!newJobOffer && state.auth) {
+        const myId = state.auth.driverId
+        const offered = action.orders.find(
+          o => o.status === 'offered' && o.assignedDriverId === myId
+        )
+        if (offered) {
+          const elapsedSec = Math.floor(
+            (Date.now() - new Date(offered.updatedAt).getTime()) / 1000
+          )
+          const remaining = 120 - elapsedSec
+          // Only restore if the offer is still meaningfully open (>5s left).
+          if (remaining > 5) {
+            newJobOffer = {
+              order: offered,
+              showModal: true,
+              timeRemaining: remaining,
+            }
+          }
+        }
+      }
+      return { ...state, orders: action.orders, jobOffer: newJobOffer }
+    }
 
     case '_UPSERT_ORDER': {
       const exists = state.orders.some(o => o.id === action.order.id)
@@ -174,21 +199,30 @@ function reducer(state: DriverState, action: Action): DriverState {
       }
     }
 
-    case 'HIDE_JOB_OFFER':
+    case 'HIDE_JOB_OFFER': {
+      // On decline/timeout, also clear the assignment locally so the order
+      // doesn't briefly sit in the dashboard 'Active Jobs' before the DB sync
+      // and realtime echo complete. Without this the driver could tap the
+      // stale order card and navigate to delivery — looked like auto-accept.
+      // (syncDriverAction handles the DB write + admin notification + log.)
+      if (!action.accepted && state.jobOffer?.order) {
+        const releasedId = state.jobOffer.order.id
+        return {
+          ...state,
+          jobOffer: null,
+          orders: state.orders.map(o =>
+            o.id !== releasedId ? o : {
+              ...o,
+              status: 'new',
+              assignedDriverId: undefined,
+              assignedDriverName: undefined,
+              updatedAt: new Date().toISOString(),
+            }
+          ),
+        }
+      }
       return { ...state, jobOffer: null }
-
-    case 'TICK_JOB_OFFER_TIMER':
-      if (!state.jobOffer) return state
-      if (state.jobOffer.timeRemaining <= 1) {
-        return { ...state, jobOffer: null }
-      }
-      return {
-        ...state,
-        jobOffer: {
-          ...state.jobOffer,
-          timeRemaining: state.jobOffer.timeRemaining - 1,
-        },
-      }
+    }
 
     default: return state
   }
@@ -546,14 +580,10 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [subscribeKey])
 
-  // Job offer countdown timer
-  useEffect(() => {
-    if (!state.jobOffer?.showModal) return
-    const interval = setInterval(() => {
-      baseDispatch({ type: 'TICK_JOB_OFFER_TIMER' })
-    }, 1000)
-    return () => clearInterval(interval)
-  }, [state.jobOffer?.showModal])
+  // Job offer countdown is owned by JobOfferModal (its internal useState + setTimeout).
+  // When the modal hits 0 it calls onTimeout → dispatch(HIDE_JOB_OFFER, reason:'timeout'),
+  // which clears the modal, releases the order locally, and syncs to DB.
+  // No reducer-side timer needed — state.jobOffer.timeRemaining is only read at modal mount.
 
   // GPS broadcast — start when driver logs in, stop on logout
   useEffect(() => {
