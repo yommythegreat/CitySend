@@ -11,24 +11,22 @@ interface Props {
   onConfirmed: () => void
 }
 
-type SecondaryTab = 'none' | 'signature' | 'code'
-
 export function ProofOfDeliveryScreen({ orderId, onBack, onConfirmed }: Props) {
   const { state, dispatch, completedOrders } = useDriver()
   const order = state.orders.find(o => o.id === orderId)
 
-  // Mandatory door photo (always required)
+  // ── Primary verification: 4-digit handoff code (REQUIRED for normal delivery)
+  const [codeDigits,     setCodeDigits]     = useState(['', '', '', ''])
+
+  // ── Optional supporting proof
   const [photoPreview,   setPhotoPreview]   = useState<string | null>(null)
   const [photoUrl,       setPhotoUrl]       = useState<string | null>(null)
   const [photoUploading, setPhotoUploading] = useState(false)
-
-  // Optional secondary proof
-  const [secondaryTab,   setSecondaryTab]   = useState<SecondaryTab>('none')
-  const [receiverName,   setReceiverName]   = useState(order?.dropoff.name ?? '')
-  const [notes,          setNotes]          = useState('')
   const [signed,         setSigned]         = useState(false)
   const [sigUrl,         setSigUrl]         = useState<string | null>(null)
-  const [codeDigits,     setCodeDigits]     = useState(['', '', '', ''])
+
+  const [receiverName,   setReceiverName]   = useState(order?.dropoff.name ?? '')
+  const [notes,          setNotes]          = useState('')
   const [submitting,     setSubmitting]     = useState(false)
   const [error,          setError]          = useState('')
 
@@ -111,45 +109,40 @@ export function ProofOfDeliveryScreen({ orderId, onBack, onConfirmed }: Props) {
 
   const codeComplete = codeDigits.every(d => d !== '')
 
-  // Photo is always required. Secondary tab requirements:
-  const secondaryReady = secondaryTab === 'none'
-    || (secondaryTab === 'signature' && signed)
-    || (secondaryTab === 'code'      && codeComplete)
-
-  const canSubmit = !!photoPreview && !!receiverName.trim() && secondaryReady
+  // For a successful delivery the recipient must provide the 4-digit code.
+  // Receiver name is still required for accountability. Photo + signature
+  // are supporting evidence — capture if you can, not blockers.
+  const canSubmit = codeComplete && !!receiverName.trim()
 
   const handleSubmit = async () => {
-    if (!photoPreview) { setError('A door photo is required before completing delivery.'); return }
+    if (!codeComplete) { setError('Enter the 4-digit code from the recipient.'); return }
     if (!receiverName.trim()) { setError('Receiver name is required.'); return }
-    if (secondaryTab === 'signature' && !signed) { setError('Please capture a signature.'); return }
-    if (secondaryTab === 'code') {
-      try {
-        const valid = await validateHandoffCode(orderId, codeDigits.join(''))
-        if (!valid) { setError('Incorrect code — ask the recipient to check their CitySend notification.'); return }
-      } catch (e: any) {
-        if (e.message === 'RATE_LIMITED') {
-          setError('Too many incorrect attempts. Please wait 15 minutes and try again.')
-        } else {
-          setError('Could not verify code. Check your connection and try again.')
-        }
-        return
+    try {
+      const valid = await validateHandoffCode(orderId, codeDigits.join(''))
+      if (!valid) { setError('Incorrect code — ask the recipient to check their CitySend notification.'); return }
+    } catch (e: any) {
+      if (e.message === 'RATE_LIMITED') {
+        setError('Too many incorrect attempts. Please wait 15 minutes and try again.')
+      } else {
+        setError('Could not verify code. Check your connection and try again.')
       }
+      return
     }
     setError('')
     setSubmitting(true)
     let resolvedSigUrl = sigUrl
-    if (secondaryTab === 'signature' && !sigUrl && isSupabaseConfigured) {
+    if (signed && !sigUrl && isSupabaseConfigured) {
       resolvedSigUrl = await uploadSignature()
       if (resolvedSigUrl) setSigUrl(resolvedSigUrl)
     }
-    const secondaryDetail = secondaryTab === 'code'      ? ` Code verified: ${codeDigits.join('')}.`
-                          : secondaryTab === 'signature' ? (resolvedSigUrl ? ` Signature: ${resolvedSigUrl}` : ' Signature captured.') : ''
-    const photoDetail = photoUrl ? ` Door photo: ${photoUrl}` : ''
+    const codeDetail  = ` Code verified: ${codeDigits.join('')}.`
+    const sigDetail   = signed ? (resolvedSigUrl ? ` Signature: ${resolvedSigUrl}` : ' Signature captured.') : ''
+    const photoDetail = photoUrl ? ` Door photo: ${photoUrl}` : (photoPreview ? ' (door photo captured)' : '')
     dispatch({
       type: 'ADD_NOTE', orderId,
       note: {
         id: `pod-${Date.now()}`,
-        text: `✅ Delivery confirmed: received by ${receiverName.trim()}.${photoDetail}${secondaryDetail}${notes ? ' Notes: ' + notes : ''}`,
+        text: `✅ Delivery confirmed: received by ${receiverName.trim()}.${codeDetail}${photoDetail}${sigDetail}${notes ? ' Notes: ' + notes : ''}`,
         authorName: state.auth?.name ?? 'Driver',
         createdAt: new Date().toISOString(),
       },
@@ -161,33 +154,23 @@ export function ProofOfDeliveryScreen({ orderId, onBack, onConfirmed }: Props) {
   }
 
   const handleRecipientUnavailable = () => {
-    if (!photoPreview) {
-      setError('Please photograph the door first — this protects you if the delivery is disputed.')
-      return
-    }
-    if (window.confirm('Mark as failed delivery? The order will be flagged for admin review.')) {
-      const photoDetail = photoUrl ? ` Door photo: ${photoUrl}` : ' (local photo only)'
-      dispatch({
-        type: 'ADD_NOTE', orderId,
-        note: {
-          id: `unavail-${Date.now()}`,
-          text: `⚠️ Recipient unavailable — delivery failed.${photoDetail}`,
-          authorName: state.auth?.name ?? 'Driver',
-          createdAt: new Date().toISOString(),
-        },
-      })
-      dispatch({ type: 'UPDATE_STATUS', orderId, status: 'cancelled' })
-      onBack()
-    }
+    // Recipient-unavailable: photo + signature are both optional. The driver
+    // simply documents the attempt — whatever proof they captured is logged.
+    if (!window.confirm('Mark as failed delivery? The order will be flagged for admin review.')) return
+    const photoDetail = photoUrl ? ` Door photo: ${photoUrl}`
+                      : (photoPreview ? ' (door photo captured locally)' : '')
+    dispatch({
+      type: 'ADD_NOTE', orderId,
+      note: {
+        id: `unavail-${Date.now()}`,
+        text: `⚠️ Recipient unavailable — delivery failed.${photoDetail}${notes ? ' Notes: ' + notes : ''}`,
+        authorName: state.auth?.name ?? 'Driver',
+        createdAt: new Date().toISOString(),
+      },
+    })
+    dispatch({ type: 'UPDATE_STATUS', orderId, status: 'cancelled' })
+    onBack()
   }
-
-  // ── Secondary tab pills ───────────────────────────────────────────────────
-
-  const SECONDARY_TABS: { k: SecondaryTab; label: string }[] = [
-    { k: 'none',      label: 'Photo only'  },
-    { k: 'signature', label: '+ Signature' },
-    { k: 'code',      label: '+ Code'      },
-  ]
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -228,25 +211,71 @@ export function ProofOfDeliveryScreen({ orderId, onBack, onConfirmed }: Props) {
       {/* Scrollable content */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '20px', scrollbarWidth: 'none' }}>
 
-        {/* ── Mandatory door photo ─────────────────────────────────────────── */}
+        {/* ── Primary: handoff code (REQUIRED for successful delivery) ───── */}
         <div style={{ marginBottom: 20 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--d-muted)', letterSpacing: 0.5, textTransform: 'uppercase' }}>
-              Door photo
+              4-digit handoff code
             </div>
             <div style={{
               fontSize: 10, fontWeight: 700, letterSpacing: 0.8,
-              color: photoPreview ? '#22c55e' : '#c94a1b',
-              background: photoPreview ? 'rgba(34,197,94,0.08)' : 'rgba(201,74,27,0.08)',
+              color: codeComplete ? '#22c55e' : '#c94a1b',
+              background: codeComplete ? 'rgba(34,197,94,0.08)' : 'rgba(201,74,27,0.08)',
               padding: '3px 8px', borderRadius: 99,
             }}>
-              {photoPreview ? '✓ CAPTURED' : 'REQUIRED'}
+              {codeComplete ? '✓ ENTERED' : 'REQUIRED'}
             </div>
+          </div>
+          <div style={{ background: '#fff', border: '1.5px solid var(--d-border)', borderRadius: 16, padding: 20, display: 'flex', flexDirection: 'column', gap: 14, alignItems: 'center' }}>
+            <div style={{ fontSize: 14, color: '#374151', textAlign: 'center', maxWidth: 280 }}>
+              Ask the recipient for the 4-digit code from their CitySend notification.
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {codeDigits.map((digit, i) => (
+                <input
+                  key={i}
+                  ref={codeRefs[i]}
+                  value={digit}
+                  maxLength={1}
+                  inputMode="numeric"
+                  onChange={e => {
+                    const val = e.target.value.replace(/\D/g, '').slice(0, 1)
+                    const next = [...codeDigits]; next[i] = val; setCodeDigits(next)
+                    if (val && i < 3) codeRefs[i + 1].current?.focus()
+                  }}
+                  onKeyDown={e => {
+                    if (e.key === 'Backspace' && !digit && i > 0) codeRefs[i - 1].current?.focus()
+                  }}
+                  style={{
+                    width: 44, height: 56, textAlign: 'center', fontSize: 24,
+                    fontFamily: 'monospace', fontWeight: 600, color: '#111827',
+                    border: `1.5px solid ${digit ? '#111827' : 'var(--d-border)'}`,
+                    borderRadius: 10, outline: 'none', background: '#fff',
+                  }}
+                />
+              ))}
+            </div>
+            {codeComplete && <div style={{ fontSize: 12, color: '#22c55e', fontWeight: 500 }}>✓ Code entered</div>}
+          </div>
+        </div>
+
+        {/* ── Optional door photo ───────────────────────────────────────── */}
+        <div style={{ marginBottom: 20 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--d-muted)', letterSpacing: 0.5, textTransform: 'uppercase' }}>
+              Door photo <span style={{ fontWeight: 400, textTransform: 'none', fontSize: 12 }}>(optional)</span>
+            </div>
+            {photoPreview && (
+              <div style={{
+                fontSize: 10, fontWeight: 700, letterSpacing: 0.8,
+                color: '#22c55e', background: 'rgba(34,197,94,0.08)',
+                padding: '3px 8px', borderRadius: 99,
+              }}>✓ CAPTURED</div>
+            )}
           </div>
           <PhotoCapture
             orderId={orderId}
             label="dropoff"
-            required
             captured={!!photoPreview}
             previewUrl={photoPreview}
             uploading={photoUploading}
@@ -259,90 +288,33 @@ export function ProofOfDeliveryScreen({ orderId, onBack, onConfirmed }: Props) {
           />
           {!photoPreview && (
             <div style={{ fontSize: 12, color: 'var(--d-muted)', marginTop: 6 }}>
-              Photograph the parcel at the door. Required to complete or flag a delivery.
+              Optional. Capture if it helps document the handoff or a failed-delivery attempt.
             </div>
           )}
         </div>
 
-        {/* ── Secondary verification (optional) ──────────────────────────── */}
+        {/* ── Optional recipient signature ─────────────────────────────── */}
         <div style={{ marginBottom: 16 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--d-muted)', letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 8 }}>
-            Additional verification <span style={{ fontWeight: 400, textTransform: 'none', fontSize: 12 }}>(optional)</span>
-          </div>
-          <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
-            {SECONDARY_TABS.map(tab => (
-              <button key={tab.k} onClick={() => setSecondaryTab(tab.k)} style={{
-                padding: '7px 14px', border: `1.5px solid ${secondaryTab === tab.k ? 'var(--d-ink)' : 'var(--d-border)'}`,
-                borderRadius: 99, background: secondaryTab === tab.k ? 'var(--d-ink)' : '#fff',
-                color: secondaryTab === tab.k ? '#fff' : 'var(--d-muted)',
-                fontSize: 13, fontWeight: secondaryTab === tab.k ? 600 : 400, cursor: 'pointer',
-              }}>
-                {tab.label}
-              </button>
-            ))}
-          </div>
-
-          {/* Signature */}
-          {secondaryTab === 'signature' && (
-            <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--d-muted)', letterSpacing: 0.5, textTransform: 'uppercase' }}>Recipient signature</div>
-                {signed && <button onClick={clearSignature} style={{ fontSize: 12, color: 'var(--d-muted)', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>Clear</button>}
-              </div>
-              <div style={{ border: `1.5px solid ${signed ? '#22c55e' : 'var(--d-border)'}`, borderRadius: 12, overflow: 'hidden', background: '#fafafa', position: 'relative', transition: 'border-color 0.2s' }}>
-                <canvas
-                  ref={canvasRef} width={360} height={140}
-                  style={{ width: '100%', height: 140, display: 'block', touchAction: 'none', cursor: 'crosshair' }}
-                  onMouseDown={startDraw} onMouseMove={draw} onMouseUp={stopDraw} onMouseLeave={stopDraw}
-                  onTouchStart={startDraw} onTouchMove={draw} onTouchEnd={stopDraw}
-                />
-                {!signed && (
-                  <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, color: '#bbb', pointerEvents: 'none' }}>
-                    Sign here
-                  </div>
-                )}
-              </div>
-              {signed && <div style={{ fontSize: 12, color: '#22c55e', marginTop: 6, fontWeight: 500 }}>✓ Signature captured</div>}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--d-muted)', letterSpacing: 0.5, textTransform: 'uppercase' }}>
+              Recipient signature <span style={{ fontWeight: 400, textTransform: 'none', fontSize: 12 }}>(optional)</span>
             </div>
-          )}
-
-          {/* Code */}
-          {secondaryTab === 'code' && (
-            <div style={{ background: '#fff', border: '1.5px solid var(--d-border)', borderRadius: 16, padding: 20, display: 'flex', flexDirection: 'column', gap: 14, alignItems: 'center' }}>
-              <div style={{ fontSize: 14, color: '#374151', textAlign: 'center', maxWidth: 280 }}>
-                Ask the recipient for the 4-digit code from their CitySend notification.
+            {signed && <button onClick={clearSignature} style={{ fontSize: 12, color: 'var(--d-muted)', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>Clear</button>}
+          </div>
+          <div style={{ border: `1.5px solid ${signed ? '#22c55e' : 'var(--d-border)'}`, borderRadius: 12, overflow: 'hidden', background: '#fafafa', position: 'relative', transition: 'border-color 0.2s' }}>
+            <canvas
+              ref={canvasRef} width={360} height={140}
+              style={{ width: '100%', height: 140, display: 'block', touchAction: 'none', cursor: 'crosshair' }}
+              onMouseDown={startDraw} onMouseMove={draw} onMouseUp={stopDraw} onMouseLeave={stopDraw}
+              onTouchStart={startDraw} onTouchMove={draw} onTouchEnd={stopDraw}
+            />
+            {!signed && (
+              <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, color: '#bbb', pointerEvents: 'none' }}>
+                Sign here
               </div>
-              <div style={{ display: 'flex', gap: 8 }}>
-                {codeDigits.map((digit, i) => (
-                  <input
-                    key={i}
-                    ref={codeRefs[i]}
-                    value={digit}
-                    maxLength={1}
-                    inputMode="numeric"
-                    onChange={e => {
-                      const val = e.target.value.replace(/\D/g, '').slice(0, 1)
-                      const next = [...codeDigits]; next[i] = val; setCodeDigits(next)
-                      if (val && i < 3) codeRefs[i + 1].current?.focus()
-                    }}
-                    onKeyDown={e => {
-                      if (e.key === 'Backspace' && !digit && i > 0) codeRefs[i - 1].current?.focus()
-                    }}
-                    style={{
-                      width: 44, height: 56, textAlign: 'center', fontSize: 24,
-                      fontFamily: 'monospace', fontWeight: 600, color: '#111827',
-                      border: `1.5px solid ${digit ? '#111827' : 'var(--d-border)'}`,
-                      borderRadius: 10, outline: 'none', background: '#fff',
-                    }}
-                  />
-                ))}
-              </div>
-              <div style={{ fontFamily: 'monospace', fontSize: 11, color: 'var(--d-muted)', letterSpacing: 1, textTransform: 'uppercase' }}>
-                4-digit handoff code
-              </div>
-              {codeComplete && <div style={{ fontSize: 12, color: '#22c55e', fontWeight: 500 }}>✓ Code entered</div>}
-            </div>
-          )}
+            )}
+          </div>
+          {signed && <div style={{ fontSize: 12, color: '#22c55e', marginTop: 6, fontWeight: 500 }}>✓ Signature captured</div>}
         </div>
 
         {/* Received by */}
@@ -386,7 +358,7 @@ export function ProofOfDeliveryScreen({ orderId, onBack, onConfirmed }: Props) {
           />
         ) : (
           <button disabled style={{ width: '100%', padding: '16px 0', border: 'none', borderRadius: 28, background: '#e5e7eb', color: '#9ca3af', fontSize: 14, fontWeight: 600, cursor: 'not-allowed' }}>
-            {!photoPreview ? 'Take a door photo to continue' : !receiverName.trim() ? 'Enter receiver name to continue' : 'Complete all required fields'}
+            {!codeComplete ? 'Enter the 4-digit code to continue' : !receiverName.trim() ? 'Enter receiver name to continue' : 'Complete all required fields'}
           </button>
         )}
         <div style={{ display: 'flex', gap: 10 }}>
