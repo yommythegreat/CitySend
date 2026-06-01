@@ -86,7 +86,6 @@ type Action =
   | { type: '_UPSERT_ORDER';       order: Order }
   | { type: 'SHOW_JOB_OFFER';      order: Order }
   | { type: 'HIDE_JOB_OFFER'; accepted?: boolean; reason?: 'declined' | 'timeout' }
-  | { type: 'TICK_JOB_OFFER_TIMER' }
   | { type: 'ACCEPT_JOB'; orderId: string; driverId: string }
 
 // ── Reducer ───────────────────────────────────────────────────────────────────
@@ -224,19 +223,6 @@ function reducer(state: DriverState, action: Action): DriverState {
       }
       return { ...state, jobOffer: null }
     }
-
-    case 'TICK_JOB_OFFER_TIMER':
-      if (!state.jobOffer) return state
-      if (state.jobOffer.timeRemaining <= 1) {
-        return { ...state, jobOffer: null }
-      }
-      return {
-        ...state,
-        jobOffer: {
-          ...state.jobOffer,
-          timeRemaining: state.jobOffer.timeRemaining - 1,
-        },
-      }
 
     default: return state
   }
@@ -594,14 +580,10 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [subscribeKey])
 
-  // Job offer countdown timer
-  useEffect(() => {
-    if (!state.jobOffer?.showModal) return
-    const interval = setInterval(() => {
-      baseDispatch({ type: 'TICK_JOB_OFFER_TIMER' })
-    }, 1000)
-    return () => clearInterval(interval)
-  }, [state.jobOffer?.showModal])
+  // Job offer countdown is owned by JobOfferModal (its internal useState + setTimeout).
+  // When the modal hits 0 it calls onTimeout → dispatch(HIDE_JOB_OFFER, reason:'timeout'),
+  // which clears the modal, releases the order locally, and syncs to DB.
+  // No reducer-side timer needed — state.jobOffer.timeRemaining is only read at modal mount.
 
   // GPS broadcast — start when driver logs in, stop on logout
   useEffect(() => {
