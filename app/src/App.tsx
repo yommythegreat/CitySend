@@ -584,6 +584,11 @@ export default function App() {
 
     // ── Tracking URL management ──────────────────────────────────────────────
     if (next === 'tracking') {
+      // Tracking is a destination, not an intermediate step. Reset the back
+      // stack so 'back' always goes home — never to the Payment screen we
+      // came from. (Customers landing here after delivery should not be sent
+      // back into a paid checkout flow.)
+      navHistoryRef.current = ['home']
       // If a specific orderId is provided, update state + ref immediately so the
       // URL push below sees the new ID (can't wait for useEffect → ref sync).
       const newId = opts?.trackOrderId
