@@ -233,6 +233,27 @@ export function DeliveryScreen({ orderId, onBack, onComplete, initialChatOpen = 
   const myId  = state.auth?.driverId ?? ''
   const order = state.orders.find(o => o.id === orderId)
 
+  // Watchdog: if admin unassigns this order from the driver mid-delivery
+  // (assignment cleared or reassigned, or order cancelled), bail back to the
+  // dashboard. Without this, the driver keeps swiping through stale screens.
+  // The check waits until `order` is loaded — we don't bail just because the
+  // initial fetch hasn't returned yet (that would loop the driver out on first
+  // open if state.orders hasn't populated).
+  const removedRef = useRef(false)
+  useEffect(() => {
+    if (!order || !myId || removedRef.current) return
+    const taken = order.assignedDriverId !== myId
+    const cancelled = order.status === 'cancelled'
+    if (taken || cancelled) {
+      removedRef.current = true
+      setToast(cancelled
+        ? 'This order was cancelled.'
+        : 'This order was removed from your queue.')
+      // Brief delay so the toast is visible before we navigate away.
+      setTimeout(() => onBack(), 1500)
+    }
+  }, [order?.assignedDriverId, order?.status, myId, onBack])
+
   const loadMessages = useCallback(async () => {
     if (!orderId) return
     try {
