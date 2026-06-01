@@ -200,8 +200,30 @@ function reducer(state: DriverState, action: Action): DriverState {
       }
     }
 
-    case 'HIDE_JOB_OFFER':
+    case 'HIDE_JOB_OFFER': {
+      // On decline/timeout, also clear the assignment locally so the order
+      // doesn't briefly sit in the dashboard 'Active Jobs' before the DB sync
+      // and realtime echo complete. Without this the driver could tap the
+      // stale order card and navigate to delivery — looked like auto-accept.
+      // (syncDriverAction handles the DB write + admin notification + log.)
+      if (!action.accepted && state.jobOffer?.order) {
+        const releasedId = state.jobOffer.order.id
+        return {
+          ...state,
+          jobOffer: null,
+          orders: state.orders.map(o =>
+            o.id !== releasedId ? o : {
+              ...o,
+              status: 'new',
+              assignedDriverId: undefined,
+              assignedDriverName: undefined,
+              updatedAt: new Date().toISOString(),
+            }
+          ),
+        }
+      }
       return { ...state, jobOffer: null }
+    }
 
     case 'TICK_JOB_OFFER_TIMER':
       if (!state.jobOffer) return state
