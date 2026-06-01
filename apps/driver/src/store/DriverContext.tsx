@@ -131,10 +131,12 @@ function reducer(state: DriverState, action: Action): DriverState {
         ? state.orders.map(o => o.id === action.order.id ? action.order : o)
         : [...state.orders, action.order]
 
-      // Auto-show job offer when admin offers the job to this driver
-      // Triggers on 'offered' (new flow) or 'assigned' (backward-compat)
+      // Auto-show job offer when admin offers the job to this driver.
+      // Only trigger on 'offered' — 'assigned' is the result of the driver
+      // accepting, so the realtime echo of ACCEPT_JOB's write must not re-pop
+      // the modal (was: "double-accept" bug, driver had to tap Accept twice).
       let newJobOffer = state.jobOffer
-      if (!newJobOffer && (action.order.status === 'offered' || action.order.status === 'assigned') &&
+      if (!newJobOffer && action.order.status === 'offered' &&
           action.order.assignedDriverId === state.auth?.driverId) {
         newJobOffer = {
           order: action.order,
