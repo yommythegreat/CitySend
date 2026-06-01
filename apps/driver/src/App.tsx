@@ -243,6 +243,7 @@ function DriverApp() {
       {jobOffer?.showModal && (
         <JobOfferModal
           order={jobOffer.order}
+          initialSeconds={jobOffer.timeRemaining}
           onAccept={handleAcceptOffer}
           onDecline={handleDeclineOffer}
           onTimeout={handleOfferTimeout}

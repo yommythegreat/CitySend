@@ -7,14 +7,17 @@ interface Props {
   onAccept:  () => void
   onDecline: () => void
   onTimeout: () => void
+  /** Initial countdown seconds. Defaults to 120; pass a smaller value to
+   *  restore an in-progress offer after page reload. */
+  initialSeconds?: number
 }
 
 /**
  * JobOfferModal — Full-screen job offer with countdown ring.
  * Design matches DOfferScreen from driver-screens.jsx prototype.
  */
-export function JobOfferModal({ order, onAccept, onDecline, onTimeout }: Props) {
-  const [t, setT]                   = useState(120)
+export function JobOfferModal({ order, onAccept, onDecline, onTimeout, initialSeconds = 120 }: Props) {
+  const [t, setT]                   = useState(initialSeconds)
   const [confirmDecline, setConfirmDecline] = useState(false)
 
   useEffect(() => {
