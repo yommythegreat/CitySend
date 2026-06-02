@@ -5,9 +5,8 @@ import { Modal } from '../components/Modal'
 import { AdminAddressField } from '../components/AdminAddressField'
 import { useAdminStore } from '../store/AdminContext'
 import { fmt, relativeTime, parcelSizeLabel } from '@shared/utils/format'
-import { computeOrderPrice } from '@shared/utils/serviceAvailability'
 import { geocodeOnce } from '../hooks/useGeocoder'
-import type { Order, OrderStatus, CityId } from '@shared/types'
+import type { Order, OrderStatus, CityId, AdminNote } from '@shared/types'
 import { ORDER_STATUS_LABELS } from '@shared/types'
 
 const ALL_STATUSES: (OrderStatus | 'all')[] = ['all', 'new', 'assigned', 'picked_up', 'in_transit', 'delivered', 'cancelled']
@@ -81,13 +80,8 @@ function CreateOrderModal({ onClose }: { onClose: () => void }) {
   }, [originalOrderId, state.orders])
   const originalOrderRef = originalOrderMatch.order
 
-  const breakdown = useMemo(() => {
-    if (!cityConfig) return null
-    return computeOrderPrice({ cityConfig, distKm, parcelSize, fragile, tip })
-  }, [cityConfig, distKm, parcelSize, fragile, tip])
-
   const handleCreate = async () => {
-    if (!customerName.trim() || !pickupAddr.trim() || !dropoffAddr.trim() || !breakdown) return
+    if (!customerName.trim() || !pickupAddr.trim() || !dropoffAddr.trim()) return
     if (!originalOrderRef) return  // paid-order reference is required
     if (!originalOrderNotes.trim()) return  // context note is required
     setSaving(true)
@@ -107,9 +101,11 @@ function CreateOrderModal({ onClose }: { onClose: () => void }) {
     const now   = new Date().toISOString()
     const newId = `CS-ADM-${Date.now().toString().slice(-5)}`
 
+    // Inherit billing-affecting fields from the original paid order so the
+    // recreation carries the same cost — no new charge, no admin-set price.
     const order: Order = {
       id: newId,
-      customerId:    customerId.trim() || `guest-${Date.now()}`,
+      customerId:    customerId.trim() || originalOrderRef.customerId,
       customerName:  customerName.trim(),
       pickup: {
         name:    pickupName.trim()  || customerName.trim(),
@@ -127,9 +123,10 @@ function CreateOrderModal({ onClose }: { onClose: () => void }) {
       },
       parcel: { size: parcelSize, desc: parcelDesc.trim() || 'Package', fragile },
       status: 'new',
-      priceBreakdown: breakdown,
-      cityId,
-      distanceKm: distKm,
+      // Inherit from original — admin recreation does not change pricing.
+      priceBreakdown: originalOrderRef.priceBreakdown,
+      cityId:         originalOrderRef.cityId,
+      distanceKm:     originalOrderRef.distanceKm,
       createdAt: now,
       updatedAt: now,
       notes: [{
@@ -142,13 +139,24 @@ function CreateOrderModal({ onClose }: { onClose: () => void }) {
     }
 
     dispatch({ type: 'CREATE_ORDER', order })
+
+    // Forward-link the ORIGINAL order with a note pointing to the new one,
+    // so traceability works both directions in the admin's notes view.
+    const forwardNote: AdminNote = {
+      id: `note-recreated-${Date.now()}`,
+      text: `🔁 Recreated as new order ${newId}. Reason: ${originalOrderNotes.trim()}`,
+      authorName: 'Admin',
+      createdAt: now,
+    }
+    dispatch({ type: 'ADD_NOTE', orderId: originalOrderRef.id, note: forwardNote })
+
     setSaving(false)
     onClose()
   }
 
   const cityOptions: CityId[] = ['winnipeg', 'toronto', 'calgary', 'vancouver', 'edmonton', 'ottawa', 'montreal']
   const canCreate = customerName.trim() && pickupAddr.trim() && dropoffAddr.trim()
-                 && !!breakdown && !!originalOrderRef && !!originalOrderNotes.trim()
+                 && !!originalOrderRef && !!originalOrderNotes.trim()
 
   return (
     <div style={{ maxHeight: '75vh', overflowY: 'auto', paddingRight: 4 }}>
@@ -300,29 +308,8 @@ function CreateOrderModal({ onClose }: { onClose: () => void }) {
         </div>
       </div>
 
-      {/* Price preview */}
-      <div style={{ background: 'var(--a-bg)', borderRadius: 8, padding: '12px 14px', marginBottom: 16, fontSize: 13 }}>
-        {!breakdown ? (
-          <div style={{ color: 'var(--a-muted)', textAlign: 'center' }}>Loading pricing…</div>
-        ) : (
-          <>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3, color: 'var(--a-muted)' }}>
-              <span>Subtotal</span><span style={{ fontFamily: 'var(--a-mono)' }}>{fmt(breakdown.subtotalPreTax)}</span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3, color: 'var(--a-muted)' }}>
-              <span>Tax</span><span style={{ fontFamily: 'var(--a-mono)' }}>{fmt(breakdown.totalTax)}</span>
-            </div>
-            {tip > 0 && (
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3, color: 'var(--a-muted)' }}>
-                <span>Tip</span><span style={{ fontFamily: 'var(--a-mono)' }}>{fmt(tip)}</span>
-              </div>
-            )}
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6, paddingTop: 6, borderTop: '1px solid var(--a-border)', fontWeight: 700, color: 'var(--a-ink)' }}>
-              <span>Total</span><span style={{ fontFamily: 'var(--a-mono)' }}>{fmt(breakdown.total)}</span>
-            </div>
-          </>
-        )}
-      </div>
+      {/* Price preview removed — recreated orders inherit the original's
+          priceBreakdown / cityId / distanceKm, so there's no admin-set price. */}
 
       <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
         <button
