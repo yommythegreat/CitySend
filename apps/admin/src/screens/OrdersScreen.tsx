@@ -23,6 +23,12 @@ const isStuck = (o: Order) =>
 function CreateOrderModal({ onClose }: { onClose: () => void }) {
   const { state, dispatch } = useAdminStore()
 
+  // Recreation-of-paid-order gate: admin must reference an existing CitySend
+  // order (cancelled / failed delivery) that was paid. Prevents admin from
+  // freely creating unpaid orders. Optional notes for context (why redo, etc.)
+  const [originalOrderId,    setOriginalOrderId]    = useState('')
+  const [originalOrderNotes, setOriginalOrderNotes] = useState('')
+
   const [customerName, setCustomerName] = useState('')
   const [customerId,   setCustomerId]   = useState('')
   const [cityId,       setCityId]       = useState<CityId>('winnipeg')
@@ -58,6 +64,15 @@ function CreateOrderModal({ onClose }: { onClose: () => void }) {
 
   // Compute price from live city config (same formula as customer app)
   const cityConfig = state.cityConfigs.find(c => c.cityId === cityId)
+
+  // Live-validate the original-order reference. Match case-insensitively and
+  // accept either bare "CS-XXXXX" or just the trailing ID portion.
+  const originalOrderRef = useMemo(() => {
+    const raw = originalOrderId.trim().toUpperCase()
+    if (!raw) return null
+    return state.orders.find(o => o.id.toUpperCase() === raw) ?? null
+  }, [originalOrderId, state.orders])
+
   const breakdown = useMemo(() => {
     if (!cityConfig) return null
     return computeOrderPrice({ cityConfig, distKm, parcelSize, fragile, tip })
@@ -65,6 +80,7 @@ function CreateOrderModal({ onClose }: { onClose: () => void }) {
 
   const handleCreate = async () => {
     if (!customerName.trim() || !pickupAddr.trim() || !dropoffAddr.trim() || !breakdown) return
+    if (!originalOrderRef) return  // paid-order reference is required
     setSaving(true)
 
     // Resolve coords for both addresses. Prefer coords captured during
@@ -109,7 +125,8 @@ function CreateOrderModal({ onClose }: { onClose: () => void }) {
       updatedAt: now,
       notes: [{
         id: `note-admin-${Date.now()}`,
-        text: 'Order manually created by admin.',
+        text: `🔁 Recreated from order ${originalOrderRef.id} (status: ${originalOrderRef.status}).`
+            + (originalOrderNotes.trim() ? ` Notes: ${originalOrderNotes.trim()}` : ''),
         authorName: 'Admin',
         createdAt: now,
       }],
@@ -121,10 +138,50 @@ function CreateOrderModal({ onClose }: { onClose: () => void }) {
   }
 
   const cityOptions: CityId[] = ['winnipeg', 'toronto', 'calgary', 'vancouver', 'edmonton', 'ottawa', 'montreal']
-  const canCreate = customerName.trim() && pickupAddr.trim() && dropoffAddr.trim() && !!breakdown
+  const canCreate = customerName.trim() && pickupAddr.trim() && dropoffAddr.trim() && !!breakdown && !!originalOrderRef
 
   return (
     <div style={{ maxHeight: '75vh', overflowY: 'auto', paddingRight: 4 }}>
+
+      {/* ── Paid-order reference (required gate) ─────────────────────────── */}
+      <div style={{
+        padding: 12, marginBottom: 16, borderRadius: 8,
+        background: originalOrderRef ? 'rgba(34,197,94,0.06)' : 'rgba(201,74,27,0.06)',
+        border: `1px solid ${originalOrderRef ? 'rgba(34,197,94,0.3)' : 'rgba(201,74,27,0.25)'}`,
+      }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--a-ink)', marginBottom: 4 }}>
+          Recreate from paid order
+        </div>
+        <div style={{ fontSize: 12, color: 'var(--a-muted)', marginBottom: 10, lineHeight: 1.4 }}>
+          Admin can only create an order to recreate a previously paid one (e.g. failed
+          delivery). Enter the original CitySend order ID.
+        </div>
+        <label style={labelStyle}>Original order ID *</label>
+        <input
+          style={{ ...inputStyle, fontFamily: 'var(--a-mono, ui-monospace, monospace)', textTransform: 'uppercase' }}
+          value={originalOrderId}
+          onChange={e => setOriginalOrderId(e.target.value)}
+          placeholder="CS-XXXXX"
+        />
+        <div style={{ fontSize: 11, marginTop: 4, minHeight: 14,
+                      color: originalOrderRef ? '#16a34a'
+                           : originalOrderId.trim() ? 'var(--a-err, #dc2626)'
+                           : 'var(--a-muted)' }}>
+          {originalOrderRef
+            ? `✓ Found: ${originalOrderRef.customerName} · ${originalOrderRef.status} · ${originalOrderRef.dropoff.address.split(',')[0]}`
+            : originalOrderId.trim() ? 'No order found with that ID.' : 'Required.'}
+        </div>
+        <div style={{ marginTop: 10 }}>
+          <label style={labelStyle}>Notes (optional)</label>
+          <textarea
+            style={{ ...inputStyle, minHeight: 50, resize: 'vertical', fontFamily: 'var(--a-font)' }}
+            value={originalOrderNotes}
+            onChange={e => setOriginalOrderNotes(e.target.value)}
+            placeholder="Reason for recreating, what went wrong, etc."
+          />
+        </div>
+      </div>
+
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16 }}>
         <div style={{ gridColumn: '1 / -1' }}>
           <label style={labelStyle}>Customer name *</label>
