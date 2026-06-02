@@ -35,12 +35,15 @@ export function AddPlaceScreen({ go, setState, user }: Props) {
       promptMessage="Create a free CitySend account to save Home, Work, and your other frequent stops — one tap to autofill on your next send."
     />
   )
-  const [label,        setLabel]        = useState('')
+  // Default to "Home" since icon defaults to 'home' — picking a type
+  // auto-fills the label (Home / Work). Picking 'Other' clears it so the
+  // user can name the place themselves.
+  const [label,        setLabel]        = useState('Home')
   const [address,      setAddress]      = useState('')
   const [unit,         setUnit]         = useState('')
   const [contactName,  setContactName]  = useState('')
   const [phone,        setPhone]        = useState('')
-  const [icon,         setIcon]         = useState<SavedAddress['icon']>('pin')
+  const [icon,         setIcon]         = useState<SavedAddress['icon']>('home')
   const [saved,        setSaved]        = useState(false)
   const [labelTouched, setLabelTouched] = useState(false)
   const [addrTouched,  setAddrTouched]  = useState(false)
@@ -119,7 +122,13 @@ export function AddPlaceScreen({ go, setState, user }: Props) {
                 {ADDR_ICONS.map(ic => (
                   <button
                     key={ic}
-                    onClick={() => setIcon(ic)}
+                    onClick={() => {
+                      setIcon(ic)
+                      // Auto-fill the label from the type (Home/Work).
+                      // 'pin' = Other: clear so the user enters a custom name.
+                      setLabel(ic === 'pin' ? '' : ICON_LABELS[ic])
+                      setLabelTouched(false)
+                    }}
                     style={{
                       flex: 1, padding: '10px 0',
                       border: `1.5px solid ${icon === ic ? 'var(--cs-ink)' : 'var(--cs-slate-200)'}`,
