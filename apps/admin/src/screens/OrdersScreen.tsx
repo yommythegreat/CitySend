@@ -2,9 +2,11 @@ import React, { useState, useMemo } from 'react'
 import { OrderStatusBadge } from '../components/StatusBadge'
 import { OrderDetailPanel } from '../components/OrderDetailPanel'
 import { Modal } from '../components/Modal'
+import { AdminAddressField } from '../components/AdminAddressField'
 import { useAdminStore } from '../store/AdminContext'
 import { fmt, relativeTime, parcelSizeLabel } from '@shared/utils/format'
 import { computeOrderPrice } from '@shared/utils/serviceAvailability'
+import { geocodeOnce } from '../hooks/useGeocoder'
 import type { Order, OrderStatus, CityId } from '@shared/types'
 import { ORDER_STATUS_LABELS } from '@shared/types'
 
@@ -25,9 +27,13 @@ function CreateOrderModal({ onClose }: { onClose: () => void }) {
   const [customerId,   setCustomerId]   = useState('')
   const [cityId,       setCityId]       = useState<CityId>('winnipeg')
   const [pickupAddr,   setPickupAddr]   = useState('')
+  const [pickupLat,    setPickupLat]    = useState<number | undefined>()
+  const [pickupLng,    setPickupLng]    = useState<number | undefined>()
   const [pickupName,   setPickupName]   = useState('')
   const [pickupPhone,  setPickupPhone]  = useState('')
   const [dropoffAddr,  setDropoffAddr]  = useState('')
+  const [dropoffLat,   setDropoffLat]   = useState<number | undefined>()
+  const [dropoffLng,   setDropoffLng]   = useState<number | undefined>()
   const [dropoffName,  setDropoffName]  = useState('')
   const [dropoffPhone, setDropoffPhone] = useState('')
   const [parcelSize,   setParcelSize]   = useState<'s' | 'm' | 'l'>('m')
@@ -57,9 +63,21 @@ function CreateOrderModal({ onClose }: { onClose: () => void }) {
     return computeOrderPrice({ cityConfig, distKm, parcelSize, fragile, tip })
   }, [cityConfig, distKm, parcelSize, fragile, tip])
 
-  const handleCreate = () => {
+  const handleCreate = async () => {
     if (!customerName.trim() || !pickupAddr.trim() || !dropoffAddr.trim() || !breakdown) return
     setSaving(true)
+
+    // Resolve coords for both addresses. Prefer coords captured during
+    // autocomplete; fall back to a one-shot geocode for typed-only addresses.
+    // Persisting coords here means the driver's proximity check at pickup /
+    // drop-off reads them instead of re-geocoding the rate-limited public
+    // endpoint every job.
+    const pickupCoords = (pickupLat != null && pickupLng != null)
+      ? { lat: pickupLat, lng: pickupLng }
+      : await geocodeOnce(pickupAddr.trim(), cityConfig ?? undefined).catch(() => null)
+    const dropoffCoords = (dropoffLat != null && dropoffLng != null)
+      ? { lat: dropoffLat, lng: dropoffLng }
+      : await geocodeOnce(dropoffAddr.trim(), cityConfig ?? undefined).catch(() => null)
 
     const now   = new Date().toISOString()
     const newId = `CS-ADM-${Date.now().toString().slice(-5)}`
@@ -72,11 +90,15 @@ function CreateOrderModal({ onClose }: { onClose: () => void }) {
         name:    pickupName.trim()  || customerName.trim(),
         phone:   pickupPhone.trim(),
         address: pickupAddr.trim(),
+        lat:     pickupCoords?.lat,
+        lng:     pickupCoords?.lng,
       },
       dropoff: {
         name:    dropoffName.trim()  || 'Recipient',
         phone:   dropoffPhone.trim(),
         address: dropoffAddr.trim(),
+        lat:     dropoffCoords?.lat,
+        lng:     dropoffCoords?.lng,
       },
       parcel: { size: parcelSize, desc: parcelDesc.trim() || 'Package', fragile },
       status: 'new',
@@ -93,11 +115,9 @@ function CreateOrderModal({ onClose }: { onClose: () => void }) {
       }],
     }
 
-    setTimeout(() => {
-      dispatch({ type: 'CREATE_ORDER', order })
-      setSaving(false)
-      onClose()
-    }, 600)
+    dispatch({ type: 'CREATE_ORDER', order })
+    setSaving(false)
+    onClose()
   }
 
   const cityOptions: CityId[] = ['winnipeg', 'toronto', 'calgary', 'vancouver', 'edmonton', 'ottawa', 'montreal']
@@ -127,7 +147,18 @@ function CreateOrderModal({ onClose }: { onClose: () => void }) {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
           <div style={{ gridColumn: '1 / -1' }}>
             <label style={labelStyle}>Address *</label>
-            <input style={inputStyle} value={pickupAddr} onChange={e => setPickupAddr(e.target.value)} placeholder="123 Main St, Winnipeg" />
+            <AdminAddressField
+              value={pickupAddr}
+              onChange={(addr, coords) => {
+                setPickupAddr(addr)
+                // Coords arrive only when the user picks a suggestion;
+                // typing alone clears them so we re-geocode at submit.
+                setPickupLat(coords?.lat)
+                setPickupLng(coords?.lng)
+              }}
+              placeholder="123 Main St, Winnipeg"
+              cityConfig={cityConfig ?? undefined}
+            />
           </div>
           <div>
             <label style={labelStyle}>Contact name</label>
@@ -145,7 +176,16 @@ function CreateOrderModal({ onClose }: { onClose: () => void }) {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
           <div style={{ gridColumn: '1 / -1' }}>
             <label style={labelStyle}>Address *</label>
-            <input style={inputStyle} value={dropoffAddr} onChange={e => setDropoffAddr(e.target.value)} placeholder="456 Portage Ave, Winnipeg" />
+            <AdminAddressField
+              value={dropoffAddr}
+              onChange={(addr, coords) => {
+                setDropoffAddr(addr)
+                setDropoffLat(coords?.lat)
+                setDropoffLng(coords?.lng)
+              }}
+              placeholder="456 Portage Ave, Winnipeg"
+              cityConfig={cityConfig ?? undefined}
+            />
           </div>
           <div>
             <label style={labelStyle}>Recipient name</label>
