@@ -205,6 +205,12 @@ export default function App() {
   // Stored in a ref (not state) so go() reads/writes it without stale-closure issues.
   const screenRef      = useRef<ScreenName>(screen)
   const navHistoryRef  = useRef<ScreenName[]>([])
+  // Tracks which user's saved-addresses have been loaded from Supabase. The
+  // persist effect refuses to write until this matches the current user.id —
+  // prevents the initial empty state from being persisted before loadUserData
+  // has populated state.savedAddresses (which would wipe Supabase on every
+  // login/refresh).
+  const savedAddrLoadedForRef = useRef<string | null>(null)
   useEffect(() => { userRef.current    = user },                       [user])
   useEffect(() => { selectedCityRef.current = state.selectedCityId },  [state.selectedCityId])
   useEffect(() => { trackingOrderIdRef.current = trackingOrderId },    [trackingOrderId])
@@ -330,6 +336,10 @@ export default function App() {
       pastDeliveries:  deliveries,
       paymentMethods:  [],  // payment methods come from Stripe, not local state
     }))
+    // Unlock the persist effect now that addresses have been hydrated.
+    // Done after setState so the very next effect run sees both the new
+    // addresses AND the ref pointing at the current user.
+    savedAddrLoadedForRef.current = authUser.id
   }, [])
 
   // ── Auth session: Supabase is the single source of truth ────────────────────
@@ -405,6 +415,7 @@ export default function App() {
           setState(INITIAL_STATE)
           setDraft(BLANK_DRAFT)
           setScreen('home')
+          savedAddrLoadedForRef.current = null  // re-arm the persist guard
           // Clear any lingering /tracking/:id URL so a re-login doesn't
           // accidentally restore an order the user may no longer have access to.
           if (window.location.pathname.startsWith('/tracking/')) {
@@ -511,6 +522,7 @@ export default function App() {
     setScreen('home')
     setUnreadCount(0)
     navHistoryRef.current = []
+    savedAddrLoadedForRef.current = null  // re-arm the persist guard
     clearBookingSession()
 
     if (wasGuest) {
@@ -532,8 +544,13 @@ export default function App() {
   }, [])
 
   // ── Persist saved addresses to Supabase + localStorage mirror ───────────────
+  // Guarded by savedAddrLoadedForRef — we only persist once loadUserData has
+  // hydrated state.savedAddresses for this user. Without that gate the initial
+  // empty state would be written to Supabase on every login/refresh, wiping
+  // the user's real saved places.
   useEffect(() => {
     if (!user || user.id === 'guest') return
+    if (savedAddrLoadedForRef.current !== user.id) return
     // Always keep a local mirror for instant reads on next launch
     localStorage.setItem(savedAddressesKey(user.id), JSON.stringify(state.savedAddresses))
     // Sync to Supabase so the same account sees the same places on any device
