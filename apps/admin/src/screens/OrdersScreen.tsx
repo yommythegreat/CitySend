@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useEffect, useRef } from 'react'
 import { OrderStatusBadge } from '../components/StatusBadge'
 import { OrderDetailPanel } from '../components/OrderDetailPanel'
 import { Modal } from '../components/Modal'
@@ -79,6 +79,39 @@ function CreateOrderModal({ onClose }: { onClose: () => void }) {
     return { order: found, reason: '' }
   }, [originalOrderId, state.orders])
   const originalOrderRef = originalOrderMatch.order
+
+  // Prefill the form from the referenced original when a NEW valid order ID
+  // resolves. Ref-guarded so we don't re-overwrite the admin's edits on every
+  // render — only when the matched order's id changes.
+  const prefilledFromRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (!originalOrderRef) { prefilledFromRef.current = null; return }
+    if (prefilledFromRef.current === originalOrderRef.id) return
+    prefilledFromRef.current = originalOrderRef.id
+
+    setCustomerName(originalOrderRef.customerName)
+    setCustomerId(originalOrderRef.customerId)
+    setCityId(originalOrderRef.cityId as CityId)
+
+    setPickupAddr(originalOrderRef.pickup.address)
+    setPickupLat(originalOrderRef.pickup.lat)
+    setPickupLng(originalOrderRef.pickup.lng)
+    setPickupName(originalOrderRef.pickup.name)
+    setPickupPhone(originalOrderRef.pickup.phone)
+
+    setDropoffAddr(originalOrderRef.dropoff.address)
+    setDropoffLat(originalOrderRef.dropoff.lat)
+    setDropoffLng(originalOrderRef.dropoff.lng)
+    setDropoffName(originalOrderRef.dropoff.name)
+    setDropoffPhone(originalOrderRef.dropoff.phone)
+
+    setParcelSize(originalOrderRef.parcel.size)
+    setParcelDesc(originalOrderRef.parcel.desc)
+    setFragile(originalOrderRef.parcel.fragile)
+
+    setDistKm(originalOrderRef.distanceKm)
+    setTip(originalOrderRef.priceBreakdown?.tip ?? 0)
+  }, [originalOrderRef])
 
   const handleCreate = async () => {
     if (!customerName.trim() || !pickupAddr.trim() || !dropoffAddr.trim()) return
