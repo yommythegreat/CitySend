@@ -659,8 +659,10 @@ export function AdminProvider({ children }: { children: React.ReactNode }) {
   // to admin when the SELECT policy uses a security-definer function (is_admin).
   // Driver-side writes (cancel, recipient-unavailable, status changes) reach
   // the DB fine but never echo to admin → admin sees a stale "new" order.
-  // A 10-second poll guarantees admin is at most 10s behind. fetchOrders is a
-  // direct SELECT and works correctly under RLS (confirmed in prod).
+  // 1-second poll makes admin near-real-time. fetchOrders is a direct SELECT
+  // which works under RLS. ~60 fetches/min per admin tab — fine at launch
+  // scale; revisit if the orders table grows beyond ~10k rows or if many admin
+  // tabs are open simultaneously.
   useEffect(() => {
     if (!isSupabaseConfigured) return
     const interval = setInterval(async () => {
@@ -668,7 +670,7 @@ export function AdminProvider({ children }: { children: React.ReactNode }) {
         const orders = await fetchOrders()
         baseDispatch({ type: '_HYDRATE_ORDERS', orders })
       } catch { /* swallow — next tick will retry */ }
-    }, 10_000)
+    }, 1_000)
     return () => clearInterval(interval)
   }, [])
 
