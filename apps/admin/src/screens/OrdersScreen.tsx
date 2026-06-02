@@ -1,13 +1,12 @@
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useEffect, useRef } from 'react'
 import { OrderStatusBadge } from '../components/StatusBadge'
 import { OrderDetailPanel } from '../components/OrderDetailPanel'
 import { Modal } from '../components/Modal'
 import { AdminAddressField } from '../components/AdminAddressField'
 import { useAdminStore } from '../store/AdminContext'
 import { fmt, relativeTime, parcelSizeLabel } from '@shared/utils/format'
-import { computeOrderPrice } from '@shared/utils/serviceAvailability'
 import { geocodeOnce } from '../hooks/useGeocoder'
-import type { Order, OrderStatus, CityId } from '@shared/types'
+import type { Order, OrderStatus, CityId, AdminNote } from '@shared/types'
 import { ORDER_STATUS_LABELS } from '@shared/types'
 
 const ALL_STATUSES: (OrderStatus | 'all')[] = ['all', 'new', 'assigned', 'picked_up', 'in_transit', 'delivered', 'cancelled']
@@ -22,6 +21,12 @@ const isStuck = (o: Order) =>
 
 function CreateOrderModal({ onClose }: { onClose: () => void }) {
   const { state, dispatch } = useAdminStore()
+
+  // Recreation-of-paid-order gate: admin must reference an existing CitySend
+  // order (cancelled / failed delivery) that was paid. Prevents admin from
+  // freely creating unpaid orders. Optional notes for context (why redo, etc.)
+  const [originalOrderId,    setOriginalOrderId]    = useState('')
+  const [originalOrderNotes, setOriginalOrderNotes] = useState('')
 
   const [customerName, setCustomerName] = useState('')
   const [customerId,   setCustomerId]   = useState('')
@@ -58,13 +63,60 @@ function CreateOrderModal({ onClose }: { onClose: () => void }) {
 
   // Compute price from live city config (same formula as customer app)
   const cityConfig = state.cityConfigs.find(c => c.cityId === cityId)
-  const breakdown = useMemo(() => {
-    if (!cityConfig) return null
-    return computeOrderPrice({ cityConfig, distKm, parcelSize, fragile, tip })
-  }, [cityConfig, distKm, parcelSize, fragile, tip])
+
+  // Live-validate the original-order reference. Match case-insensitively.
+  // Returns both the match (if any) and a refusal reason for delivered
+  // orders — we only allow recreating UN-fulfilled deliveries (cancelled
+  // or otherwise terminated), never a delivered one.
+  const originalOrderMatch = useMemo(() => {
+    const raw = originalOrderId.trim().toUpperCase()
+    if (!raw) return { order: null as Order | null, reason: '' }
+    const found = state.orders.find(o => o.id.toUpperCase() === raw) ?? null
+    if (!found) return { order: null, reason: 'No order found with that ID.' }
+    if (found.status === 'delivered') {
+      return { order: null, reason: 'This order was already delivered — cannot recreate.' }
+    }
+    return { order: found, reason: '' }
+  }, [originalOrderId, state.orders])
+  const originalOrderRef = originalOrderMatch.order
+
+  // Prefill the form from the referenced original when a NEW valid order ID
+  // resolves. Ref-guarded so we don't re-overwrite the admin's edits on every
+  // render — only when the matched order's id changes.
+  const prefilledFromRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (!originalOrderRef) { prefilledFromRef.current = null; return }
+    if (prefilledFromRef.current === originalOrderRef.id) return
+    prefilledFromRef.current = originalOrderRef.id
+
+    setCustomerName(originalOrderRef.customerName)
+    setCustomerId(originalOrderRef.customerId)
+    setCityId(originalOrderRef.cityId as CityId)
+
+    setPickupAddr(originalOrderRef.pickup.address)
+    setPickupLat(originalOrderRef.pickup.lat)
+    setPickupLng(originalOrderRef.pickup.lng)
+    setPickupName(originalOrderRef.pickup.name)
+    setPickupPhone(originalOrderRef.pickup.phone)
+
+    setDropoffAddr(originalOrderRef.dropoff.address)
+    setDropoffLat(originalOrderRef.dropoff.lat)
+    setDropoffLng(originalOrderRef.dropoff.lng)
+    setDropoffName(originalOrderRef.dropoff.name)
+    setDropoffPhone(originalOrderRef.dropoff.phone)
+
+    setParcelSize(originalOrderRef.parcel.size)
+    setParcelDesc(originalOrderRef.parcel.desc)
+    setFragile(originalOrderRef.parcel.fragile)
+
+    setDistKm(originalOrderRef.distanceKm)
+    setTip(originalOrderRef.priceBreakdown?.tip ?? 0)
+  }, [originalOrderRef])
 
   const handleCreate = async () => {
-    if (!customerName.trim() || !pickupAddr.trim() || !dropoffAddr.trim() || !breakdown) return
+    if (!customerName.trim() || !pickupAddr.trim() || !dropoffAddr.trim()) return
+    if (!originalOrderRef) return  // paid-order reference is required
+    if (!originalOrderNotes.trim()) return  // context note is required
     setSaving(true)
 
     // Resolve coords for both addresses. Prefer coords captured during
@@ -82,9 +134,11 @@ function CreateOrderModal({ onClose }: { onClose: () => void }) {
     const now   = new Date().toISOString()
     const newId = `CS-ADM-${Date.now().toString().slice(-5)}`
 
+    // Inherit billing-affecting fields from the original paid order so the
+    // recreation carries the same cost — no new charge, no admin-set price.
     const order: Order = {
       id: newId,
-      customerId:    customerId.trim() || `guest-${Date.now()}`,
+      customerId:    customerId.trim() || originalOrderRef.customerId,
       customerName:  customerName.trim(),
       pickup: {
         name:    pickupName.trim()  || customerName.trim(),
@@ -102,29 +156,86 @@ function CreateOrderModal({ onClose }: { onClose: () => void }) {
       },
       parcel: { size: parcelSize, desc: parcelDesc.trim() || 'Package', fragile },
       status: 'new',
-      priceBreakdown: breakdown,
-      cityId,
-      distanceKm: distKm,
+      // Inherit from original — admin recreation does not change pricing.
+      priceBreakdown: originalOrderRef.priceBreakdown,
+      cityId:         originalOrderRef.cityId,
+      distanceKm:     originalOrderRef.distanceKm,
       createdAt: now,
       updatedAt: now,
       notes: [{
         id: `note-admin-${Date.now()}`,
-        text: 'Order manually created by admin.',
+        text: `🔁 Recreated from order ${originalOrderRef.id} (status: ${originalOrderRef.status}). `
+            + `Reason: ${originalOrderNotes.trim()}`,
         authorName: 'Admin',
         createdAt: now,
       }],
     }
 
     dispatch({ type: 'CREATE_ORDER', order })
+
+    // Forward-link the ORIGINAL order with a note pointing to the new one,
+    // so traceability works both directions in the admin's notes view.
+    const forwardNote: AdminNote = {
+      id: `note-recreated-${Date.now()}`,
+      text: `🔁 Recreated as new order ${newId}. Reason: ${originalOrderNotes.trim()}`,
+      authorName: 'Admin',
+      createdAt: now,
+    }
+    dispatch({ type: 'ADD_NOTE', orderId: originalOrderRef.id, note: forwardNote })
+
     setSaving(false)
     onClose()
   }
 
   const cityOptions: CityId[] = ['winnipeg', 'toronto', 'calgary', 'vancouver', 'edmonton', 'ottawa', 'montreal']
-  const canCreate = customerName.trim() && pickupAddr.trim() && dropoffAddr.trim() && !!breakdown
+  const canCreate = customerName.trim() && pickupAddr.trim() && dropoffAddr.trim()
+                 && !!originalOrderRef && !!originalOrderNotes.trim()
 
   return (
     <div style={{ maxHeight: '75vh', overflowY: 'auto', paddingRight: 4 }}>
+
+      {/* ── Paid-order reference (required gate) ─────────────────────────── */}
+      <div style={{
+        padding: 12, marginBottom: 16, borderRadius: 8,
+        background: originalOrderRef ? 'rgba(34,197,94,0.06)' : 'rgba(201,74,27,0.06)',
+        border: `1px solid ${originalOrderRef ? 'rgba(34,197,94,0.3)' : 'rgba(201,74,27,0.25)'}`,
+      }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--a-ink)', marginBottom: 4 }}>
+          Recreate from paid order
+        </div>
+        <div style={{ fontSize: 12, color: 'var(--a-muted)', marginBottom: 10, lineHeight: 1.4 }}>
+          Admin can only recreate a previously paid order that was NOT fulfilled
+          (cancelled, failed delivery, etc.). Delivered orders cannot be recreated.
+        </div>
+        <label style={labelStyle}>Original order ID *</label>
+        <input
+          style={{ ...inputStyle, fontFamily: 'var(--a-mono, ui-monospace, monospace)', textTransform: 'uppercase' }}
+          value={originalOrderId}
+          onChange={e => setOriginalOrderId(e.target.value)}
+          placeholder="CS-XXXXX"
+        />
+        <div style={{ fontSize: 11, marginTop: 4, minHeight: 14,
+                      color: originalOrderRef ? '#16a34a'
+                           : originalOrderId.trim() ? 'var(--a-err, #dc2626)'
+                           : 'var(--a-muted)' }}>
+          {originalOrderRef
+            ? `✓ Found: ${originalOrderRef.customerName} · ${originalOrderRef.status} · ${originalOrderRef.dropoff.address.split(',')[0]}`
+            : originalOrderId.trim() ? originalOrderMatch.reason : 'Required.'}
+        </div>
+        <div style={{ marginTop: 10 }}>
+          <label style={labelStyle}>Reason for recreating *</label>
+          <textarea
+            style={{ ...inputStyle, minHeight: 50, resize: 'vertical', fontFamily: 'var(--a-font)' }}
+            value={originalOrderNotes}
+            onChange={e => setOriginalOrderNotes(e.target.value)}
+            placeholder="e.g. Driver could not reach recipient — rescheduled per customer request"
+          />
+          <div style={{ fontSize: 11, marginTop: 4, color: 'var(--a-muted)' }}>
+            Required. This explanation is logged on the new order for audit.
+          </div>
+        </div>
+      </div>
+
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16 }}>
         <div style={{ gridColumn: '1 / -1' }}>
           <label style={labelStyle}>Customer name *</label>
@@ -230,29 +341,8 @@ function CreateOrderModal({ onClose }: { onClose: () => void }) {
         </div>
       </div>
 
-      {/* Price preview */}
-      <div style={{ background: 'var(--a-bg)', borderRadius: 8, padding: '12px 14px', marginBottom: 16, fontSize: 13 }}>
-        {!breakdown ? (
-          <div style={{ color: 'var(--a-muted)', textAlign: 'center' }}>Loading pricing…</div>
-        ) : (
-          <>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3, color: 'var(--a-muted)' }}>
-              <span>Subtotal</span><span style={{ fontFamily: 'var(--a-mono)' }}>{fmt(breakdown.subtotalPreTax)}</span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3, color: 'var(--a-muted)' }}>
-              <span>Tax</span><span style={{ fontFamily: 'var(--a-mono)' }}>{fmt(breakdown.totalTax)}</span>
-            </div>
-            {tip > 0 && (
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3, color: 'var(--a-muted)' }}>
-                <span>Tip</span><span style={{ fontFamily: 'var(--a-mono)' }}>{fmt(tip)}</span>
-              </div>
-            )}
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6, paddingTop: 6, borderTop: '1px solid var(--a-border)', fontWeight: 700, color: 'var(--a-ink)' }}>
-              <span>Total</span><span style={{ fontFamily: 'var(--a-mono)' }}>{fmt(breakdown.total)}</span>
-            </div>
-          </>
-        )}
-      </div>
+      {/* Price preview removed — recreated orders inherit the original's
+          priceBreakdown / cityId / distanceKm, so there's no admin-set price. */}
 
       <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
         <button
