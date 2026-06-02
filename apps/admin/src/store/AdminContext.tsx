@@ -654,6 +654,26 @@ export function AdminProvider({ children }: { children: React.ReactNode }) {
     return () => { cancelled = true }
   }, [])
 
+  // ── Order poll (safety net for realtime under RLS) ─────────────────────────
+  // Supabase realtime postgres_changes doesn't reliably deliver UPDATE events
+  // to admin when the SELECT policy uses a security-definer function (is_admin).
+  // Driver-side writes (cancel, recipient-unavailable, status changes) reach
+  // the DB fine but never echo to admin → admin sees a stale "new" order.
+  // 1-second poll makes admin near-real-time. fetchOrders is a direct SELECT
+  // which works under RLS. ~60 fetches/min per admin tab — fine at launch
+  // scale; revisit if the orders table grows beyond ~10k rows or if many admin
+  // tabs are open simultaneously.
+  useEffect(() => {
+    if (!isSupabaseConfigured) return
+    const interval = setInterval(async () => {
+      try {
+        const orders = await fetchOrders()
+        baseDispatch({ type: '_HYDRATE_ORDERS', orders })
+      } catch { /* swallow — next tick will retry */ }
+    }, 1_000)
+    return () => clearInterval(interval)
+  }, [])
+
   // ── Realtime subscriptions ─────────────────────────────────────────────────
   useEffect(() => {
     const unsubOrders = subscribeToOrders(
