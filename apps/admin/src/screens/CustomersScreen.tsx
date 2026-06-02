@@ -11,15 +11,28 @@ export function CustomersScreen() {
   const [selectedUser,   setSelectedUser]   = useState<User | null>(null)
   const [selectedOrder,  setSelectedOrder]  = useState<string | null>(null)
 
+  // Exclude any user whose email matches a driver's email. A driver can have a
+  // customer-role profile row (signed up as a customer first, then later became
+  // a driver — same Supabase user, same email). Email-match works without
+  // requiring user_id on the Driver type.
+  const driverEmails = useMemo(
+    () => new Set(state.drivers.map(d => d.email.toLowerCase()).filter(Boolean)),
+    [state.drivers],
+  )
+  const customerOnly = useMemo(
+    () => state.users.filter(u => !driverEmails.has(u.email.toLowerCase())),
+    [state.users, driverEmails],
+  )
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
-    if (!q) return state.users
-    return state.users.filter(u =>
+    if (!q) return customerOnly
+    return customerOnly.filter(u =>
       u.name.toLowerCase().includes(q) ||
       u.email.toLowerCase().includes(q) ||
       u.phone.includes(q)
     )
-  }, [state.users, search])
+  }, [customerOnly, search])
 
   const userOrders = useMemo(() =>
     selectedUser
