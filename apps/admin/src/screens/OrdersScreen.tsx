@@ -65,13 +65,21 @@ function CreateOrderModal({ onClose }: { onClose: () => void }) {
   // Compute price from live city config (same formula as customer app)
   const cityConfig = state.cityConfigs.find(c => c.cityId === cityId)
 
-  // Live-validate the original-order reference. Match case-insensitively and
-  // accept either bare "CS-XXXXX" or just the trailing ID portion.
-  const originalOrderRef = useMemo(() => {
+  // Live-validate the original-order reference. Match case-insensitively.
+  // Returns both the match (if any) and a refusal reason for delivered
+  // orders — we only allow recreating UN-fulfilled deliveries (cancelled
+  // or otherwise terminated), never a delivered one.
+  const originalOrderMatch = useMemo(() => {
     const raw = originalOrderId.trim().toUpperCase()
-    if (!raw) return null
-    return state.orders.find(o => o.id.toUpperCase() === raw) ?? null
+    if (!raw) return { order: null as Order | null, reason: '' }
+    const found = state.orders.find(o => o.id.toUpperCase() === raw) ?? null
+    if (!found) return { order: null, reason: 'No order found with that ID.' }
+    if (found.status === 'delivered') {
+      return { order: null, reason: 'This order was already delivered — cannot recreate.' }
+    }
+    return { order: found, reason: '' }
   }, [originalOrderId, state.orders])
+  const originalOrderRef = originalOrderMatch.order
 
   const breakdown = useMemo(() => {
     if (!cityConfig) return null
@@ -81,6 +89,7 @@ function CreateOrderModal({ onClose }: { onClose: () => void }) {
   const handleCreate = async () => {
     if (!customerName.trim() || !pickupAddr.trim() || !dropoffAddr.trim() || !breakdown) return
     if (!originalOrderRef) return  // paid-order reference is required
+    if (!originalOrderNotes.trim()) return  // context note is required
     setSaving(true)
 
     // Resolve coords for both addresses. Prefer coords captured during
@@ -125,8 +134,8 @@ function CreateOrderModal({ onClose }: { onClose: () => void }) {
       updatedAt: now,
       notes: [{
         id: `note-admin-${Date.now()}`,
-        text: `🔁 Recreated from order ${originalOrderRef.id} (status: ${originalOrderRef.status}).`
-            + (originalOrderNotes.trim() ? ` Notes: ${originalOrderNotes.trim()}` : ''),
+        text: `🔁 Recreated from order ${originalOrderRef.id} (status: ${originalOrderRef.status}). `
+            + `Reason: ${originalOrderNotes.trim()}`,
         authorName: 'Admin',
         createdAt: now,
       }],
@@ -138,7 +147,8 @@ function CreateOrderModal({ onClose }: { onClose: () => void }) {
   }
 
   const cityOptions: CityId[] = ['winnipeg', 'toronto', 'calgary', 'vancouver', 'edmonton', 'ottawa', 'montreal']
-  const canCreate = customerName.trim() && pickupAddr.trim() && dropoffAddr.trim() && !!breakdown && !!originalOrderRef
+  const canCreate = customerName.trim() && pickupAddr.trim() && dropoffAddr.trim()
+                 && !!breakdown && !!originalOrderRef && !!originalOrderNotes.trim()
 
   return (
     <div style={{ maxHeight: '75vh', overflowY: 'auto', paddingRight: 4 }}>
@@ -153,8 +163,8 @@ function CreateOrderModal({ onClose }: { onClose: () => void }) {
           Recreate from paid order
         </div>
         <div style={{ fontSize: 12, color: 'var(--a-muted)', marginBottom: 10, lineHeight: 1.4 }}>
-          Admin can only create an order to recreate a previously paid one (e.g. failed
-          delivery). Enter the original CitySend order ID.
+          Admin can only recreate a previously paid order that was NOT fulfilled
+          (cancelled, failed delivery, etc.). Delivered orders cannot be recreated.
         </div>
         <label style={labelStyle}>Original order ID *</label>
         <input
@@ -169,16 +179,19 @@ function CreateOrderModal({ onClose }: { onClose: () => void }) {
                            : 'var(--a-muted)' }}>
           {originalOrderRef
             ? `✓ Found: ${originalOrderRef.customerName} · ${originalOrderRef.status} · ${originalOrderRef.dropoff.address.split(',')[0]}`
-            : originalOrderId.trim() ? 'No order found with that ID.' : 'Required.'}
+            : originalOrderId.trim() ? originalOrderMatch.reason : 'Required.'}
         </div>
         <div style={{ marginTop: 10 }}>
-          <label style={labelStyle}>Notes (optional)</label>
+          <label style={labelStyle}>Reason for recreating *</label>
           <textarea
             style={{ ...inputStyle, minHeight: 50, resize: 'vertical', fontFamily: 'var(--a-font)' }}
             value={originalOrderNotes}
             onChange={e => setOriginalOrderNotes(e.target.value)}
-            placeholder="Reason for recreating, what went wrong, etc."
+            placeholder="e.g. Driver could not reach recipient — rescheduled per customer request"
           />
+          <div style={{ fontSize: 11, marginTop: 4, color: 'var(--a-muted)' }}>
+            Required. This explanation is logged on the new order for audit.
+          </div>
         </div>
       </div>
 
