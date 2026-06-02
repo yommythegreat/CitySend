@@ -13,7 +13,7 @@
  * dispatch() exactly as before.
  */
 
-import React, { createContext, useContext, useReducer, useEffect, useCallback } from 'react'
+import React, { createContext, useContext, useReducer, useEffect, useCallback, useRef } from 'react'
 import type { Order, Driver, User, Receipt, OrderStatus, AdminNote, IncidentReport } from '@shared/types'
 import type { CityConfig } from '@shared/config/cityConfig'
 import { supabase, isSupabaseConfigured } from '@shared/lib/supabase'
@@ -673,6 +673,55 @@ export function AdminProvider({ children }: { children: React.ReactNode }) {
     }, 1_000)
     return () => clearInterval(interval)
   }, [])
+
+  // ── Auto-create receipts for delivered orders ─────────────────────────────
+  // Receipts used to be inserted inside the UPDATE_ORDER_STATUS reducer, which
+  // only fires when ADMIN marks an order delivered. But drivers now confirm
+  // deliveries themselves via the POD screen — that writes status='delivered'
+  // straight to Supabase, so the admin-side receipt path was never triggered.
+  // Result: receipts stopped being created as soon as drivers took over POD.
+  //
+  // Watch state.orders for delivered orders without a matching receipt and
+  // insert one. Deterministic receipt id (RCP-<orderId>) makes inserts
+  // idempotent — repeated attempts or multiple admin tabs collide on PK
+  // and silently no-op instead of creating duplicates.
+  const insertingReceiptsRef = useRef<Set<string>>(new Set())
+  useEffect(() => {
+    if (!isSupabaseConfigured) return
+    const haveReceipt = new Set(state.receipts.map(r => r.orderId))
+    const missing = state.orders.filter(o =>
+      o.status === 'delivered'
+      && !haveReceipt.has(o.id)
+      && !insertingReceiptsRef.current.has(o.id),
+    )
+    if (missing.length === 0) return
+
+    missing.forEach(async (order) => {
+      insertingReceiptsRef.current.add(order.id)
+      const receipt: Receipt = {
+        id:            `RCP-${order.id}`,
+        orderId:       order.id,
+        customerId:    order.customerId,
+        customerName:  order.customerName,
+        amount:        order.priceBreakdown.subtotalPreTax,
+        tax:           order.priceBreakdown.totalTax,
+        tip:           order.priceBreakdown.tip,
+        total:         order.priceBreakdown.total,
+        paymentMethod: 'card',
+        last4:         '4242',
+        brand:         'visa',
+        createdAt:     new Date().toISOString(),
+      }
+      try {
+        await insertReceipt(receipt)
+        const receipts = await fetchReceipts()
+        baseDispatch({ type: '_HYDRATE_RECEIPTS', receipts })
+      } catch (err) {
+        console.error('[AdminContext] auto-receipt insert failed', err)
+        insertingReceiptsRef.current.delete(order.id)  // allow retry
+      }
+    })
+  }, [state.orders, state.receipts])
 
   // ── Realtime subscriptions ─────────────────────────────────────────────────
   useEffect(() => {
