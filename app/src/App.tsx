@@ -330,6 +330,7 @@ export default function App() {
       }
     }
 
+    console.log('[loadUserData] setting savedAddresses + ref for', authUser.id, '— count:', addresses.length, 'labels:', addresses.map(a => a.label))
     setState(s => ({
       ...s,
       savedAddresses:  addresses,
@@ -549,8 +550,15 @@ export default function App() {
   // empty state would be written to Supabase on every login/refresh, wiping
   // the user's real saved places.
   useEffect(() => {
-    if (!user || user.id === 'guest') return
-    if (savedAddrLoadedForRef.current !== user.id) return
+    if (!user || user.id === 'guest') {
+      console.log('[savedAddresses] effect: skip (no user)', { user: user?.id, count: state.savedAddresses.length })
+      return
+    }
+    if (savedAddrLoadedForRef.current !== user.id) {
+      console.log('[savedAddresses] effect: skip (not loaded yet)', { user: user.id, refUser: savedAddrLoadedForRef.current, count: state.savedAddresses.length })
+      return
+    }
+    console.log('[savedAddresses] effect: PERSIST', { user: user.id, count: state.savedAddresses.length, places: state.savedAddresses.map(a => a.label) })
     // Always keep a local mirror for instant reads on next launch
     localStorage.setItem(savedAddressesKey(user.id), JSON.stringify(state.savedAddresses))
     // Sync to Supabase so the same account sees the same places on any device
@@ -561,6 +569,7 @@ export default function App() {
         .eq('id', user.id)
         .then(({ error }) => {
           if (error) console.warn('[savedAddresses] sync failed', error.message)
+          else console.log('[savedAddresses] persisted OK', state.savedAddresses.length, 'places')
         })
     }
   }, [state.savedAddresses, user])
