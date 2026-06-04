@@ -308,29 +308,42 @@ export default function App() {
     }
     loadingForUserRef.current = authUser.id
 
-    // Addresses: Supabase is source of truth; localStorage is a fast fallback
+    // Address loading strategy:
+    //
+    // The persist effect writes localStorage SYNCHRONOUSLY before the async
+    // Supabase UPDATE. If we read from Supabase first on load, we can get a
+    // stale snapshot (the last write hasn't committed yet). We then persist
+    // that stale snapshot, OVERWRITING the pending write — causing the "just
+    // added place vanishes on refresh" bug.
+    //
+    // Fix: read localStorage first. It is always the freshest copy.
+    // Only fall back to Supabase if localStorage is EMPTY (new device, cleared
+    // browser data). Supabase remains the cross-device backup, not the primary
+    // read source.
     let addresses: AppState['savedAddresses'] = []
     if (authUser.id !== 'guest') {
-      if (isSupabaseConfigured) {
+      const localAddresses = loadSavedAddresses(authUser.id)
+      if (localAddresses.length > 0) {
+        // localStorage has data — always fresh (written synchronously on every change)
+        addresses = localAddresses
+        console.log('[loadUserData] loaded from localStorage:', localAddresses.length, 'places')
+      } else if (isSupabaseConfigured) {
+        // localStorage empty — new device or cleared cache. Fall back to Supabase.
         try {
           const { data } = await supabase
             .from('profiles')
             .select('saved_addresses')
             .eq('id', authUser.id)
             .maybeSingle()
-          if (Array.isArray(data?.saved_addresses)) {
+          if (Array.isArray(data?.saved_addresses) && data.saved_addresses.length > 0) {
             addresses = data.saved_addresses
-            // Keep local mirror in sync
+            // Seed localStorage so future loads are instant.
             localStorage.setItem(savedAddressesKey(authUser.id), JSON.stringify(addresses))
-          } else {
-            // Column not yet migrated — fall back to localStorage
-            addresses = loadSavedAddresses(authUser.id)
+            console.log('[loadUserData] seeded from Supabase:', addresses.length, 'places')
           }
         } catch {
-          addresses = loadSavedAddresses(authUser.id)
+          // Network error and no local data — start empty.
         }
-      } else {
-        addresses = loadSavedAddresses(authUser.id)
       }
     }
 
