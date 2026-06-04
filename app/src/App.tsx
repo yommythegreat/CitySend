@@ -218,6 +218,11 @@ export default function App() {
   // AFTER a newer write (e.g. when the user adds a place fast), overwriting
   // the new state with old data. Reset to null on logout.
   const loadingForUserRef = useRef<string | null>(null)
+  // Tracks the previous savedAddresses count for the current user. The persist
+  // effect refuses to write [] when the previous count was >1 — that pattern
+  // (N>1 places suddenly disappearing) is almost always a bug, not a real
+  // delete. Real deletes are incremental (N → N-1 → ... → 0).
+  const prevAddrCountRef = useRef<number>(0)
   useEffect(() => { userRef.current    = user },                       [user])
   useEffect(() => { selectedCityRef.current = state.selectedCityId },  [state.selectedCityId])
   useEffect(() => { trackingOrderIdRef.current = trackingOrderId },    [trackingOrderId])
@@ -323,28 +328,39 @@ export default function App() {
     let addresses: AppState['savedAddresses'] = []
     if (authUser.id !== 'guest') {
       const localAddresses = loadSavedAddresses(authUser.id)
+      // Diagnostic: log the raw localStorage state so we can see if it's been wiped externally.
+      const rawLocal = (typeof localStorage !== 'undefined')
+        ? localStorage.getItem(savedAddressesKey(authUser.id))
+        : null
+      console.log('[loadUserData] localStorage raw:', rawLocal === null ? 'NULL' : `len=${rawLocal.length}`, '— parsed count:', localAddresses.length)
+
       if (localAddresses.length > 0) {
-        // localStorage has data — always fresh (written synchronously on every change)
         addresses = localAddresses
-        console.log('[loadUserData] loaded from localStorage:', localAddresses.length, 'places')
+        console.log('[loadUserData] using localStorage:', localAddresses.length, 'places')
       } else if (isSupabaseConfigured) {
-        // localStorage empty — new device or cleared cache. Fall back to Supabase.
+        // localStorage empty — try Supabase as fallback.
         try {
           const { data } = await supabase
             .from('profiles')
             .select('saved_addresses')
             .eq('id', authUser.id)
             .maybeSingle()
+          const supaCount = Array.isArray(data?.saved_addresses) ? data.saved_addresses.length : 0
+          console.log('[loadUserData] Supabase returned:', supaCount, 'places')
           if (Array.isArray(data?.saved_addresses) && data.saved_addresses.length > 0) {
             addresses = data.saved_addresses
             // Seed localStorage so future loads are instant.
             localStorage.setItem(savedAddressesKey(authUser.id), JSON.stringify(addresses))
-            console.log('[loadUserData] seeded from Supabase:', addresses.length, 'places')
+            // Prime the wipe-guard with the loaded count so a buggy clear-to-0
+            // right after load doesn't slip past the guard.
+            prevAddrCountRef.current = addresses.length
           }
-        } catch {
-          // Network error and no local data — start empty.
+        } catch (err) {
+          console.warn('[loadUserData] Supabase fetch failed', err)
         }
       }
+      // If we loaded from localStorage, also prime the guard.
+      if (addresses.length > 0) prevAddrCountRef.current = addresses.length
     }
 
     // Past deliveries: fetch from order store, map to legacy Delivery type
@@ -446,6 +462,7 @@ export default function App() {
           setScreen('home')
           savedAddrLoadedForRef.current = null  // re-arm the persist guard
           loadingForUserRef.current = null      // allow loadUserData to fire on next login
+    prevAddrCountRef.current = 0           // re-arm the wipe guard
           // Clear any lingering /tracking/:id URL so a re-login doesn't
           // accidentally restore an order the user may no longer have access to.
           if (window.location.pathname.startsWith('/tracking/')) {
@@ -556,6 +573,7 @@ export default function App() {
     navHistoryRef.current = []
     savedAddrLoadedForRef.current = null  // re-arm the persist guard
     loadingForUserRef.current = null      // allow loadUserData to fire on next login
+    prevAddrCountRef.current = 0           // re-arm the wipe guard
     clearBookingSession()
 
     if (wasGuest) {
@@ -590,7 +608,18 @@ export default function App() {
       console.log('[savedAddresses] effect: skip (not loaded yet)', { user: user.id, refUser: savedAddrLoadedForRef.current, count: state.savedAddresses.length })
       return
     }
-    console.log('[savedAddresses] effect: PERSIST', { user: user.id, count: state.savedAddresses.length, places: state.savedAddresses.map(a => a.label) })
+    // Wipe guard: refuse to persist a sudden N>1 → 0 collapse. That pattern is
+    // almost always a bug (auth race, state reset, etc.), not a real deletion.
+    // Real deletes happen one at a time (N → N-1 → ...).
+    const newCount  = state.savedAddresses.length
+    const prevCount = prevAddrCountRef.current
+    if (newCount === 0 && prevCount > 1) {
+      console.warn('[savedAddresses] WIPE BLOCKED — refusing to persist sudden', prevCount, '→ 0 collapse. State will be re-hydrated from localStorage on next load.')
+      // Do NOT update prevAddrCountRef so a legitimate retry can still go through.
+      return
+    }
+    prevAddrCountRef.current = newCount
+    console.log('[savedAddresses] effect: PERSIST', { user: user.id, count: newCount, prev: prevCount, places: state.savedAddresses.map(a => a.label) })
     // Always keep a local mirror for instant reads on next launch
     localStorage.setItem(savedAddressesKey(user.id), JSON.stringify(state.savedAddresses))
     // Sync to Supabase so the same account sees the same places on any device
