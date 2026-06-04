@@ -223,6 +223,10 @@ export default function App() {
   // (N>1 places suddenly disappearing) is almost always a bug, not a real
   // delete. Real deletes are incremental (N → N-1 → ... → 0).
   const prevAddrCountRef = useRef<number>(0)
+  // Debounce timer for Supabase writes — coalesces rapid state changes into a
+  // single network write. Eliminates the race where two parallel async UPDATEs
+  // arrive at the server out of order, with the older one overwriting the newer.
+  const supabaseWriteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   useEffect(() => { userRef.current    = user },                       [user])
   useEffect(() => { selectedCityRef.current = state.selectedCityId },  [state.selectedCityId])
   useEffect(() => { trackingOrderIdRef.current = trackingOrderId },    [trackingOrderId])
@@ -327,39 +331,46 @@ export default function App() {
     // read source.
     let addresses: AppState['savedAddresses'] = []
     if (authUser.id !== 'guest') {
+      // Read BOTH stores in parallel. Pick the LARGER one as the source of
+      // truth — defensive against either store being wiped. If they agree,
+      // use either. If one is empty and the other has data, use the populated
+      // one and reseed the empty store. If they disagree on count (e.g. due
+      // to a race), prefer the larger as it's more likely to have the
+      // most-recently-added places.
       const localAddresses = loadSavedAddresses(authUser.id)
-      // Diagnostic: log the raw localStorage state so we can see if it's been wiped externally.
       const rawLocal = (typeof localStorage !== 'undefined')
         ? localStorage.getItem(savedAddressesKey(authUser.id))
         : null
       console.log('[loadUserData] localStorage raw:', rawLocal === null ? 'NULL' : `len=${rawLocal.length}`, '— parsed count:', localAddresses.length)
 
-      if (localAddresses.length > 0) {
-        addresses = localAddresses
-        console.log('[loadUserData] using localStorage:', localAddresses.length, 'places')
-      } else if (isSupabaseConfigured) {
-        // localStorage empty — try Supabase as fallback.
+      let supaAddresses: AppState['savedAddresses'] = []
+      if (isSupabaseConfigured) {
         try {
           const { data } = await supabase
             .from('profiles')
             .select('saved_addresses')
             .eq('id', authUser.id)
             .maybeSingle()
-          const supaCount = Array.isArray(data?.saved_addresses) ? data.saved_addresses.length : 0
-          console.log('[loadUserData] Supabase returned:', supaCount, 'places')
-          if (Array.isArray(data?.saved_addresses) && data.saved_addresses.length > 0) {
-            addresses = data.saved_addresses
-            // Seed localStorage so future loads are instant.
-            localStorage.setItem(savedAddressesKey(authUser.id), JSON.stringify(addresses))
-            // Prime the wipe-guard with the loaded count so a buggy clear-to-0
-            // right after load doesn't slip past the guard.
-            prevAddrCountRef.current = addresses.length
+          if (Array.isArray(data?.saved_addresses)) {
+            supaAddresses = data.saved_addresses
           }
         } catch (err) {
           console.warn('[loadUserData] Supabase fetch failed', err)
         }
       }
-      // If we loaded from localStorage, also prime the guard.
+      console.log('[loadUserData] Supabase returned:', supaAddresses.length, 'places')
+
+      // Pick the larger. Ties go to localStorage (faster path on next reload).
+      if (localAddresses.length >= supaAddresses.length) {
+        addresses = localAddresses
+        console.log('[loadUserData] using localStorage:', addresses.length, 'places (Supabase had', supaAddresses.length + ')')
+      } else {
+        addresses = supaAddresses
+        console.log('[loadUserData] using Supabase:', addresses.length, 'places (localStorage had', localAddresses.length + ')')
+        // Heal localStorage from Supabase so next load is fast.
+        try { localStorage.setItem(savedAddressesKey(authUser.id), JSON.stringify(addresses)) } catch {}
+      }
+      // Prime the wipe-guard so a buggy clear-to-0 right after load is caught.
       if (addresses.length > 0) prevAddrCountRef.current = addresses.length
     }
 
@@ -620,15 +631,14 @@ export default function App() {
     }
     prevAddrCountRef.current = newCount
     console.log('[savedAddresses] effect: PERSIST', { user: user.id, count: newCount, prev: prevCount, origin: window.location.origin, places: state.savedAddresses.map(a => a.label) })
-    // Always keep a local mirror for instant reads on next launch
+    // Always keep a local mirror for instant reads on next launch (SYNC, never debounced)
     const key = savedAddressesKey(user.id)
     const value = JSON.stringify(state.savedAddresses)
     try {
       localStorage.setItem(key, value)
-      // Immediate read-back to verify the write actually stuck.
       const readback = localStorage.getItem(key)
       if (readback === null) {
-        console.error('[savedAddresses] localStorage WRITE LOST — readback is NULL. Storage is blocked or being cleared by something.')
+        console.error('[savedAddresses] localStorage WRITE LOST — readback is NULL.')
       } else if (readback !== value) {
         console.error('[savedAddresses] localStorage MISMATCH after write', { wroteLen: value.length, readLen: readback.length })
       } else {
@@ -637,16 +647,24 @@ export default function App() {
     } catch (err) {
       console.error('[savedAddresses] localStorage.setItem THREW', err)
     }
-    // Sync to Supabase so the same account sees the same places on any device
+    // DEBOUNCED Supabase write. Coalesces rapid state changes into a single
+    // network UPDATE so two parallel writes can't arrive at the server out of
+    // order. If a new state change arrives within 300ms, the previous timer
+    // is cancelled and only the latest value is written.
     if (isSupabaseConfigured) {
-      supabase
-        .from('profiles')
-        .update({ saved_addresses: state.savedAddresses })
-        .eq('id', user.id)
-        .then(({ error }) => {
-          if (error) console.warn('[savedAddresses] sync failed', error.message)
-          else console.log('[savedAddresses] persisted OK', state.savedAddresses.length, 'places')
-        })
+      if (supabaseWriteTimerRef.current) clearTimeout(supabaseWriteTimerRef.current)
+      const userId = user.id
+      const valueToWrite = state.savedAddresses
+      supabaseWriteTimerRef.current = setTimeout(() => {
+        supabase
+          .from('profiles')
+          .update({ saved_addresses: valueToWrite })
+          .eq('id', userId)
+          .then(({ error }) => {
+            if (error) console.warn('[savedAddresses] sync failed', error.message)
+            else console.log('[savedAddresses] persisted OK', valueToWrite.length, 'places')
+          })
+      }, 300)
     }
   }, [state.savedAddresses, user])
 
