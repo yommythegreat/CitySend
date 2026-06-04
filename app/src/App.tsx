@@ -211,6 +211,13 @@ export default function App() {
   // has populated state.savedAddresses (which would wipe Supabase on every
   // login/refresh).
   const savedAddrLoadedForRef = useRef<string | null>(null)
+  // Dedupes concurrent loadUserData calls. Supabase fires both SIGNED_IN and
+  // INITIAL_SESSION on page load — without this each event would trigger its
+  // own loadUserData, each of which would persist the loaded data, producing
+  // two parallel UPDATE requests that race. A delayed earlier write can land
+  // AFTER a newer write (e.g. when the user adds a place fast), overwriting
+  // the new state with old data. Reset to null on logout.
+  const loadingForUserRef = useRef<string | null>(null)
   useEffect(() => { userRef.current    = user },                       [user])
   useEffect(() => { selectedCityRef.current = state.selectedCityId },  [state.selectedCityId])
   useEffect(() => { trackingOrderIdRef.current = trackingOrderId },    [trackingOrderId])
@@ -293,6 +300,14 @@ export default function App() {
 
   // ── Load user-specific data (addresses from Supabase, orders from Supabase) ──
   const loadUserData = useCallback(async (authUser: AuthUser) => {
+    // De-dupe: Supabase fires SIGNED_IN + INITIAL_SESSION on every refresh, each
+    // calling this. Without this guard we get two parallel persists and a race.
+    if (loadingForUserRef.current === authUser.id) {
+      console.log('[loadUserData] skip — already loading/loaded for', authUser.id)
+      return
+    }
+    loadingForUserRef.current = authUser.id
+
     // Addresses: Supabase is source of truth; localStorage is a fast fallback
     let addresses: AppState['savedAddresses'] = []
     if (authUser.id !== 'guest') {
@@ -417,6 +432,7 @@ export default function App() {
           setDraft(BLANK_DRAFT)
           setScreen('home')
           savedAddrLoadedForRef.current = null  // re-arm the persist guard
+          loadingForUserRef.current = null      // allow loadUserData to fire on next login
           // Clear any lingering /tracking/:id URL so a re-login doesn't
           // accidentally restore an order the user may no longer have access to.
           if (window.location.pathname.startsWith('/tracking/')) {
@@ -469,6 +485,8 @@ export default function App() {
       const authUser = userRef.current
       if (!authUser || authUser.id === 'guest') return
       await new Promise(r => setTimeout(r, Math.random() * 2000))
+      // Bypass the dedup guard: reconnect SHOULD refresh from Supabase.
+      loadingForUserRef.current = null
       loadUserData(authUser).catch(() => {})
     }
     window.addEventListener('online', onOnline)
@@ -524,6 +542,7 @@ export default function App() {
     setUnreadCount(0)
     navHistoryRef.current = []
     savedAddrLoadedForRef.current = null  // re-arm the persist guard
+    loadingForUserRef.current = null      // allow loadUserData to fire on next login
     clearBookingSession()
 
     if (wasGuest) {
