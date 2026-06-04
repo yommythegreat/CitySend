@@ -619,9 +619,24 @@ export default function App() {
       return
     }
     prevAddrCountRef.current = newCount
-    console.log('[savedAddresses] effect: PERSIST', { user: user.id, count: newCount, prev: prevCount, places: state.savedAddresses.map(a => a.label) })
+    console.log('[savedAddresses] effect: PERSIST', { user: user.id, count: newCount, prev: prevCount, origin: window.location.origin, places: state.savedAddresses.map(a => a.label) })
     // Always keep a local mirror for instant reads on next launch
-    localStorage.setItem(savedAddressesKey(user.id), JSON.stringify(state.savedAddresses))
+    const key = savedAddressesKey(user.id)
+    const value = JSON.stringify(state.savedAddresses)
+    try {
+      localStorage.setItem(key, value)
+      // Immediate read-back to verify the write actually stuck.
+      const readback = localStorage.getItem(key)
+      if (readback === null) {
+        console.error('[savedAddresses] localStorage WRITE LOST — readback is NULL. Storage is blocked or being cleared by something.')
+      } else if (readback !== value) {
+        console.error('[savedAddresses] localStorage MISMATCH after write', { wroteLen: value.length, readLen: readback.length })
+      } else {
+        console.log('[savedAddresses] localStorage write verified — key:', key)
+      }
+    } catch (err) {
+      console.error('[savedAddresses] localStorage.setItem THREW', err)
+    }
     // Sync to Supabase so the same account sees the same places on any device
     if (isSupabaseConfigured) {
       supabase
