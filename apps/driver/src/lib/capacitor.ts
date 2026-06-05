@@ -13,6 +13,7 @@
  */
 
 import { Capacitor } from '@capacitor/core'
+import { cachePushToken } from '@shared/utils/pushTokenStore'
 
 export async function setupCapacitor(): Promise<void> {
   if (!Capacitor.isNativePlatform()) return
@@ -46,8 +47,11 @@ export async function setupCapacitor(): Promise<void> {
 
   PushNotifications.addListener('registration', token => {
     console.log('[Push] driver device token:', token.value)
-    // TODO: POST token to your API and store against the driver's profile
-    // so the admin can target this device when assigning a job.
+    // Cache the token. DriverContext (after sign-in) calls
+    // syncPushTokenToSupabase(driverAuthUserId, 'driver') to upsert into
+    // push_tokens for server-side delivery of job-offer pushes.
+    const platform = Capacitor.getPlatform() === 'ios' ? 'ios' : 'android'
+    cachePushToken(token.value, platform)
   })
 
   PushNotifications.addListener('registrationError', err => {

@@ -11,6 +11,7 @@
  */
 
 import { Capacitor } from '@capacitor/core'
+import { cachePushToken } from '../utils/pushTokenStore'
 
 export async function setupCapacitor(): Promise<void> {
   if (!Capacitor.isNativePlatform()) return
@@ -43,7 +44,10 @@ export async function setupCapacitor(): Promise<void> {
   // to associate with the customer's account for targeted notifications.
   PushNotifications.addListener('registration', token => {
     console.log('[Push] device token:', token.value)
-    // TODO: POST token to your API and store against the customer's profile
+    // Cache the token. App.tsx calls syncPushTokenToSupabase(user.id) once the
+    // user is authenticated to upsert it into push_tokens for server-side delivery.
+    const platform = Capacitor.getPlatform() === 'ios' ? 'ios' : 'android'
+    cachePushToken(token.value, platform)
   })
 
   PushNotifications.addListener('registrationError', err => {

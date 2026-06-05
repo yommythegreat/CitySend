@@ -17,6 +17,7 @@ import {
   getSharedOrders, setSharedOrders, ORDERS_STORAGE_KEY,
 } from '@shared/utils/orderStore'
 import { pushNotification } from '@shared/utils/notificationStore'
+import { syncPushTokenToSupabase } from '@shared/utils/pushTokenStore'
 import {
   startLocationBroadcast,
   stopLocationBroadcast,
@@ -515,6 +516,26 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
       }
     }
     load()
+    return () => { cancelled = true }
+  }, [state.auth?.driverId])
+
+  // Sync push-notification device token (cached by setupCapacitor) into the
+  // push_tokens table for THIS driver's auth.users.id. The Edge Function uses
+  // it to deliver job-offer pushes to the right device. push_tokens.user_id
+  // is the Supabase auth UUID, not driverId, so we fetch it from the session.
+  useEffect(() => {
+    if (!state.auth || !isSupabaseConfigured) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const { data } = await supabase.auth.getUser()
+        const authUserId = data?.user?.id
+        if (!authUserId || cancelled) return
+        await syncPushTokenToSupabase(authUserId, 'driver')
+      } catch (err) {
+        console.warn('[Push] driver token sync failed', err)
+      }
+    })()
     return () => { cancelled = true }
   }, [state.auth?.driverId])
 

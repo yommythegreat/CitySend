@@ -24,6 +24,7 @@ import { getCityConfig, getCityConfigByDetectedName, computeOrderPrice, canStart
 import { fetchCityConfigs, subscribeToCityConfigs } from './utils/configStore'
 import { pushNewOrder, getCustomerOrders, type CustomerOrder } from './utils/orderStore'
 import { pushCustomerNotif, NOTIFS_STORAGE_KEY, subscribeToCustomerNotifs, fetchCustomerNotifs } from './utils/notificationStore'
+import { syncPushTokenToSupabase } from './utils/pushTokenStore'
 import { supabase, isSupabaseConfigured } from './lib/supabase'
 import { Capacitor } from '@capacitor/core'
 
@@ -460,6 +461,12 @@ export default function App() {
             loadUserData(authUser).catch(err =>
               console.error('[Auth] loadUserData failed during session restore', err)
             )
+            // Sync push-notification device token (cached by setupCapacitor) to
+            // Supabase for this user. Fire-and-forget — no-op if no token yet
+            // (e.g. permission not granted) or not on native.
+            syncPushTokenToSupabase(authUser.id).catch(err =>
+              console.warn('[Push] token sync failed', err)
+            )
           } else {
             // No session — show the auth screen immediately.
             setAuthChecked(true)
@@ -560,6 +567,13 @@ export default function App() {
 
     setUser(authUser)
     await loadUserData(authUser)
+    // Sync push-notification device token for this user (fire-and-forget; no-op
+    // if no token yet or if the cached token already matches in Supabase).
+    if (authUser.id !== 'guest') {
+      syncPushTokenToSupabase(authUser.id).catch(err =>
+        console.warn('[Push] token sync failed', err),
+      )
+    }
     // Honour tracking deep-link: if the URL still contains /tracking/:id the
     // user came here via a shared link and must be sent to tracking after auth.
     const deepId = parseTrackingId()
