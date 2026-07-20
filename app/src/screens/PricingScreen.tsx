@@ -5,7 +5,7 @@ import { Back, Lock, Clock } from '../components/Icons'
 import { fmt } from '../utils/pricing'
 import { computeOrderPrice } from '../utils/serviceAvailability'
 import { fetchRoute, geocodeOnce } from '../hooks/useGeocoder'
-import { DELIVERY_WINDOWS, EXPRESS_FLAT_FEE } from '../config/cityConfig'
+import { DELIVERY_WINDOWS } from '../config/cityConfig'
 import type { CityConfig } from '../config/cityConfig'
 import type { Draft, ScreenName, RouteInfo, DeliveryWindow } from '../types'
 
@@ -135,13 +135,13 @@ export function PricingScreen({ go, draft, setDraft, cityConfig }: Props) {
                   key={w.id}
                   onClick={() => setDraft({ ...draft, deliveryWindow: w.id })}
                   style={{
-                    padding: '12px 6px',
+                    padding: '8px 6px',
                     border: `1.5px solid ${selected ? 'var(--cs-ink)' : 'var(--cs-slate-200)'}`,
                     borderRadius: 12,
                     background: selected ? 'var(--cs-ink)' : '#fff',
                     color: selected ? '#fff' : 'var(--cs-ink)',
                     fontFamily: 'var(--cs-font)', cursor: 'pointer',
-                    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3,
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
                     transition: 'background .15s, border-color .15s',
                   }}
                 >
@@ -149,23 +149,10 @@ export function PricingScreen({ go, draft, setDraft, cityConfig }: Props) {
                   <span style={{ fontSize: 11, color: selected ? 'rgba(255,255,255,.75)' : 'var(--cs-slate-500)' }}>
                     {w.time}
                   </span>
-                  {w.id === 'express' && (
-                    <span style={{
-                      fontSize: 10, fontWeight: 700, letterSpacing: 0.4,
-                      color: selected ? '#fff' : 'var(--cs-accent)',
-                    }}>
-                      ${EXPRESS_FLAT_FEE} FLAT
-                    </span>
-                  )}
                 </button>
               )
             })}
           </div>
-          {isExpress && (
-            <div style={{ fontSize: 12, color: 'var(--cs-slate-500)', marginTop: 8, lineHeight: 1.5 }}>
-              Express is a flat ${EXPRESS_FLAT_FEE} + tax, dispatched as soon as possible — distance and size don't change the price.
-            </div>
-          )}
         </div>
 
         {/* Route card */}
