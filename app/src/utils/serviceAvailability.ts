@@ -7,6 +7,7 @@
  */
 
 import { getSystemCityConfigs } from './configStore'
+import { EXPRESS_FLAT_FEE } from '../config/cityConfig'
 import type { CityConfig, CityPricing, TaxRates } from '../config/cityConfig'
 import type { CityId } from '../types'
 
@@ -99,6 +100,9 @@ export interface OrderPriceParams {
   parcelSize: 's' | 'm' | 'l'
   fragile: boolean
   tip?: number
+  /** 'express' switches to the flat EXPRESS_FLAT_FEE price (pre-tax),
+   *  replacing base/distance/size/fragile fees. Windows price normally. */
+  deliveryWindow?: 'morning' | 'evening' | 'express'
 }
 
 export interface PriceBreakdown {
@@ -146,24 +150,32 @@ export function computeOrderPrice({
   parcelSize,
   fragile,
   tip = 0,
+  deliveryWindow,
 }: OrderPriceParams): PriceBreakdown {
   const { pricing, taxRates } = cityConfig
 
+  const isExpress = deliveryWindow === 'express'
+
+  // Express: flat pre-tax price replaces ALL calculated fees. Reuses the
+  // baseFee field so downstream breakdown displays (admin, driver payout)
+  // keep working with no new fields.
+  const baseFee = isExpress ? EXPRESS_FLAT_FEE : pricing.baseFee
+
   // Distance surcharge
-  const distanceFee = distKm > pricing.baseDistanceKm
+  const distanceFee = !isExpress && distKm > pricing.baseDistanceKm
     ? round2((distKm - pricing.baseDistanceKm) * pricing.extraKmFee)
     : 0
 
   // Size surcharge
-  const sizeFee =
+  const sizeFee = isExpress ? 0 :
     parcelSize === 's' ? pricing.smallPackageFee :
     parcelSize === 'l' ? pricing.largePackageFee :
     pricing.mediumPackageFee
 
   // Fragile surcharge
-  const fragileFee = fragile ? pricing.fragileFee : 0
+  const fragileFee = (!isExpress && fragile) ? pricing.fragileFee : 0
 
-  const subtotalPreTax = round2(pricing.baseFee + distanceFee + sizeFee + fragileFee)
+  const subtotalPreTax = round2(baseFee + distanceFee + sizeFee + fragileFee)
 
   // Taxes applied to subtotalPreTax (not on tip)
   const gst = round2(subtotalPreTax * taxRates.gst)
@@ -177,7 +189,7 @@ export function computeOrderPrice({
   const total           = round2(subtotalWithTax + tipRounded)
 
   return {
-    baseFee: pricing.baseFee,
+    baseFee,
     distanceFee,
     sizeFee,
     fragileFee,

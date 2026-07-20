@@ -252,6 +252,7 @@ export function PaymentScreen({ go, state, draft, cityConfig, onPaymentComplete 
     parcelSize: draft.parcel.size,
     fragile:    draft.parcel.fragile,
     tip,
+    deliveryWindow: draft.deliveryWindow ?? 'morning',
   })
 
   // ── Tax tooltip label ──────────────────────────────────────────────────────
@@ -274,12 +275,13 @@ export function PaymentScreen({ go, state, draft, cityConfig, onPaymentComplete 
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        cityId:     cityConfig.cityId,
-        distanceKm: distKm,
-        parcelSize: draft.parcel.size,
-        fragile:    draft.parcel.fragile,
+        cityId:         cityConfig.cityId,
+        distanceKm:     distKm,
+        parcelSize:     draft.parcel.size,
+        fragile:        draft.parcel.fragile,
         tip,
-        amountCad:  price.total,  // fallback if server can't reach Supabase
+        deliveryWindow: draft.deliveryWindow ?? 'morning',
+        amountCad:      price.total,  // fallback if server can't reach Supabase
       }),
     })
       .then(r => r.json())

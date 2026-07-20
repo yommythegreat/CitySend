@@ -111,7 +111,10 @@ function restoreBookingSession(): { screen: ScreenName; draft: Draft } | null {
     const s = sessionStorage.getItem(SESSION_SCREEN_KEY) as ScreenName | null
     const d = sessionStorage.getItem(SESSION_DRAFT_KEY)
     if (s && BOOKING_SCREENS.includes(s) && d) {
-      return { screen: s, draft: JSON.parse(d) as Draft }
+      const parsed = JSON.parse(d) as Draft
+      // Drafts saved before the delivery-window feature lack the field.
+      if (!parsed.deliveryWindow) parsed.deliveryWindow = 'morning'
+      return { screen: s, draft: parsed }
     }
   } catch {}
   return null
@@ -782,6 +785,7 @@ export default function App() {
       parcelSize: draft.parcel.size,
       fragile:    draft.parcel.fragile,
       tip,
+      deliveryWindow: draft.deliveryWindow ?? 'morning',
     })
     // If the server returned an authoritative total, trust it over the client-computed value
     if (authorizedTotal !== undefined) breakdown.total = authorizedTotal
@@ -831,6 +835,8 @@ export default function App() {
         fragile: draft.parcel.fragile,
         prohibitedItemsDeclarationAccepted:   draft.parcel.prohibitedItemsDeclarationAccepted,
         prohibitedItemsDeclarationAcceptedAt: draft.parcel.prohibitedItemsDeclarationAcceptedAt ?? now,
+        // Rides in the parcel JSONB — no DB migration needed
+        deliveryWindow: draft.deliveryWindow ?? 'morning',
       },
       status: 'new',
       priceBreakdown: breakdown,

@@ -7,6 +7,7 @@ import { SlideAction } from '../components/SlideAction'
 import { NavigationBanner } from '../components/NavigationBanner'
 import { PhotoCapture } from '../components/PhotoCapture'
 import { checkProximity, formatDistance } from '../utils/proximity'
+import { DELIVERY_WINDOW_LABELS } from '@shared/types'
 import type { Order } from '@shared/types'
 import { addIncident, newIncidentId } from '@shared/utils/incidentStore'
 import { pushNotification } from '@shared/utils/notificationStore'
@@ -497,6 +498,7 @@ export function DeliveryScreen({ orderId, onBack, onComplete, initialChatOpen = 
                 { label: 'SIZE',        value: SIZE_LABEL[order.parcel.size] ?? order.parcel.size },
                 { label: 'DESCRIPTION', value: order.parcel.desc },
                 ...(order.parcel.fragile ? [{ label: 'HANDLING', value: 'Fragile · keep upright' }] : []),
+                ...(order.parcel.deliveryWindow ? [{ label: 'WINDOW', value: DELIVERY_WINDOW_LABELS[order.parcel.deliveryWindow] }] : []),
               ].map((row, i, arr) => (
                 <div key={row.label} style={{ display: 'flex', padding: '12px 14px', borderTop: i > 0 ? '1px solid var(--d-border)' : 'none' }}>
                   <div style={{ width: 100, fontSize: 11, fontWeight: 700, color: 'var(--d-muted)', letterSpacing: 0.5, textTransform: 'uppercase', flexShrink: 0, paddingTop: 1 }}>{row.label}</div>

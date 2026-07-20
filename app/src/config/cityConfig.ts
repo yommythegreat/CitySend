@@ -46,6 +46,27 @@ export interface TaxRates {
   qst: number
 }
 
+// ── Delivery windows ──────────────────────────────────────────────────────────
+// v1: hardcoded across all cities. When these become admin-managed, move them
+// into CityConfig alongside serviceHours and edit via ConfigurationScreen.
+
+export interface DeliveryWindowOption {
+  id: 'morning' | 'evening' | 'express'
+  label: string
+  /** Human-readable time range shown to the customer */
+  time: string
+}
+
+export const DELIVERY_WINDOWS: DeliveryWindowOption[] = [
+  { id: 'morning', label: 'Morning', time: '10 AM – 2 PM' },
+  { id: 'evening', label: 'Evening', time: '6 PM – 10 PM' },
+  { id: 'express', label: 'Express', time: 'ASAP' },
+]
+
+/** Flat pre-tax price for Express delivery — replaces the calculated
+ *  base/distance/size/fragile fees entirely. Taxes still apply on top. */
+export const EXPRESS_FLAT_FEE = 25
+
 // ── Service hours ─────────────────────────────────────────────────────────────
 
 export type Weekday = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun'

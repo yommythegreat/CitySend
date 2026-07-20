@@ -3,7 +3,7 @@ import { OrderStatusBadge } from './StatusBadge'
 import { AssignDriverModal } from './AssignDriverModal'
 import { useAdminStore } from '../store/AdminContext'
 import { fmt, fmtDateTime, fmtTime, parcelSizeLabel } from '@shared/utils/format'
-import { NEXT_STATUSES, ORDER_STATUS_LABELS } from '@shared/types'
+import { NEXT_STATUSES, ORDER_STATUS_LABELS, DELIVERY_WINDOW_LABELS } from '@shared/types'
 import type { OrderStatus } from '@shared/types'
 import { getMessages, sendMessage, subscribeToMessages, type Message } from '@shared/utils/messageStore'
 
@@ -291,6 +291,18 @@ export function OrderDetailPanel({ orderId, onClose }: Props) {
             <Row label="Size"        value={parcelSizeLabel(order.parcel.size)} />
             <Row label="Description" value={order.parcel.desc} />
             <Row label="Fragile"     value={order.parcel.fragile ? 'Yes' : 'No'} />
+            {order.parcel.deliveryWindow && (
+              <Row
+                label="Window"
+                value={
+                  order.parcel.deliveryWindow === 'express'
+                    ? <span style={{ color: 'var(--a-warn, #c94a1b)', fontWeight: 600 }}>
+                        {DELIVERY_WINDOW_LABELS.express}
+                      </span>
+                    : DELIVERY_WINDOW_LABELS[order.parcel.deliveryWindow]
+                }
+              />
+            )}
             <Row label="Distance"    value={`${order.distanceKm} km`} />
             <Row label="City"        value={order.cityId.charAt(0).toUpperCase() + order.cityId.slice(1)} />
             <Row

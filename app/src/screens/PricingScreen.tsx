@@ -5,8 +5,9 @@ import { Back, Lock, Clock } from '../components/Icons'
 import { fmt } from '../utils/pricing'
 import { computeOrderPrice } from '../utils/serviceAvailability'
 import { fetchRoute, geocodeOnce } from '../hooks/useGeocoder'
+import { DELIVERY_WINDOWS, EXPRESS_FLAT_FEE } from '../config/cityConfig'
 import type { CityConfig } from '../config/cityConfig'
-import type { Draft, ScreenName, RouteInfo } from '../types'
+import type { Draft, ScreenName, RouteInfo, DeliveryWindow } from '../types'
 
 interface Props {
   go: (screen: ScreenName) => void
@@ -55,6 +56,10 @@ export function PricingScreen({ go, draft, setDraft, cityConfig }: Props) {
     ? new Date(Date.now() + etaMins * 60_000).toLocaleTimeString('en-CA', { hour: 'numeric', minute: '2-digit' })
     : '—'
 
+  // Restored pre-feature drafts (sessionStorage) may lack deliveryWindow.
+  const deliveryWindow: DeliveryWindow = draft.deliveryWindow ?? 'morning'
+  const isExpress = deliveryWindow === 'express'
+
   // ── Compute price from city config ──────────────────────────────────────────
   const price = computeOrderPrice({
     cityConfig,
@@ -62,6 +67,7 @@ export function PricingScreen({ go, draft, setDraft, cityConfig }: Props) {
     parcelSize: draft.parcel.size,
     fragile: draft.parcel.fragile,
     tip: 0,
+    deliveryWindow,
   })
 
   // Build line-item list — only show rows where the value is > 0
@@ -75,7 +81,7 @@ export function PricingScreen({ go, draft, setDraft, cityConfig }: Props) {
   const TAX_TOOLTIP = 'Taxes are calculated based on your delivery city and applicable provincial/federal rates. Tip is not taxed.'
 
   const lineItems: { label: string; value: number; isTax?: boolean }[] = [
-    { label: 'Base delivery fee',      value: price.baseFee      },
+    { label: isExpress ? 'Express flat rate' : 'Base delivery fee', value: price.baseFee },
     { label: 'Distance surcharge',     value: price.distanceFee  },
     { label: 'Size surcharge',         value: price.sizeFee      },
     { label: 'Fragile handling',       value: price.fragileFee   },
@@ -115,6 +121,52 @@ export function PricingScreen({ go, draft, setDraft, cityConfig }: Props) {
       </div>
 
       <div style={{ flex: 1, padding: '0 20px', overflowY: 'auto', scrollbarWidth: 'none' }}>
+
+        {/* Delivery window selector */}
+        <div style={{ marginBottom: 10 }}>
+          <div style={{ fontFamily: 'var(--cs-mono)', fontSize: 10, color: 'var(--cs-slate-500)', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 8 }}>
+            Delivery window
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+            {DELIVERY_WINDOWS.map(w => {
+              const selected = deliveryWindow === w.id
+              return (
+                <button
+                  key={w.id}
+                  onClick={() => setDraft({ ...draft, deliveryWindow: w.id })}
+                  style={{
+                    padding: '12px 6px',
+                    border: `1.5px solid ${selected ? 'var(--cs-ink)' : 'var(--cs-slate-200)'}`,
+                    borderRadius: 12,
+                    background: selected ? 'var(--cs-ink)' : '#fff',
+                    color: selected ? '#fff' : 'var(--cs-ink)',
+                    fontFamily: 'var(--cs-font)', cursor: 'pointer',
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3,
+                    transition: 'background .15s, border-color .15s',
+                  }}
+                >
+                  <span style={{ fontSize: 14, fontWeight: 600 }}>{w.label}</span>
+                  <span style={{ fontSize: 11, color: selected ? 'rgba(255,255,255,.75)' : 'var(--cs-slate-500)' }}>
+                    {w.time}
+                  </span>
+                  {w.id === 'express' && (
+                    <span style={{
+                      fontSize: 10, fontWeight: 700, letterSpacing: 0.4,
+                      color: selected ? '#fff' : 'var(--cs-accent)',
+                    }}>
+                      ${EXPRESS_FLAT_FEE} FLAT
+                    </span>
+                  )}
+                </button>
+              )
+            })}
+          </div>
+          {isExpress && (
+            <div style={{ fontSize: 12, color: 'var(--cs-slate-500)', marginTop: 8, lineHeight: 1.5 }}>
+              Express is a flat ${EXPRESS_FLAT_FEE} + tax, dispatched as soon as possible — distance and size don't change the price.
+            </div>
+          )}
+        </div>
 
         {/* Route card */}
         <div style={{ background: '#fff', borderRadius: 18, border: '1px solid var(--cs-slate-100)', padding: 18, marginBottom: 10 }}>

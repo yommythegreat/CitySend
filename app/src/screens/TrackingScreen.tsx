@@ -2,11 +2,12 @@ import React, { useEffect, useRef, useState } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { IconButton } from '../components/IconButton'
-import { Back, Check, Phone, Send, Star, X } from '../components/Icons'
+import { Back, Check, Clock, Phone, Send, Star, X } from '../components/Icons'
 import { geocodeOnce, fetchRoute } from '../hooks/useGeocoder'
 import { getOrderById, subscribeToOrderById, type CustomerOrder } from '../utils/orderStore'
 import { getMessages, sendMessage, subscribeToMessages, markMessagesRead, type Message } from '../utils/messageStore'
 import { subscribeToDriverLocation } from '../utils/locationStore'
+import { DELIVERY_WINDOWS } from '../config/cityConfig'
 import type { CityConfig } from '../config/cityConfig'
 import type { AuthUser, Draft, NavOptions, RouteInfo, ScreenName } from '../types'
 
@@ -775,6 +776,26 @@ export function TrackingScreen({ go, draft, cityConfig, orderId, user }: Props) 
                 </div>
               )}
             </div>
+
+            {/* Delivery window */}
+            {order?.parcel?.deliveryWindow && (() => {
+              const w = DELIVERY_WINDOWS.find(x => x.id === order.parcel.deliveryWindow)
+              if (!w) return null
+              const express = w.id === 'express'
+              return (
+                <div style={{
+                  margin: '12px 20px 0', padding: '10px 14px',
+                  background: express ? 'rgba(201,74,27,0.08)' : 'var(--cs-slate-50, #f8f9fb)',
+                  border: `1px solid ${express ? 'rgba(201,74,27,0.25)' : 'var(--cs-slate-100)'}`,
+                  borderRadius: 12, display: 'flex', alignItems: 'center', gap: 8,
+                }}>
+                  <Clock size={14} color={express ? 'var(--cs-accent)' : 'var(--cs-slate-500)'} />
+                  <span style={{ fontSize: 13, color: express ? 'var(--cs-accent)' : 'var(--cs-slate-700)', fontWeight: express ? 600 : 400 }}>
+                    {express ? 'Express delivery · ASAP' : `${w.label} window · ${w.time}`}
+                  </span>
+                </div>
+              )
+            })()}
 
             {/* Handoff code — shown when driver is on the way to drop-off */}
             {order?.handoffCode && (status === 'in_transit' || status === 'picked_up') && (

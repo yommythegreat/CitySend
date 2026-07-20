@@ -61,6 +61,17 @@ export interface ParcelInfo {
   fragile: boolean
   prohibitedItemsDeclarationAccepted?: boolean
   prohibitedItemsDeclarationAcceptedAt?: string
+  /** Customer-chosen delivery window. Rides in the parcel JSONB (no migration).
+   *  'express' = ASAP dispatch at flat rate. Absent on pre-feature orders. */
+  deliveryWindow?: 'morning' | 'evening' | 'express'
+}
+
+/** Display labels for ParcelInfo.deliveryWindow (admin + driver surfaces).
+ *  Times must match DELIVERY_WINDOWS in app/src/config/cityConfig.ts. */
+export const DELIVERY_WINDOW_LABELS: Record<'morning' | 'evening' | 'express', string> = {
+  morning: 'Morning · 10 AM – 2 PM',
+  evening: 'Evening · 6 PM – 10 PM',
+  express: 'Express · ASAP',
 }
 
 export interface PriceBreakdown {

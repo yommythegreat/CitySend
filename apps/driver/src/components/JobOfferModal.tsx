@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { DELIVERY_WINDOW_LABELS } from '@shared/types'
 import type { Order } from '@shared/types'
 import { driverPayout } from '../utils/payout'
 
@@ -108,9 +109,15 @@ export function JobOfferModal({ order, onAccept, onDecline, onTimeout, initialSe
               <span style={{ fontSize: 10, fontWeight: 700, color: '#c94a1b', letterSpacing: 1, textTransform: 'uppercase' }}>NEW</span>
             </div>
             <span style={{
-              fontFamily: 'monospace', fontSize: 11, color: '#6b7280',
+              fontFamily: 'monospace', fontSize: 11,
+              color: order.parcel.deliveryWindow === 'express' ? '#c94a1b' : '#6b7280',
+              fontWeight: order.parcel.deliveryWindow === 'express' ? 700 : 400,
               letterSpacing: 1, textTransform: 'uppercase',
-            }}>{order.id} · Standard</span>
+            }}>
+              {order.id} · {order.parcel.deliveryWindow
+                ? DELIVERY_WINDOW_LABELS[order.parcel.deliveryWindow]
+                : 'Standard'}
+            </span>
           </div>
 
           {/* Payout */}
