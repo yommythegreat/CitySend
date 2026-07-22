@@ -23,6 +23,7 @@ export type ScreenName =
   | 'new-3'
   | 'pricing'
   | 'pay'
+  | 'scheduled'   // post-payment confirmation for Morning/Evening bookings
   | 'tracking'
   | 'history'
   | 'billing'

@@ -305,7 +305,9 @@ export function PaymentScreen({ go, state, draft, cityConfig, onPaymentComplete 
     setOrderError(null)
     try {
       await onPaymentComplete(tip, authorizedTotal)
-      go('tracking')
+      // Express → straight to live tracking (finding driver). Morning/Evening →
+      // the Scheduled Delivery confirmation screen (no live tracking yet).
+      go((draft.deliveryWindow ?? 'morning') === 'express' ? 'tracking' : 'scheduled')
     } catch (err: any) {
       // Payment succeeded but order creation failed (e.g. not signed in).
       // Show a recoverable error — the user must sign in and contact support.

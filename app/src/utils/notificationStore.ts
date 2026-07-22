@@ -11,7 +11,7 @@ export const NOTIFS_STORAGE_KEY = 'cs_notifications_v1'
 
 export type NotifAudience = 'customer' | 'driver' | 'admin' | 'all'
 export type NotifEvent =
-  | 'order_created' | 'driver_assigned' | 'driver_en_route'
+  | 'order_created' | 'preparing' | 'driver_assigned' | 'driver_en_route'
   | 'picked_up' | 'in_transit' | 'delivered' | 'cancelled'
   | 'issue_reported' | 'receipt_generated'
 

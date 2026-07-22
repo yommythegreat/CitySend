@@ -36,6 +36,9 @@ function rowToOrder(row: Record<string, any>): Order {
     handoffCode:         row.handoff_code ?? undefined,
     createdAt:           row.created_at,
     updatedAt:           row.updated_at,
+    deliveryType:        row.delivery_type ?? undefined,
+    deliveryWindowStart: row.delivery_window_start ?? undefined,
+    deliveryWindowEnd:   row.delivery_window_end ?? undefined,
   }
 }
 
@@ -58,6 +61,9 @@ export function orderToRow(order: Order): Record<string, any> {
     handoff_code:         order.handoffCode ?? null,
     created_at:           order.createdAt,
     updated_at:           order.updatedAt,
+    delivery_type:         order.deliveryType ?? null,
+    delivery_window_start: order.deliveryWindowStart ?? null,
+    delivery_window_end:   order.deliveryWindowEnd ?? null,
   }
 }
 

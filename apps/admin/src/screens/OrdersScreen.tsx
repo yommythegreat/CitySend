@@ -9,7 +9,35 @@ import { geocodeOnce } from '../hooks/useGeocoder'
 import type { Order, OrderStatus, CityId, AdminNote } from '@shared/types'
 import { ORDER_STATUS_LABELS } from '@shared/types'
 
-const ALL_STATUSES: (OrderStatus | 'all')[] = ['all', 'new', 'assigned', 'picked_up', 'in_transit', 'delivered', 'cancelled']
+// Group filters (Scheduled reuses the 'scheduled' status; Ready-for-Dispatch
+// reuses 'preparing'). Active/Completed are groups of statuses.
+const ACTIVE_STATUSES:    readonly OrderStatus[] = ['new', 'offered', 'assigned', 'picked_up', 'in_transit']
+const COMPLETED_STATUSES: readonly OrderStatus[] = ['delivered', 'cancelled']
+
+const GROUP_TABS: { value: 'all' | 'scheduled' | 'preparing' | 'active' | 'completed'; label: string }[] = [
+  { value: 'all',       label: 'All' },
+  { value: 'scheduled', label: 'Scheduled' },
+  { value: 'preparing', label: 'Ready for Dispatch' },
+  { value: 'active',    label: 'Active' },
+  { value: 'completed', label: 'Completed' },
+]
+
+/** Small chip showing delivery type (Express / Morning / Evening). */
+export function DeliveryTypeBadge({ order }: { order: Order }) {
+  const type = order.deliveryType ?? order.parcel?.deliveryWindow ?? 'express'
+  const map: Record<string, { label: string; bg: string; fg: string }> = {
+    express: { label: 'Express', bg: 'rgba(201,74,27,0.10)', fg: '#c94a1b' },
+    morning: { label: 'Morning', bg: 'rgba(37,99,235,0.10)',  fg: '#2563eb' },
+    evening: { label: 'Evening', bg: 'rgba(124,58,237,0.10)', fg: '#7c3aed' },
+  }
+  const s = map[type] ?? map.express
+  return (
+    <span style={{
+      fontSize: 10, fontWeight: 700, letterSpacing: 0.3, textTransform: 'uppercase',
+      padding: '2px 7px', borderRadius: 99, background: s.bg, color: s.fg, whiteSpace: 'nowrap',
+    }}>{s.label}</span>
+  )
+}
 
 const STUCK_THRESHOLD_MS = 2 * 60 * 60 * 1000
 const STUCK_ACTIVE: readonly OrderStatus[] = ['assigned', 'picked_up', 'in_transit']
@@ -366,7 +394,17 @@ function CreateOrderModal({ onClose }: { onClose: () => void }) {
 
 // ── Main screen ───────────────────────────────────────────────────────────────
 
-type FilterValue = OrderStatus | 'all' | 'stuck'
+type FilterValue = OrderStatus | 'all' | 'stuck' | 'active' | 'completed'
+
+function matchesFilter(o: Order, filter: FilterValue): boolean {
+  switch (filter) {
+    case 'all':       return true
+    case 'stuck':     return isStuck(o)
+    case 'active':    return ACTIVE_STATUSES.includes(o.status)
+    case 'completed': return COMPLETED_STATUSES.includes(o.status)
+    default:          return o.status === filter   // exact status (scheduled, preparing, new, …)
+  }
+}
 
 interface OrdersScreenProps {
   initialFilter?: FilterValue
@@ -380,9 +418,7 @@ export function OrdersScreen({ initialFilter = 'all' }: OrdersScreenProps) {
   const [showCreate, setShowCreate] = useState(false)
 
   const filtered = useMemo(() => {
-    let list = state.orders
-    if (filter === 'stuck')     list = list.filter(isStuck)
-    else if (filter !== 'all')  list = list.filter(o => o.status === filter)
+    let list = state.orders.filter(o => matchesFilter(o, filter))
     const q = search.trim().toLowerCase()
     if (q) {
       list = list.filter(o =>
@@ -396,9 +432,13 @@ export function OrdersScreen({ initialFilter = 'all' }: OrdersScreenProps) {
   }, [state.orders, filter, search])
 
   const counts = useMemo(() => {
-    const c: Record<string, number> = { all: state.orders.length, stuck: state.orders.filter(isStuck).length }
-    for (const s of ALL_STATUSES) {
-      if (s !== 'all') c[s] = state.orders.filter(o => o.status === s).length
+    const c: Record<string, number> = {
+      all:       state.orders.length,
+      stuck:     state.orders.filter(isStuck).length,
+      scheduled: state.orders.filter(o => o.status === 'scheduled').length,
+      preparing: state.orders.filter(o => o.status === 'preparing').length,
+      active:    state.orders.filter(o => ACTIVE_STATUSES.includes(o.status)).length,
+      completed: state.orders.filter(o => COMPLETED_STATUSES.includes(o.status)).length,
     }
     return c
   }, [state.orders])
@@ -442,22 +482,22 @@ export function OrdersScreen({ initialFilter = 'all' }: OrdersScreenProps) {
 
       {/* Filter tabs */}
       <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
-        {ALL_STATUSES.map(s => (
+        {GROUP_TABS.map(t => (
           <button
-            key={s}
-            onClick={() => setFilter(s)}
+            key={t.value}
+            onClick={() => setFilter(t.value)}
             style={{
               padding: '5px 12px', borderRadius: 999,
-              border: filter === s ? 'none' : '1.5px solid var(--a-border)',
-              background: filter === s ? 'var(--a-sidebar)' : '#fff',
-              color: filter === s ? '#fff' : 'var(--a-ink2)',
-              fontSize: 12, fontWeight: filter === s ? 600 : 400,
+              border: filter === t.value ? 'none' : '1.5px solid var(--a-border)',
+              background: filter === t.value ? 'var(--a-sidebar)' : '#fff',
+              color: filter === t.value ? '#fff' : 'var(--a-ink2)',
+              fontSize: 12, fontWeight: filter === t.value ? 600 : 400,
               cursor: 'pointer',
             }}
           >
-            {s === 'all' ? 'All' : ORDER_STATUS_LABELS[s]}
-            <span style={{ marginLeft: 5, fontSize: 10, color: filter === s ? 'rgba(255,255,255,0.6)' : 'var(--a-muted)' }}>
-              {counts[s]}
+            {t.label}
+            <span style={{ marginLeft: 5, fontSize: 10, color: filter === t.value ? 'rgba(255,255,255,0.6)' : 'var(--a-muted)' }}>
+              {t.value === 'all' ? counts.all : counts[t.value]}
             </span>
           </button>
         ))}
@@ -516,7 +556,10 @@ export function OrdersScreen({ initialFilter = 'all' }: OrdersScreenProps) {
               }}
             >
               <td>
-                <span style={{ fontFamily: 'var(--a-mono)', fontSize: 12, fontWeight: 600 }}>{o.id}</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ fontFamily: 'var(--a-mono)', fontSize: 12, fontWeight: 600 }}>{o.id}</span>
+                  <DeliveryTypeBadge order={o} />
+                </div>
               </td>
               <td style={{ fontWeight: 500, fontSize: 13 }}>{o.customerName}</td>
               <td style={{ fontSize: 12, color: 'var(--a-muted)', maxWidth: 140 }}>

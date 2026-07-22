@@ -21,7 +21,7 @@ export interface CustomerOrder {
   pickup:  { name: string; phone: string; address: string; unit?: string; note?: string }
   dropoff: { name: string; phone: string; address: string; unit?: string; note?: string }
   parcel:  { size: 's' | 'm' | 'l'; desc: string; fragile: boolean; prohibitedItemsDeclarationAccepted?: boolean; prohibitedItemsDeclarationAcceptedAt?: string; deliveryWindow?: 'morning' | 'evening' | 'express' }
-  status:  'new' | 'offered' | 'assigned' | 'picked_up' | 'in_transit' | 'delivered' | 'cancelled'
+  status:  'scheduled' | 'preparing' | 'new' | 'offered' | 'assigned' | 'picked_up' | 'in_transit' | 'delivered' | 'cancelled'
   assignedDriverId?:   string
   assignedDriverName?: string
   priceBreakdown: {
@@ -37,6 +37,10 @@ export interface CustomerOrder {
   cancelReason?: string
   /** 4-digit handoff code shown to recipient for driver verification at drop-off */
   handoffCode?: string
+  /** Authoritative delivery type + scheduled window bounds (DB columns). */
+  deliveryType?:        'express' | 'morning' | 'evening'
+  deliveryWindowStart?: string
+  deliveryWindowEnd?:   string
 }
 
 // ── Write a new order ─────────────────────────────────────────────────────────
@@ -55,22 +59,26 @@ export async function pushNewOrder(order: CustomerOrder): Promise<void> {
   const code = order.handoffCode ?? newHandoffCode()
 
   const { error } = await supabase.from('orders').insert({
-    id:                   order.id,
-    customer_id:          order.customerId,
-    customer_name:        order.customerName,
-    pickup:               order.pickup,
-    dropoff:              order.dropoff,
-    parcel:               order.parcel,
-    status:               'new',
-    assigned_driver_id:   null,
-    assigned_driver_name: null,
-    price_breakdown:      order.priceBreakdown,
-    city_id:              order.cityId,
-    distance_km:          order.distanceKm,
-    notes:                [],
-    handoff_code:         code,
-    created_at:           order.createdAt,
-    updated_at:           order.updatedAt,
+    id:                    order.id,
+    customer_id:           order.customerId,
+    customer_name:         order.customerName,
+    pickup:                order.pickup,
+    dropoff:               order.dropoff,
+    parcel:                order.parcel,
+    // Scheduled orders (morning/evening) start in 'scheduled'; express in 'new'.
+    status:                order.status ?? 'new',
+    assigned_driver_id:    null,
+    assigned_driver_name:  null,
+    price_breakdown:       order.priceBreakdown,
+    city_id:               order.cityId,
+    distance_km:           order.distanceKm,
+    notes:                 [],
+    handoff_code:          code,
+    created_at:            order.createdAt,
+    updated_at:            order.updatedAt,
+    delivery_type:         order.deliveryType ?? 'express',
+    delivery_window_start: order.deliveryWindowStart ?? null,
+    delivery_window_end:   order.deliveryWindowEnd ?? null,
   })
   if (error) throw new Error(error.message)
 }
@@ -185,6 +193,9 @@ function rowToCustomerOrder(row: Record<string, any>): CustomerOrder {
     handoffCode:         row.handoff_code ?? undefined,
     createdAt:           row.created_at,
     updatedAt:           row.updated_at,
+    deliveryType:        row.delivery_type ?? undefined,
+    deliveryWindowStart: row.delivery_window_start ?? undefined,
+    deliveryWindowEnd:   row.delivery_window_end ?? undefined,
   }
 }
 

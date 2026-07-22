@@ -5,7 +5,7 @@ import { Back, Lock, Clock } from '../components/Icons'
 import { fmt } from '../utils/pricing'
 import { computeOrderPrice } from '../utils/serviceAvailability'
 import { fetchRoute, geocodeOnce } from '../hooks/useGeocoder'
-import { DELIVERY_WINDOWS } from '../config/cityConfig'
+import { DELIVERY_WINDOWS, resolveWindow } from '../config/cityConfig'
 import type { CityConfig } from '../config/cityConfig'
 import type { Draft, ScreenName, RouteInfo, DeliveryWindow } from '../types'
 
@@ -149,6 +149,15 @@ export function PricingScreen({ go, draft, setDraft, cityConfig }: Props) {
                   <span style={{ fontSize: 11, color: selected ? 'rgba(255,255,255,.75)' : 'var(--cs-slate-500)' }}>
                     {w.time}
                   </span>
+                  {/* Date hint — a scheduled window that has passed today rolls to tomorrow */}
+                  {w.id !== 'express' && (() => {
+                    const r = resolveWindow(w.id, new Date())
+                    return r.isToday ? null : (
+                      <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.3, color: selected ? 'rgba(255,255,255,.9)' : 'var(--cs-accent)' }}>
+                        {r.dateLabel}
+                      </span>
+                    )
+                  })()}
                 </button>
               )
             })}

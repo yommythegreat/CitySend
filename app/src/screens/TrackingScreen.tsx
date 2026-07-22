@@ -8,6 +8,7 @@ import { getOrderById, subscribeToOrderById, type CustomerOrder } from '../utils
 import { getMessages, sendMessage, subscribeToMessages, markMessagesRead, type Message } from '../utils/messageStore'
 import { subscribeToDriverLocation } from '../utils/locationStore'
 import { DELIVERY_WINDOWS } from '../config/cityConfig'
+import { DeliveryTimeline } from '../components/DeliveryTimeline'
 import type { CityConfig } from '../config/cityConfig'
 import type { AuthUser, Draft, NavOptions, RouteInfo, ScreenName } from '../types'
 
@@ -26,6 +27,8 @@ type OrderStatus = CustomerOrder['status']
 interface PhaseInfo { step: number; label: string; desc: string; terminal: boolean }
 
 const PHASE_MAP: Record<OrderStatus, PhaseInfo> = {
+  scheduled:  { step: 0, label: 'Scheduled',         desc: 'Waiting for your delivery window',      terminal: false },
+  preparing:  { step: 0, label: 'Preparing',         desc: 'Getting your delivery ready',           terminal: false },
   new:        { step: 0, label: 'Finding driver',    desc: 'Looking for a courier nearby',         terminal: false },
   offered:    { step: 0, label: 'Finding driver',    desc: 'Looking for a courier nearby',         terminal: false },
   assigned:   { step: 1, label: 'Driver assigned',   desc: 'Your driver is heading to pickup',      terminal: false },
@@ -589,6 +592,69 @@ export function TrackingScreen({ go, draft, cityConfig, orderId, user }: Props) 
         >
           Back to home
         </button>
+      </div>
+    )
+  }
+
+  // ── Scheduled (Morning/Evening) pre-dispatch: timeline-first, NO live map ────
+  // Shown while a scheduled order is still 'scheduled'/'preparing'. Once admin
+  // dispatches it (status → new/offered/assigned/…), this condition goes false
+  // and the live map layout below renders — realtime setOrder triggers the
+  // re-render automatically, so the swap is seamless with no reload.
+  const orderWindow = (order?.deliveryType ?? order?.parcel?.deliveryWindow) as
+    'morning' | 'evening' | 'express' | undefined
+  const isScheduledType = orderWindow === 'morning' || orderWindow === 'evening'
+  const preDispatch = status === 'scheduled' || status === 'preparing'
+
+  if (order && isScheduledType && preDispatch) {
+    const opt = DELIVERY_WINDOWS.find(w => w.id === orderWindow)
+    const start = order.deliveryWindowStart ? new Date(order.deliveryWindowStart) : null
+    const dateLabel = start ? start.toLocaleDateString('en-CA', { weekday: 'long', month: 'short', day: 'numeric' }) : ''
+    return (
+      <div style={{ position: 'absolute', inset: 0, background: 'var(--cs-slate-50, #f8f9fb)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        {/* Top bar */}
+        <div style={{ padding: '56px 16px 0', display: 'flex', gap: 10, flexShrink: 0 }}>
+          <IconButton onClick={() => go('back')}><Back /></IconButton>
+          <div style={{ flex: 1 }} />
+          {order && (
+            <div style={{ background: '#fff', borderRadius: 20, padding: '8px 14px', display: 'flex', alignItems: 'center', gap: 6, border: '1px solid var(--cs-slate-100)' }}>
+              <span style={{ fontFamily: 'var(--cs-mono)', fontSize: 12, color: 'var(--cs-slate-500)', letterSpacing: 0.5 }}>{order.id}</span>
+            </div>
+          )}
+        </div>
+
+        <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px 32px', scrollbarWidth: 'none' }}>
+          {/* Window hero */}
+          <div style={{
+            background: status === 'preparing' ? 'var(--cs-ink)' : '#fff',
+            color: status === 'preparing' ? '#fff' : 'var(--cs-ink)',
+            borderRadius: 18, border: '1px solid var(--cs-slate-100)', padding: 20, marginBottom: 12,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+              <Clock size={16} color={status === 'preparing' ? '#fff' : 'var(--cs-accent)'} />
+              <span style={{ fontFamily: 'var(--cs-mono)', fontSize: 11, letterSpacing: 1.2, textTransform: 'uppercase', opacity: 0.7 }}>
+                {status === 'preparing' ? 'Preparing your delivery' : 'Scheduled delivery'}
+              </span>
+            </div>
+            <div style={{ fontSize: 22, fontWeight: 700, letterSpacing: -0.4 }}>
+              {opt?.label} · {opt?.time}
+            </div>
+            {dateLabel && <div style={{ fontSize: 13, opacity: 0.65, marginTop: 2 }}>{dateLabel}</div>}
+            <div style={{ fontSize: 14, opacity: 0.7, marginTop: 10, lineHeight: 1.5 }}>
+              {status === 'preparing'
+                ? 'A courier will be assigned shortly.'
+                : "We'll assign a CitySend courier closer to your delivery window."}
+            </div>
+          </div>
+
+          {/* Timeline */}
+          <div style={{ background: '#fff', borderRadius: 18, border: '1px solid var(--cs-slate-100)', padding: 18 }}>
+            <div style={{ fontFamily: 'var(--cs-mono)', fontSize: 10, color: 'var(--cs-slate-500)', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 14 }}>
+              Delivery timeline
+            </div>
+            <DeliveryTimeline status={status} />
+          </div>
+        </div>
       </div>
     )
   }

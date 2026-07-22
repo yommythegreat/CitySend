@@ -29,8 +29,9 @@ import { supabase, isSupabaseConfigured } from './lib/supabase'
 import { Capacitor } from '@capacitor/core'
 
 const IS_NATIVE = Capacitor.isNativePlatform()
-import { CITY_CONFIGS } from './config/cityConfig'
+import { CITY_CONFIGS, resolveWindow, defaultDeliveryWindow } from './config/cityConfig'
 import type { CityConfig } from './config/cityConfig'
+import { ScheduledDeliveryScreen } from './screens/ScheduledDeliveryScreen'
 import type { ScreenName, Draft, AppState, NavOptions, AuthUser, CityId, Delivery } from './types'
 
 const TAB_SCREENS: ScreenName[] = ['home', 'history', 'notifications']
@@ -719,25 +720,26 @@ export default function App() {
       return
     }
 
-    // ── Tracking URL management ──────────────────────────────────────────────
-    if (next === 'tracking') {
-      // Tracking is a destination, not an intermediate step. Reset the back
-      // stack so 'back' always goes home — never to the Payment screen we
-      // came from. (Customers landing here after delivery should not be sent
-      // back into a paid checkout flow.)
+    // Booking start: preselect the next available delivery window by current
+    // time (only when entering new-1 fresh — not when stepping back inside the
+    // flow). The customer can still switch to Express or the other window.
+    if (next === 'new-1' && !['new-1', 'new-2', 'new-3', 'pricing', 'pay'].includes(current)) {
+      setDraft(d => ({ ...d, deliveryWindow: defaultDeliveryWindow(new Date()) }))
+    }
+
+    // ── Tracking / Scheduled URL management ──────────────────────────────────
+    // Both are order-scoped destinations reached after payment; reset the back
+    // stack to home and pin the order id. 'scheduled' is the confirmation screen
+    // for Morning/Evening bookings; 'tracking' is the live/timeline view.
+    if (next === 'tracking' || next === 'scheduled') {
       navHistoryRef.current = ['home']
-      // If a specific orderId is provided, update state + ref immediately so the
-      // URL push below sees the new ID (can't wait for useEffect → ref sync).
       const newId = opts?.trackOrderId
       if (newId !== undefined) {
         setTrackingOrderId(newId)
         trackingOrderIdRef.current = newId
       }
-      // Resolve the ID to embed in the URL: prefer the freshly-provided one,
-      // then the existing ref (set synchronously by onPaymentComplete before
-      // calling go('tracking') with no opts).
       const resolvedId = newId ?? trackingOrderIdRef.current
-      if (resolvedId) {
+      if (resolvedId && next === 'tracking') {
         window.history.pushState({}, '', `/tracking/${encodeURIComponent(resolvedId)}`)
       }
     } else {
@@ -779,14 +781,22 @@ export default function App() {
     const orderId  = `CS-${randPart}`
     const cityConf = getCityConfig(state.selectedCityId, configsRef.current)
     const distKm   = draft.route ? Math.round(draft.route.distanceM / 100) / 10 : 5
+    const deliveryWindow = draft.deliveryWindow ?? 'morning'
     const breakdown = computeOrderPrice({
       cityConfig: cityConf,
       distKm,
       parcelSize: draft.parcel.size,
       fragile:    draft.parcel.fragile,
       tip,
-      deliveryWindow: draft.deliveryWindow ?? 'morning',
+      deliveryWindow,
     })
+
+    // Scheduled (morning/evening) orders start in 'scheduled' and carry a
+    // resolved window (rolls to tomorrow if the chosen window already passed).
+    // Express keeps today's immediate flow (status 'new').
+    const isExpress = deliveryWindow === 'express'
+    const win       = isExpress ? null : resolveWindow(deliveryWindow, new Date())
+    const initialStatus = isExpress ? 'new' : 'scheduled'
     // If the server returned an authoritative total, trust it over the client-computed value
     if (authorizedTotal !== undefined) breakdown.total = authorizedTotal
 
@@ -835,25 +845,31 @@ export default function App() {
         fragile: draft.parcel.fragile,
         prohibitedItemsDeclarationAccepted:   draft.parcel.prohibitedItemsDeclarationAccepted,
         prohibitedItemsDeclarationAcceptedAt: draft.parcel.prohibitedItemsDeclarationAcceptedAt ?? now,
-        // Rides in the parcel JSONB — no DB migration needed
-        deliveryWindow: draft.deliveryWindow ?? 'morning',
+        // Mirror of delivery_type — kept so existing display code keeps working.
+        deliveryWindow,
       },
-      status: 'new',
+      status: initialStatus,
       priceBreakdown: breakdown,
       cityId:     state.selectedCityId,
       distanceKm: distKm,
       createdAt: now,
       updatedAt: now,
       notes: [],
+      // Authoritative delivery type + scheduled window (DB columns).
+      deliveryType:        deliveryWindow,
+      deliveryWindowStart: win?.start.toISOString(),
+      deliveryWindowEnd:   win?.end.toISOString(),
     })
 
-    // Push order_created notification
+    // Push order_created notification — copy differs for scheduled vs express.
     await pushCustomerNotif({
       event:      'order_created',
       audience:   'customer',
       orderId,
-      title:      'Delivery request submitted',
-      body:       `Your parcel to ${draft.dropoff.name} is being matched with a driver.`,
+      title:      isExpress ? 'Delivery request submitted' : 'Booking confirmed',
+      body:       isExpress
+        ? `Your parcel to ${draft.dropoff.name} is being matched with a driver.`
+        : `Your ${deliveryWindow} delivery to ${draft.dropoff.name} is scheduled. We'll assign a courier closer to your window.`,
       customerId: user?.id,
     })
 
@@ -906,6 +922,9 @@ export default function App() {
         )
       case 'pay':
         return <PaymentScreen go={go} state={state} draft={draft} cityConfig={cityConfig} onPaymentComplete={onPaymentComplete} />
+      case 'scheduled':
+        return <ScheduledDeliveryScreen go={go} orderId={trackingOrderId} cityConfig={cityConfig} />
+
       case 'tracking':
         return <TrackingScreen go={go} draft={draft} cityConfig={cityConfig} orderId={trackingOrderId} user={user} />
       case 'history':

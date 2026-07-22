@@ -410,6 +410,7 @@ async function syncToSupabase(action: Action, snapshot: AdminState): Promise<voi
       }).eq('id', action.orderId)
 
       const notifMap: Partial<Record<OrderStatus, { title: string; body: string }>> = {
+        preparing:  { title: 'Preparing your delivery', body: 'We’re preparing your delivery. A courier will be assigned shortly.' },
         picked_up:  { title: 'Parcel picked up', body: `Your parcel is on the way to ${order.dropoff.name}.` },
         in_transit: { title: 'Out for delivery', body: 'Your parcel is on the way — ETA soon.' },
         delivered:  { title: 'Delivered! 🎉',    body: `Your parcel was delivered to ${order.dropoff.name}.` },
