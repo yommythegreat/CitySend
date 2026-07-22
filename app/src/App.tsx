@@ -26,6 +26,7 @@ import { pushNewOrder, getCustomerOrders, type CustomerOrder } from './utils/ord
 import { pushCustomerNotif, NOTIFS_STORAGE_KEY, subscribeToCustomerNotifs, fetchCustomerNotifs } from './utils/notificationStore'
 import { syncPushTokenToSupabase } from './utils/pushTokenStore'
 import { supabase, isSupabaseConfigured } from './lib/supabase'
+import { ensureGuestSession, clearGuestSession } from './lib/guestSession'
 import { Capacitor } from '@capacitor/core'
 
 const IS_NATIVE = Capacitor.isNativePlatform()
@@ -448,7 +449,9 @@ export default function App() {
         console.log('[Auth] state change:', event, session?.user?.email ?? 'no user')
 
         if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN') {
-          if (session?.user) {
+          // Anonymous (guest) sessions back guest DB writes only — never surface
+          // them as a signed-in user. Guests keep their ephemeral 'guest' identity.
+          if (session?.user && !session.user.is_anonymous) {
             const authUser: AuthUser = {
               id:    session.user.id,
               email: session.user.email ?? '',
@@ -567,6 +570,9 @@ export default function App() {
     if (authUser.id === 'guest') {
       setState(INITIAL_STATE)
       setDraft(BLANK_DRAFT)
+      // Establish an anonymous Supabase session in the background so the guest's
+      // order (and its notifications) can be written under a real auth.uid().
+      ensureGuestSession().catch(() => { /* surfaced again at write-time */ })
     }
 
     setUser(authUser)
@@ -606,8 +612,9 @@ export default function App() {
     clearBookingSession()
 
     if (wasGuest) {
-      // Guests never have a Supabase session — just wipe local state and return.
-      // Also clear any non-Supabase dev tokens that might have been set.
+      // Sign out the anonymous session that backed guest DB writes (no-op in the
+      // non-Supabase dev fallback). Also clear any non-Supabase dev tokens.
+      await clearGuestSession()
       localStorage.removeItem('cs_token')
       localStorage.removeItem('cs_user')
       return
@@ -821,11 +828,17 @@ export default function App() {
     setTrackingOrderId(orderId)
     trackingOrderIdRef.current = orderId
 
+    // Guests write under a real anonymous session so the orders-table RLS
+    // (auth.uid() is not null AND customer_id = auth.uid()) passes. Await here so
+    // the session is guaranteed even if the background warm-up hasn't finished.
+    const guestUid   = user?.id === 'guest' ? await ensureGuestSession() : null
+    const customerId = guestUid ?? user?.id ?? 'guest'
+
     // Write to shared order store (Supabase or localStorage).
     // pushNewOrder throws on failure — the PaymentScreen caller catches and surfaces the error.
     await pushNewOrder({
       id: orderId,
-      customerId:   user?.id ?? 'guest',
+      customerId,
       customerName: user?.name ?? (draft.pickup.name || 'Customer'),
       pickup: {
         name:    draft.pickup.name,
@@ -870,7 +883,7 @@ export default function App() {
       body:       isExpress
         ? `Your parcel to ${draft.dropoff.name} is being matched with a driver.`
         : `Your ${deliveryWindow} delivery to ${draft.dropoff.name} is scheduled. We'll assign a courier closer to your window.`,
-      customerId: user?.id,
+      customerId,
     })
 
     setState(s => ({ ...s, pastDeliveries: [newDelivery, ...s.pastDeliveries] }))
