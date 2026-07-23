@@ -3,7 +3,7 @@ import { OrderStatusBadge } from './StatusBadge'
 import { AssignDriverModal } from './AssignDriverModal'
 import { useAdminStore } from '../store/AdminContext'
 import { fmt, fmtDateTime, fmtTime, parcelSizeLabel } from '@shared/utils/format'
-import { NEXT_STATUSES, ORDER_STATUS_LABELS } from '@shared/types'
+import { NEXT_STATUSES, ORDER_STATUS_LABELS, DELIVERY_WINDOW_LABELS } from '@shared/types'
 import type { OrderStatus } from '@shared/types'
 import { getMessages, sendMessage, subscribeToMessages, type Message } from '@shared/utils/messageStore'
 
@@ -98,7 +98,15 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   )
 }
 
-const STATUS_PIPELINE: OrderStatus[] = ['new', 'offered', 'assigned', 'picked_up', 'in_transit', 'delivered']
+const STATUS_PIPELINE_EXPRESS:   OrderStatus[] = ['new', 'offered', 'assigned', 'picked_up', 'in_transit', 'delivered']
+const STATUS_PIPELINE_SCHEDULED: OrderStatus[] = ['scheduled', 'preparing', 'new', 'offered', 'assigned', 'picked_up', 'in_transit', 'delivered']
+
+/** Friendlier button copy for scheduled-workflow transitions. */
+function statusActionLabel(from: OrderStatus, to: OrderStatus): string {
+  if (from === 'scheduled' && to === 'preparing') return 'Start preparing'
+  if (from === 'preparing' && to === 'new')       return 'Dispatch now'
+  return `Mark as ${ORDER_STATUS_LABELS[to]}`
+}
 
 export function OrderDetailPanel({ orderId, onClose }: Props) {
   const { state, dispatch } = useAdminStore()
@@ -124,6 +132,9 @@ export function OrderDetailPanel({ orderId, onClose }: Props) {
   const receipt = state.receipts.find(r => r.orderId === orderId)
   const nextStatuses = NEXT_STATUSES[order.status] ?? []
   const driver = state.drivers.find(d => d.id === order.assignedDriverId)
+  const deliveryType = order.deliveryType ?? order.parcel?.deliveryWindow ?? 'express'
+  const isScheduled  = deliveryType === 'morning' || deliveryType === 'evening'
+  const STATUS_PIPELINE = isScheduled ? STATUS_PIPELINE_SCHEDULED : STATUS_PIPELINE_EXPRESS
 
   const handleStatusUpdate = (status: OrderStatus) => {
     dispatch({ type: 'UPDATE_ORDER_STATUS', orderId, status })
@@ -288,6 +299,23 @@ export function OrderDetailPanel({ orderId, onClose }: Props) {
 
           {/* Parcel */}
           <Section title="Parcel">
+            <Row
+              label="Delivery"
+              value={
+                deliveryType === 'express'
+                  ? <span style={{ color: 'var(--a-warn, #c94a1b)', fontWeight: 600 }}>{DELIVERY_WINDOW_LABELS.express}</span>
+                  : (
+                    <span>
+                      {DELIVERY_WINDOW_LABELS[deliveryType as 'morning' | 'evening']}
+                      {order.deliveryWindowStart && (
+                        <span style={{ color: 'var(--a-muted)' }}>
+                          {' · '}{new Date(order.deliveryWindowStart).toLocaleDateString('en-CA', { weekday: 'short', month: 'short', day: 'numeric' })}
+                        </span>
+                      )}
+                    </span>
+                  )
+              }
+            />
             <Row label="Size"        value={parcelSizeLabel(order.parcel.size)} />
             <Row label="Description" value={order.parcel.desc} />
             <Row label="Fragile"     value={order.parcel.fragile ? 'Yes' : 'No'} />
@@ -489,7 +517,7 @@ export function OrderDetailPanel({ orderId, onClose }: Props) {
             padding: '14px 20px', borderTop: '1px solid var(--a-border)',
             display: 'flex', gap: 8, flexShrink: 0, background: '#fff',
           }}>
-            {/* Next status buttons */}
+            {/* Next status buttons (scheduled steps get dispatch-friendly copy) */}
             {nextStatuses.filter(s => s !== 'cancelled').map(s => (
               <button
                 key={s}
@@ -500,7 +528,7 @@ export function OrderDetailPanel({ orderId, onClose }: Props) {
                   fontSize: 13, fontWeight: 600,
                 }}
               >
-                Mark as {ORDER_STATUS_LABELS[s]}
+                {statusActionLabel(order.status, s)}
               </button>
             ))}
 

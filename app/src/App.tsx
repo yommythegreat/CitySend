@@ -26,11 +26,13 @@ import { pushNewOrder, getCustomerOrders, type CustomerOrder } from './utils/ord
 import { pushCustomerNotif, NOTIFS_STORAGE_KEY, subscribeToCustomerNotifs, fetchCustomerNotifs } from './utils/notificationStore'
 import { syncPushTokenToSupabase } from './utils/pushTokenStore'
 import { supabase, isSupabaseConfigured } from './lib/supabase'
+import { ensureGuestSession, clearGuestSession } from './lib/guestSession'
 import { Capacitor } from '@capacitor/core'
 
 const IS_NATIVE = Capacitor.isNativePlatform()
-import { CITY_CONFIGS } from './config/cityConfig'
+import { CITY_CONFIGS, resolveWindow, defaultDeliveryWindow } from './config/cityConfig'
 import type { CityConfig } from './config/cityConfig'
+import { ScheduledDeliveryScreen } from './screens/ScheduledDeliveryScreen'
 import type { ScreenName, Draft, AppState, NavOptions, AuthUser, CityId, Delivery } from './types'
 
 const TAB_SCREENS: ScreenName[] = ['home', 'history', 'notifications']
@@ -85,8 +87,8 @@ async function detectCityFromGeolocation(configs: CityConfig[]): Promise<CityId 
 // the landing page. sessionStorage is tab-scoped and auto-cleared when the tab
 // closes, so there's no cross-session bleed.
 //
-// Guest sessions intentionally bypass this: guests have no persistent identity,
-// so restoring a booking mid-flow after a refresh is impossible.
+// Guests are included: their anonymous Supabase session survives a refresh, so
+// the INITIAL_SESSION guest-restore path can pick the booking back up.
 
 const BOOKING_SCREENS: ScreenName[] = ['new-1', 'new-2', 'new-3', 'pricing', 'pay']
 const SESSION_SCREEN_KEY = 'cs_screen'
@@ -111,7 +113,10 @@ function restoreBookingSession(): { screen: ScreenName; draft: Draft } | null {
     const s = sessionStorage.getItem(SESSION_SCREEN_KEY) as ScreenName | null
     const d = sessionStorage.getItem(SESSION_DRAFT_KEY)
     if (s && BOOKING_SCREENS.includes(s) && d) {
-      return { screen: s, draft: JSON.parse(d) as Draft }
+      const parsed = JSON.parse(d) as Draft
+      // Drafts saved before the delivery-window feature lack the field.
+      if (!parsed.deliveryWindow) parsed.deliveryWindow = 'morning'
+      return { screen: s, draft: parsed }
     }
   } catch {}
   return null
@@ -181,13 +186,14 @@ export default function App() {
   )
 
   // Persist active booking screen + draft to sessionStorage so a page refresh
-  // during a booking flow restores the user to where they left off (registered
-  // users only — guests are ephemeral and always start fresh).
+  // during a booking flow restores the user to where they left off. Guests are
+  // included: their anonymous Supabase session survives a refresh, and the
+  // INITIAL_SESSION guest-restore path re-applies this saved booking.
   // Guard: skip the write when neither screen nor the serialized draft changed
   // so typing in a form field doesn't repeatedly serialize the whole object.
   const _prevBookingKey = useRef('')
   useEffect(() => {
-    if (!user || user.id === 'guest') return
+    if (!user) return
     const key = BOOKING_SCREENS.includes(screen) ? `${screen}::${JSON.stringify(draft)}` : screen
     if (key === _prevBookingKey.current) return
     _prevBookingKey.current = key
@@ -444,7 +450,9 @@ export default function App() {
         console.log('[Auth] state change:', event, session?.user?.email ?? 'no user')
 
         if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN') {
-          if (session?.user) {
+          // Anonymous (guest) sessions back guest DB writes only — never surface
+          // them as a signed-in user. Guests keep their ephemeral 'guest' identity.
+          if (session?.user && !session.user.is_anonymous) {
             const authUser: AuthUser = {
               id:    session.user.id,
               email: session.user.email ?? '',
@@ -466,6 +474,21 @@ export default function App() {
             // (e.g. permission not granted) or not on native.
             syncPushTokenToSupabase(authUser.id).catch(err =>
               console.warn('[Push] token sync failed', err)
+            )
+          } else if (session?.user?.is_anonymous && event === 'INITIAL_SESSION') {
+            // A lingering anonymous session on page load = a returning guest.
+            // Restore the ephemeral 'guest' identity so their booking/tracking
+            // survives a refresh; the anon session keeps backing DB reads/writes
+            // (orders RLS matches customer_id = anon uid). Guest logout signs the
+            // anon session out, so this only fires for guests who didn't leave.
+            // Mid-flow SIGNED_IN events from ensureGuestSession() stay ignored.
+            const guestUser: AuthUser = { id: 'guest', email: '', name: 'Guest' }
+            setUser(guestUser)
+            userRef.current = guestUser
+            applyRestoredSession()
+            setAuthChecked(true)
+            loadUserData(guestUser).catch(err =>
+              console.error('[Auth] loadUserData failed during guest restore', err)
             )
           } else {
             // No session — show the auth screen immediately.
@@ -563,6 +586,9 @@ export default function App() {
     if (authUser.id === 'guest') {
       setState(INITIAL_STATE)
       setDraft(BLANK_DRAFT)
+      // Establish an anonymous Supabase session in the background so the guest's
+      // order (and its notifications) can be written under a real auth.uid().
+      ensureGuestSession().catch(() => { /* surfaced again at write-time */ })
     }
 
     setUser(authUser)
@@ -602,8 +628,9 @@ export default function App() {
     clearBookingSession()
 
     if (wasGuest) {
-      // Guests never have a Supabase session — just wipe local state and return.
-      // Also clear any non-Supabase dev tokens that might have been set.
+      // Sign out the anonymous session that backed guest DB writes (no-op in the
+      // non-Supabase dev fallback). Also clear any non-Supabase dev tokens.
+      await clearGuestSession()
       localStorage.removeItem('cs_token')
       localStorage.removeItem('cs_user')
       return
@@ -692,13 +719,15 @@ export default function App() {
     // ── Back navigation: pop the history stack ───────────────────────────────
     if (next === 'back') {
       const history = navHistoryRef.current
-      if (history.length > 0) {
-        const prev = history[history.length - 1]
-        navHistoryRef.current = history.slice(0, -1)
-        setScreen(prev)
-      } else {
-        // No history (e.g. direct deep-link or root tab) — fall back to home
-        setScreen('home')
+      // Fall back to home when there's no history (direct deep-link / root tab)
+      const prev = history.length > 0 ? history[history.length - 1] : 'home'
+      navHistoryRef.current = history.slice(0, -1)
+      setScreen(prev)
+      // Leaving an order view via back → clear its /tracking/:id URL so a
+      // refresh doesn't resurrect the order screen the user just left.
+      if (prev !== 'tracking' && prev !== 'scheduled' &&
+          window.location.pathname.startsWith('/tracking/')) {
+        window.history.replaceState({}, '', '/')
       }
       return
     }
@@ -716,23 +745,26 @@ export default function App() {
       return
     }
 
-    // ── Tracking URL management ──────────────────────────────────────────────
-    if (next === 'tracking') {
-      // Tracking is a destination, not an intermediate step. Reset the back
-      // stack so 'back' always goes home — never to the Payment screen we
-      // came from. (Customers landing here after delivery should not be sent
-      // back into a paid checkout flow.)
+    // Booking start: preselect the next available delivery window by current
+    // time (only when entering new-1 fresh — not when stepping back inside the
+    // flow). The customer can still switch to Express or the other window.
+    if (next === 'new-1' && !['new-1', 'new-2', 'new-3', 'pricing', 'pay'].includes(current)) {
+      setDraft(d => ({ ...d, deliveryWindow: defaultDeliveryWindow(new Date()) }))
+    }
+
+    // ── Tracking / Scheduled URL management ──────────────────────────────────
+    // Both are order-scoped destinations reached after payment; reset the back
+    // stack to home and pin the order id. 'scheduled' is the confirmation screen
+    // for Morning/Evening bookings; 'tracking' is the live/timeline view.
+    if (next === 'tracking' || next === 'scheduled') {
       navHistoryRef.current = ['home']
-      // If a specific orderId is provided, update state + ref immediately so the
-      // URL push below sees the new ID (can't wait for useEffect → ref sync).
       const newId = opts?.trackOrderId
       if (newId !== undefined) {
         setTrackingOrderId(newId)
         trackingOrderIdRef.current = newId
       }
-      // Resolve the ID to embed in the URL: prefer the freshly-provided one,
-      // then the existing ref (set synchronously by onPaymentComplete before
-      // calling go('tracking') with no opts).
+      // Push the /tracking/:id URL for both destinations so a refresh from
+      // either lands back on this order's tracking view (timeline pre-dispatch).
       const resolvedId = newId ?? trackingOrderIdRef.current
       if (resolvedId) {
         window.history.pushState({}, '', `/tracking/${encodeURIComponent(resolvedId)}`)
@@ -776,13 +808,22 @@ export default function App() {
     const orderId  = `CS-${randPart}`
     const cityConf = getCityConfig(state.selectedCityId, configsRef.current)
     const distKm   = draft.route ? Math.round(draft.route.distanceM / 100) / 10 : 5
+    const deliveryWindow = draft.deliveryWindow ?? 'morning'
     const breakdown = computeOrderPrice({
       cityConfig: cityConf,
       distKm,
       parcelSize: draft.parcel.size,
       fragile:    draft.parcel.fragile,
       tip,
+      deliveryWindow,
     })
+
+    // Scheduled (morning/evening) orders start in 'scheduled' and carry a
+    // resolved window (rolls to tomorrow if the chosen window already passed).
+    // Express keeps today's immediate flow (status 'new').
+    const isExpress = deliveryWindow === 'express'
+    const win       = isExpress ? null : resolveWindow(deliveryWindow, new Date())
+    const initialStatus = isExpress ? 'new' : 'scheduled'
     // If the server returned an authoritative total, trust it over the client-computed value
     if (authorizedTotal !== undefined) breakdown.total = authorizedTotal
 
@@ -807,11 +848,17 @@ export default function App() {
     setTrackingOrderId(orderId)
     trackingOrderIdRef.current = orderId
 
+    // Guests write under a real anonymous session so the orders-table RLS
+    // (auth.uid() is not null AND customer_id = auth.uid()) passes. Await here so
+    // the session is guaranteed even if the background warm-up hasn't finished.
+    const guestUid   = user?.id === 'guest' ? await ensureGuestSession() : null
+    const customerId = guestUid ?? user?.id ?? 'guest'
+
     // Write to shared order store (Supabase or localStorage).
     // pushNewOrder throws on failure — the PaymentScreen caller catches and surfaces the error.
     await pushNewOrder({
       id: orderId,
-      customerId:   user?.id ?? 'guest',
+      customerId,
       customerName: user?.name ?? (draft.pickup.name || 'Customer'),
       pickup: {
         name:    draft.pickup.name,
@@ -831,24 +878,32 @@ export default function App() {
         fragile: draft.parcel.fragile,
         prohibitedItemsDeclarationAccepted:   draft.parcel.prohibitedItemsDeclarationAccepted,
         prohibitedItemsDeclarationAcceptedAt: draft.parcel.prohibitedItemsDeclarationAcceptedAt ?? now,
+        // Mirror of delivery_type — kept so existing display code keeps working.
+        deliveryWindow,
       },
-      status: 'new',
+      status: initialStatus,
       priceBreakdown: breakdown,
       cityId:     state.selectedCityId,
       distanceKm: distKm,
       createdAt: now,
       updatedAt: now,
       notes: [],
+      // Authoritative delivery type + scheduled window (DB columns).
+      deliveryType:        deliveryWindow,
+      deliveryWindowStart: win?.start.toISOString(),
+      deliveryWindowEnd:   win?.end.toISOString(),
     })
 
-    // Push order_created notification
+    // Push order_created notification — copy differs for scheduled vs express.
     await pushCustomerNotif({
       event:      'order_created',
       audience:   'customer',
       orderId,
-      title:      'Delivery request submitted',
-      body:       `Your parcel to ${draft.dropoff.name} is being matched with a driver.`,
-      customerId: user?.id,
+      title:      isExpress ? 'Delivery request submitted' : 'Booking confirmed',
+      body:       isExpress
+        ? `Your parcel to ${draft.dropoff.name} is being matched with a driver.`
+        : `Your ${deliveryWindow} delivery to ${draft.dropoff.name} is scheduled. We'll assign a courier closer to your window.`,
+      customerId,
     })
 
     setState(s => ({ ...s, pastDeliveries: [newDelivery, ...s.pastDeliveries] }))
@@ -900,6 +955,9 @@ export default function App() {
         )
       case 'pay':
         return <PaymentScreen go={go} state={state} draft={draft} cityConfig={cityConfig} onPaymentComplete={onPaymentComplete} />
+      case 'scheduled':
+        return <ScheduledDeliveryScreen go={go} orderId={trackingOrderId} cityConfig={cityConfig} />
+
       case 'tracking':
         return <TrackingScreen go={go} draft={draft} cityConfig={cityConfig} orderId={trackingOrderId} user={user} />
       case 'history':

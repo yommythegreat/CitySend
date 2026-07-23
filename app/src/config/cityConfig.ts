@@ -46,6 +46,93 @@ export interface TaxRates {
   qst: number
 }
 
+// ── Delivery windows ──────────────────────────────────────────────────────────
+// v1: hardcoded across all cities. When these become admin-managed, move them
+// into CityConfig alongside serviceHours and edit via ConfigurationScreen.
+
+export interface DeliveryWindowOption {
+  id: 'morning' | 'evening' | 'express'
+  label: string
+  /** Human-readable time range shown to the customer */
+  time: string
+}
+
+export const DELIVERY_WINDOWS: DeliveryWindowOption[] = [
+  { id: 'morning', label: 'Morning', time: '10 AM – 2 PM' },
+  { id: 'evening', label: 'Evening', time: '6 PM – 10 PM' },
+  { id: 'express', label: 'Express', time: 'ASAP' },
+]
+
+/** Flat pre-tax price for Express delivery — replaces the calculated
+ *  base/distance/size/fragile fees entirely. Taxes still apply on top. */
+export const EXPRESS_FLAT_FEE = 25
+
+// ── Window hours + date resolution ────────────────────────────────────────────
+// Local-time hour bounds for each scheduled window. Express has no window.
+
+export const WINDOW_HOURS: Record<'morning' | 'evening', { start: number; end: number }> = {
+  morning: { start: 10, end: 14 }, // 10 AM – 2 PM
+  evening: { start: 18, end: 22 }, // 6 PM – 10 PM
+}
+
+export type ScheduledWindowId = 'morning' | 'evening'
+
+/**
+ * Preselect the next available window for a new booking, per the rules:
+ *   before/within morning → morning; between windows → evening;
+ *   within evening → evening; at/after 22:00 → morning (tomorrow).
+ * Only decides the DEFAULT — the customer can still switch to Express or the
+ * other window.
+ */
+export function defaultDeliveryWindow(now: Date = new Date()): ScheduledWindowId {
+  const h = now.getHours()
+  if (h < WINDOW_HOURS.evening.end && h >= WINDOW_HOURS.evening.start) return 'evening' // in evening
+  if (h < WINDOW_HOURS.evening.start && h >= WINDOW_HOURS.morning.end)  return 'evening' // between → next up
+  if (h < WINDOW_HOURS.morning.end)  return 'morning' // before or within morning (incl. early AM)
+  return 'morning' // ≥ 22:00 → tomorrow morning (date resolved by resolveWindow)
+}
+
+export interface ResolvedWindow {
+  start: Date
+  end: Date
+  isToday: boolean
+  /** 'Today' | 'Tomorrow' | weekday name (e.g. 'Mon') */
+  dateLabel: string
+}
+
+/**
+ * Resolve a window id to concrete start/end Dates. If the window has already
+ * ended today, it rolls to tomorrow. Express returns null (no window).
+ */
+export function resolveWindow(id: ScheduledWindowId, now: Date = new Date()): ResolvedWindow {
+  const { start, end } = WINDOW_HOURS[id]
+  const mk = (dayOffset: number, hour: number) => {
+    const d = new Date(now)
+    d.setDate(d.getDate() + dayOffset)
+    d.setHours(hour, 0, 0, 0)
+    return d
+  }
+  // If today's window end is still in the future, use today; else tomorrow.
+  const endToday = mk(0, end)
+  const dayOffset = now.getTime() < endToday.getTime() ? 0 : 1
+  const startDate = mk(dayOffset, start)
+  const endDate   = mk(dayOffset, end)
+
+  const isToday = dayOffset === 0
+  const dateLabel = isToday ? 'Today'
+    : dayOffset === 1 ? 'Tomorrow'
+    : startDate.toLocaleDateString('en-CA', { weekday: 'short' })
+
+  return { start: startDate, end: endDate, isToday, dateLabel }
+}
+
+/** e.g. "Morning · 10 AM – 2 PM · Tomorrow" */
+export function windowSummary(id: ScheduledWindowId, now: Date = new Date()): string {
+  const opt = DELIVERY_WINDOWS.find(w => w.id === id)!
+  const r = resolveWindow(id, now)
+  return `${opt.label} · ${opt.time}${r.isToday ? '' : ' · ' + r.dateLabel}`
+}
+
 // ── Service hours ─────────────────────────────────────────────────────────────
 
 export type Weekday = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun'

@@ -61,12 +61,17 @@ function round2(n: number): number {
   return Math.round(n * 100) / 100
 }
 
+// Express flat pre-tax fee. MUST stay in sync with EXPRESS_FLAT_FEE in
+// app/src/config/cityConfig.ts (server can't import from the Vite bundle).
+const EXPRESS_FLAT_FEE = 25
+
 interface PriceInputs {
-  cityId:      string
-  distanceKm:  number
-  parcelSize:  's' | 'm' | 'l'
-  fragile:     boolean
-  tip:         number
+  cityId:         string
+  distanceKm:     number
+  parcelSize:     's' | 'm' | 'l'
+  fragile:        boolean
+  tip:            number
+  deliveryWindow: 'morning' | 'evening' | 'express'
 }
 
 async function computeServerTotal(inputs: PriceInputs): Promise<number | null> {
@@ -88,14 +93,19 @@ async function computeServerTotal(inputs: PriceInputs): Promise<number | null> {
     const p   = cfg.pricing
     const t   = cfg.taxRates
 
-    const distanceFee = inputs.distanceKm > p.baseDistanceKm
+    const isExpress = inputs.deliveryWindow === 'express'
+
+    // Express: flat pre-tax fee replaces base/distance/size/fragile entirely.
+    const baseFee = isExpress ? EXPRESS_FLAT_FEE : p.baseFee
+    const distanceFee = !isExpress && inputs.distanceKm > p.baseDistanceKm
       ? round2((inputs.distanceKm - p.baseDistanceKm) * p.extraKmFee)
       : 0
-    const sizeFee   = inputs.parcelSize === 's' ? p.smallPackageFee
+    const sizeFee   = isExpress ? 0
+                    : inputs.parcelSize === 's' ? p.smallPackageFee
                     : inputs.parcelSize === 'l' ? p.largePackageFee
                     : p.mediumPackageFee
-    const fragileFee   = inputs.fragile ? p.fragileFee : 0
-    const subtotal     = round2(p.baseFee + distanceFee + sizeFee + fragileFee)
+    const fragileFee   = (!isExpress && inputs.fragile) ? p.fragileFee : 0
+    const subtotal     = round2(baseFee + distanceFee + sizeFee + fragileFee)
     const totalTax     = round2(subtotal * ((t.gst ?? 0) + (t.pst ?? 0) + (t.hst ?? 0) + (t.qst ?? 0)))
     const subtotalTaxed = round2(subtotal + totalTax)
     return round2(subtotalTaxed + round2(inputs.tip))
@@ -127,12 +137,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const body = (req.body ?? {}) as {
-    cityId?:     unknown
-    distanceKm?: unknown
-    parcelSize?: unknown
-    fragile?:    unknown
-    tip?:        unknown
-    amountCad?:  unknown   // legacy fallback — ignored when inputs are present
+    cityId?:         unknown
+    distanceKm?:     unknown
+    parcelSize?:     unknown
+    fragile?:        unknown
+    tip?:            unknown
+    deliveryWindow?: unknown
+    amountCad?:      unknown   // legacy fallback — ignored when inputs are present
   }
 
   const client = getStripe()
@@ -146,12 +157,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const parcelSize = ['s','m','l'].includes(String(body.parcelSize)) ? String(body.parcelSize) as 's'|'m'|'l' : null
   const fragile    = body.fragile === true || body.fragile === 'true'
   const tip        = Math.max(0, parseFloat(String(body.tip ?? '0')) || 0)
+  // Unknown/absent window values fall back to 'morning' (standard pricing) —
+  // never let a malformed value select the flat express price.
+  const deliveryWindow = ['morning','evening','express'].includes(String(body.deliveryWindow))
+    ? String(body.deliveryWindow) as 'morning'|'evening'|'express'
+    : 'morning'
 
   let authoritative: number | null = null
 
   if (cityId && parcelSize && !isNaN(distanceKm) && distanceKm >= 0) {
     // Server recomputes the total — client-provided amountCad is ignored
-    authoritative = await computeServerTotal({ cityId, distanceKm, parcelSize, fragile, tip })
+    authoritative = await computeServerTotal({ cityId, distanceKm, parcelSize, fragile, tip, deliveryWindow })
   }
 
   if (authoritative === null) {
@@ -178,11 +194,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       currency: 'cad',
       automatic_payment_methods: { enabled: true },
       metadata: {
-        cityId:     cityId    ?? '',
-        distanceKm: String(distanceKm ?? ''),
-        parcelSize: parcelSize ?? '',
-        fragile:    String(fragile),
-        tip:        String(tip),
+        cityId:         cityId    ?? '',
+        distanceKm:     String(distanceKm ?? ''),
+        parcelSize:     parcelSize ?? '',
+        fragile:        String(fragile),
+        tip:            String(tip),
+        deliveryWindow,
       },
     })
     return res.status(200).json({

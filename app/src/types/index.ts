@@ -23,6 +23,7 @@ export type ScreenName =
   | 'new-3'
   | 'pricing'
   | 'pay'
+  | 'scheduled'   // post-payment confirmation for Morning/Evening bookings
   | 'tracking'
   | 'history'
   | 'billing'
@@ -96,11 +97,17 @@ export interface RouteInfo {
   coords: [number, number][]  // [lat, lng] pairs for Leaflet
 }
 
+/** Delivery scheduling choice made on the Pricing screen.
+ *  'morning' / 'evening' are batched windows; 'express' is ASAP dispatch
+ *  at a flat rate (see EXPRESS_FLAT_FEE in config/cityConfig.ts). */
+export type DeliveryWindow = 'morning' | 'evening' | 'express'
+
 export interface Draft {
   pickup: PickupDraft
   dropoff: DropoffDraft
   parcel: ParcelDraft
   route?: RouteInfo
+  deliveryWindow: DeliveryWindow
 }
 
 export interface PaymentMethod {

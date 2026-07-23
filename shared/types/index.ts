@@ -18,7 +18,9 @@ export type CityId =
 // ── Order ─────────────────────────────────────────────────────────────────────
 
 export type OrderStatus =
-  | 'new'
+  | 'scheduled' // Morning/Evening order booked, waiting for its delivery window
+  | 'preparing' // admin is getting the scheduled order ready to dispatch
+  | 'new'       // in the assignable pool ("Finding Driver")
   | 'offered'   // admin assigned a driver; waiting for driver to accept
   | 'assigned'  // driver accepted
   | 'picked_up'
@@ -27,6 +29,8 @@ export type OrderStatus =
   | 'cancelled'
 
 export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
+  scheduled:  'Scheduled',
+  preparing:  'Preparing',
   new:        'New',
   offered:    'Pending Accept',
   assigned:   'Assigned',
@@ -38,6 +42,8 @@ export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
 
 /** Valid next statuses for a given current status (admin workflow). */
 export const NEXT_STATUSES: Partial<Record<OrderStatus, OrderStatus[]>> = {
+  scheduled:  ['preparing', 'cancelled'],
+  preparing:  ['new', 'cancelled'],       // → new = "Dispatch" (enters assignable pool)
   new:        ['offered', 'assigned', 'cancelled'],
   offered:    ['assigned', 'cancelled'],
   assigned:   ['picked_up', 'cancelled'],
@@ -61,6 +67,17 @@ export interface ParcelInfo {
   fragile: boolean
   prohibitedItemsDeclarationAccepted?: boolean
   prohibitedItemsDeclarationAcceptedAt?: string
+  /** Customer-chosen delivery window. Rides in the parcel JSONB (no migration).
+   *  'express' = ASAP dispatch at flat rate. Absent on pre-feature orders. */
+  deliveryWindow?: 'morning' | 'evening' | 'express'
+}
+
+/** Display labels for ParcelInfo.deliveryWindow (admin + driver surfaces).
+ *  Times must match DELIVERY_WINDOWS in app/src/config/cityConfig.ts. */
+export const DELIVERY_WINDOW_LABELS: Record<'morning' | 'evening' | 'express', string> = {
+  morning: 'Morning · 10 AM – 2 PM',
+  evening: 'Evening · 6 PM – 10 PM',
+  express: 'Express · ASAP',
 }
 
 export interface PriceBreakdown {
@@ -86,6 +103,8 @@ export interface AdminNote {
   createdAt: string
 }
 
+export type DeliveryType = 'express' | 'morning' | 'evening'
+
 export interface Order {
   id: string
   customerId: string
@@ -105,7 +124,26 @@ export interface Order {
   cancelReason?: string
   /** 4-digit numeric code generated at booking; shown to recipient for driver handoff verification */
   handoffCode?: string
+  /** Authoritative delivery type (DB column, not derived from parcel text). */
+  deliveryType?: DeliveryType
+  /** Scheduled window bounds (ISO). Null/absent for express. */
+  deliveryWindowStart?: string
+  deliveryWindowEnd?: string
 }
+
+/** True when the order is a scheduled (Morning/Evening) delivery rather than
+ *  Express. Falls back to the parcel mirror for orders written before the
+ *  delivery_type column existed. */
+export function isScheduledDelivery(o: {
+  deliveryType?: DeliveryType
+  parcel?: { deliveryWindow?: 'morning' | 'evening' | 'express' }
+}): boolean {
+  const t = o.deliveryType ?? o.parcel?.deliveryWindow
+  return t === 'morning' || t === 'evening'
+}
+
+/** Order statuses that count as "scheduled / pre-dispatch". */
+export const PRE_DISPATCH_STATUSES: OrderStatus[] = ['scheduled', 'preparing']
 
 // ── Driver ────────────────────────────────────────────────────────────────────
 
@@ -198,6 +236,7 @@ export interface IncidentReport {
 export type NotificationAudience = 'customer' | 'driver' | 'admin' | 'all'
 export type NotificationEvent =
   | 'order_created'
+  | 'preparing'          // scheduled order moved into Preparing (pre-dispatch)
   | 'driver_assigned'
   | 'driver_en_route'
   | 'picked_up'

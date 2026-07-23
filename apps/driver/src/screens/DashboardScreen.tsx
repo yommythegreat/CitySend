@@ -299,8 +299,23 @@ export function DashboardScreen({ onSelectOrder, onGoHistory, onGoProfile, onGoE
                   }}
                 >
                   <div>
-                    <div style={{ fontSize: 11, color: 'var(--d-accent)', fontWeight: 700, marginBottom: 2, letterSpacing: 0.3 }}>
-                      {order.id}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                      <span style={{ fontSize: 11, color: 'var(--d-accent)', fontWeight: 700, letterSpacing: 0.3 }}>
+                        {order.id}
+                      </span>
+                      {(() => {
+                        const t = order.deliveryType ?? order.parcel?.deliveryWindow
+                        if (!t) return null
+                        const express = t === 'express'
+                        return (
+                          <span style={{
+                            fontSize: 9, fontWeight: 700, letterSpacing: 0.3, textTransform: 'uppercase',
+                            padding: '1px 6px', borderRadius: 99,
+                            background: express ? 'rgba(201,74,27,0.1)' : 'rgba(37,99,235,0.1)',
+                            color: express ? '#c94a1b' : '#2563eb',
+                          }}>{t}</span>
+                        )
+                      })()}
                     </div>
                     <div style={{ fontSize: 13, color: 'var(--d-ink)', fontWeight: 500 }}>
                       {order.pickup.address.split(',')[0]}

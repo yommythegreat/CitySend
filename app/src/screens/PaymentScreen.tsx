@@ -252,6 +252,7 @@ export function PaymentScreen({ go, state, draft, cityConfig, onPaymentComplete 
     parcelSize: draft.parcel.size,
     fragile:    draft.parcel.fragile,
     tip,
+    deliveryWindow: draft.deliveryWindow ?? 'morning',
   })
 
   // ── Tax tooltip label ──────────────────────────────────────────────────────
@@ -274,12 +275,13 @@ export function PaymentScreen({ go, state, draft, cityConfig, onPaymentComplete 
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        cityId:     cityConfig.cityId,
-        distanceKm: distKm,
-        parcelSize: draft.parcel.size,
-        fragile:    draft.parcel.fragile,
+        cityId:         cityConfig.cityId,
+        distanceKm:     distKm,
+        parcelSize:     draft.parcel.size,
+        fragile:        draft.parcel.fragile,
         tip,
-        amountCad:  price.total,  // fallback if server can't reach Supabase
+        deliveryWindow: draft.deliveryWindow ?? 'morning',
+        amountCad:      price.total,  // fallback if server can't reach Supabase
       }),
     })
       .then(r => r.json())
@@ -303,7 +305,9 @@ export function PaymentScreen({ go, state, draft, cityConfig, onPaymentComplete 
     setOrderError(null)
     try {
       await onPaymentComplete(tip, authorizedTotal)
-      go('tracking')
+      // Express → straight to live tracking (finding driver). Morning/Evening →
+      // the Scheduled Delivery confirmation screen (no live tracking yet).
+      go((draft.deliveryWindow ?? 'morning') === 'express' ? 'tracking' : 'scheduled')
     } catch (err: any) {
       // Payment succeeded but order creation failed (e.g. not signed in).
       // Show a recoverable error — the user must sign in and contact support.

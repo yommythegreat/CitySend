@@ -29,6 +29,7 @@ function eventTone(event: NotifEvent): ToneKey {
 function eventLabel(event: NotifEvent): string {
   const map: Record<NotifEvent, string> = {
     order_created:    'New order',
+    preparing:        'Preparing',
     driver_assigned:  'Matched',
     driver_en_route:  'En route',
     picked_up:        'Picked up',

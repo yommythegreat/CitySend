@@ -2,11 +2,13 @@ import React, { useEffect, useRef, useState } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { IconButton } from '../components/IconButton'
-import { Back, Check, Phone, Send, Star, X } from '../components/Icons'
+import { Back, Check, Clock, Phone, Send, Star, X } from '../components/Icons'
 import { geocodeOnce, fetchRoute } from '../hooks/useGeocoder'
 import { getOrderById, subscribeToOrderById, type CustomerOrder } from '../utils/orderStore'
 import { getMessages, sendMessage, subscribeToMessages, markMessagesRead, type Message } from '../utils/messageStore'
 import { subscribeToDriverLocation } from '../utils/locationStore'
+import { DELIVERY_WINDOWS } from '../config/cityConfig'
+import { DeliveryTimeline } from '../components/DeliveryTimeline'
 import type { CityConfig } from '../config/cityConfig'
 import type { AuthUser, Draft, NavOptions, RouteInfo, ScreenName } from '../types'
 
@@ -25,6 +27,8 @@ type OrderStatus = CustomerOrder['status']
 interface PhaseInfo { step: number; label: string; desc: string; terminal: boolean }
 
 const PHASE_MAP: Record<OrderStatus, PhaseInfo> = {
+  scheduled:  { step: 0, label: 'Scheduled',         desc: 'Waiting for your delivery window',      terminal: false },
+  preparing:  { step: 0, label: 'Preparing',         desc: 'Getting your delivery ready',           terminal: false },
   new:        { step: 0, label: 'Finding driver',    desc: 'Looking for a courier nearby',         terminal: false },
   offered:    { step: 0, label: 'Finding driver',    desc: 'Looking for a courier nearby',         terminal: false },
   assigned:   { step: 1, label: 'Driver assigned',   desc: 'Your driver is heading to pickup',      terminal: false },
@@ -465,7 +469,20 @@ export function TrackingScreen({ go, draft, cityConfig, orderId, user }: Props) 
   }, [orderLoading, order?.id])
 
   // ── Init Leaflet ─────────────────────────────────────────────────────────────
+  // Scheduled orders show a timeline (no map) until dispatch — see the
+  // pre-dispatch return below. Computed here because the map effect must know.
+  const orderWindow = (order?.deliveryType ?? order?.parcel?.deliveryWindow) as
+    'morning' | 'evening' | 'express' | undefined
+  const isScheduledType = orderWindow === 'morning' || orderWindow === 'evening'
+  const preDispatchView = !!order && isScheduledType &&
+    (order.status === 'scheduled' || order.status === 'preparing')
+
   useEffect(() => {
+    // No live map while pre-dispatch: the timeline layout has no map container,
+    // and any map created during the initial order load must be torn down so its
+    // Leaflet DOM doesn't survive React's reconciliation into the timeline view.
+    // Re-runs when dispatch flips preDispatchView false → fresh map on the live layout.
+    if (preDispatchView) return
     if (!mapContainerRef.current || mapRef.current) return
     const map = L.map(mapContainerRef.current, {
       center: DEFAULT_CENTER, zoom: 14,
@@ -477,9 +494,16 @@ export function TrackingScreen({ go, draft, cityConfig, orderId, user }: Props) 
     mapRef.current = map
     routeLayer.current = L.layerGroup().addTo(map)
     setMapReady(true)
-    return () => { map.remove(); mapRef.current = null }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+    return () => {
+      map.remove()
+      mapRef.current      = null
+      routeLayer.current  = null
+      pickupMarker.current  = null
+      dropoffMarker.current = null
+      driverMarker.current  = null
+      setMapReady(false)
+    }
+  }, [preDispatchView])
 
   // ── Draw route + markers ─────────────────────────────────────────────────────
   useEffect(() => {
@@ -592,11 +616,70 @@ export function TrackingScreen({ go, draft, cityConfig, orderId, user }: Props) 
     )
   }
 
+  // ── Scheduled (Morning/Evening) pre-dispatch: timeline-first, NO live map ────
+  // Shown while a scheduled order is still 'scheduled'/'preparing'. Once admin
+  // dispatches it (status → new/offered/assigned/…), preDispatchView goes false
+  // and the live map layout below renders — realtime setOrder triggers the
+  // re-render automatically, so the swap is seamless with no reload.
+  // (preDispatchView / orderWindow are computed above the map effect.)
+  if (preDispatchView && order) {
+    const opt = DELIVERY_WINDOWS.find(w => w.id === orderWindow)
+    const start = order.deliveryWindowStart ? new Date(order.deliveryWindowStart) : null
+    const dateLabel = start ? start.toLocaleDateString('en-CA', { weekday: 'long', month: 'short', day: 'numeric' }) : ''
+    return (
+      <div key="cs-track-scheduled" style={{ position: 'absolute', inset: 0, background: 'var(--cs-slate-50, #f8f9fb)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        {/* Top bar */}
+        <div style={{ padding: '56px 16px 0', display: 'flex', gap: 10, flexShrink: 0 }}>
+          <IconButton onClick={() => go('back')}><Back /></IconButton>
+          <div style={{ flex: 1 }} />
+          {order && (
+            <div style={{ background: '#fff', borderRadius: 20, padding: '8px 14px', display: 'flex', alignItems: 'center', gap: 6, border: '1px solid var(--cs-slate-100)' }}>
+              <span style={{ fontFamily: 'var(--cs-mono)', fontSize: 12, color: 'var(--cs-slate-500)', letterSpacing: 0.5 }}>{order.id}</span>
+            </div>
+          )}
+        </div>
+
+        <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px 32px', scrollbarWidth: 'none' }}>
+          {/* Window hero */}
+          <div style={{
+            background: status === 'preparing' ? 'var(--cs-ink)' : '#fff',
+            color: status === 'preparing' ? '#fff' : 'var(--cs-ink)',
+            borderRadius: 18, border: '1px solid var(--cs-slate-100)', padding: 20, marginBottom: 12,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+              <Clock size={16} color={status === 'preparing' ? '#fff' : 'var(--cs-accent)'} />
+              <span style={{ fontFamily: 'var(--cs-mono)', fontSize: 11, letterSpacing: 1.2, textTransform: 'uppercase', opacity: 0.7 }}>
+                {status === 'preparing' ? 'Preparing your delivery' : 'Scheduled delivery'}
+              </span>
+            </div>
+            <div style={{ fontSize: 22, fontWeight: 700, letterSpacing: -0.4 }}>
+              {opt?.label} · {opt?.time}
+            </div>
+            {dateLabel && <div style={{ fontSize: 13, opacity: 0.65, marginTop: 2 }}>{dateLabel}</div>}
+            <div style={{ fontSize: 14, opacity: 0.7, marginTop: 10, lineHeight: 1.5 }}>
+              {status === 'preparing'
+                ? 'A courier will be assigned shortly.'
+                : "We'll assign a CitySend courier closer to your delivery window."}
+            </div>
+          </div>
+
+          {/* Timeline */}
+          <div style={{ background: '#fff', borderRadius: 18, border: '1px solid var(--cs-slate-100)', padding: 18 }}>
+            <div style={{ fontFamily: 'var(--cs-mono)', fontSize: 10, color: 'var(--cs-slate-500)', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 14 }}>
+              Delivery timeline
+            </div>
+            <DeliveryTimeline status={status} />
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   // ── Loading ────────────────────────────────────────────────────────────────
   const showLoadingOverlay = (orderId && orderLoading) || !routeInfo
 
   return (
-    <div style={{ position: 'absolute', inset: 0, overflow: 'hidden' }}>
+    <div key="cs-track-live" style={{ position: 'absolute', inset: 0, overflow: 'hidden' }}>
       {/* Map */}
       <div ref={mapContainerRef} style={{ position: 'absolute', inset: 0, zIndex: 0 }} />
 
@@ -775,6 +858,26 @@ export function TrackingScreen({ go, draft, cityConfig, orderId, user }: Props) 
                 </div>
               )}
             </div>
+
+            {/* Delivery window */}
+            {order?.parcel?.deliveryWindow && (() => {
+              const w = DELIVERY_WINDOWS.find(x => x.id === order.parcel.deliveryWindow)
+              if (!w) return null
+              const express = w.id === 'express'
+              return (
+                <div style={{
+                  margin: '12px 20px 0', padding: '10px 14px',
+                  background: express ? 'rgba(201,74,27,0.08)' : 'var(--cs-slate-50, #f8f9fb)',
+                  border: `1px solid ${express ? 'rgba(201,74,27,0.25)' : 'var(--cs-slate-100)'}`,
+                  borderRadius: 12, display: 'flex', alignItems: 'center', gap: 8,
+                }}>
+                  <Clock size={14} color={express ? 'var(--cs-accent)' : 'var(--cs-slate-500)'} />
+                  <span style={{ fontSize: 13, color: express ? 'var(--cs-accent)' : 'var(--cs-slate-700)', fontWeight: express ? 600 : 400 }}>
+                    {express ? 'Express delivery · ASAP' : `${w.label} window · ${w.time}`}
+                  </span>
+                </div>
+              )
+            })()}
 
             {/* Handoff code — shown when driver is on the way to drop-off */}
             {order?.handoffCode && (status === 'in_transit' || status === 'picked_up') && (
