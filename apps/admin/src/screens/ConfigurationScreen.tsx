@@ -241,8 +241,11 @@ function PricingTab() {
       <CityRail configs={state.cityConfigs} selected={selected} onSelect={handleCityChange} />
       <div style={{ flex: 1 }}>
         <Card title="Base Fee Structure">
-          <FieldRow label="Base Fee ($)" hint="Flat fee up to base distance">
+          <FieldRow label="Base Fee ($)" hint="Morning/Evening windows — flat fee up to base distance">
             <NumInput value={p.baseFee} onChange={v => update({ baseFee: v })} step={0.5} />
+          </FieldRow>
+          <FieldRow label="Express Base Fee ($)" hint="Express (ASAP) — replaces the base fee; distance, size and fragile fees still apply">
+            <NumInput value={p.expressBaseFee ?? 25} onChange={v => update({ expressBaseFee: v })} step={0.5} />
           </FieldRow>
           <FieldRow label="Base Distance (km)" hint="Km covered by base fee">
             <NumInput value={p.baseDistanceKm} onChange={v => update({ baseDistanceKm: v })} step={1} min={1} />

@@ -81,7 +81,7 @@ export function PricingScreen({ go, draft, setDraft, cityConfig }: Props) {
   const TAX_TOOLTIP = 'Taxes are calculated based on your delivery city and applicable provincial/federal rates. Tip is not taxed.'
 
   const lineItems: { label: string; value: number; isTax?: boolean }[] = [
-    { label: isExpress ? 'Express flat rate' : 'Base delivery fee', value: price.baseFee },
+    { label: isExpress ? 'Express base fee' : 'Base delivery fee', value: price.baseFee },
     { label: 'Distance surcharge',     value: price.distanceFee  },
     { label: 'Size surcharge',         value: price.sizeFee      },
     { label: 'Fragile handling',       value: price.fragileFee   },
