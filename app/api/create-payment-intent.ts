@@ -61,8 +61,10 @@ function round2(n: number): number {
   return Math.round(n * 100) / 100
 }
 
-// Express flat pre-tax fee. MUST stay in sync with EXPRESS_FLAT_FEE in
-// app/src/config/cityConfig.ts (server can't import from the Vite bundle).
+// Fallback Express flat pre-tax fee, used only when the city's config row
+// predates the pricing.expressFlatFee field. The DB value (admin-managed via
+// Configuration → Pricing) is authoritative; keep this equal to the legacy
+// EXPRESS_FLAT_FEE in app/src/config/cityConfig.ts.
 const EXPRESS_FLAT_FEE = 25
 
 interface PriceInputs {
@@ -96,7 +98,8 @@ async function computeServerTotal(inputs: PriceInputs): Promise<number | null> {
     const isExpress = inputs.deliveryWindow === 'express'
 
     // Express: flat pre-tax fee replaces base/distance/size/fragile entirely.
-    const baseFee = isExpress ? EXPRESS_FLAT_FEE : p.baseFee
+    // Admin-managed per city; fall back for config rows missing the field.
+    const baseFee = isExpress ? (p.expressFlatFee ?? EXPRESS_FLAT_FEE) : p.baseFee
     const distanceFee = !isExpress && inputs.distanceKm > p.baseDistanceKm
       ? round2((inputs.distanceKm - p.baseDistanceKm) * p.extraKmFee)
       : 0

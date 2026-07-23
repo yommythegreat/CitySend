@@ -29,6 +29,12 @@ export interface CityPricing {
   largePackageFee: number
   /** Surcharge added when parcel is marked fragile */
   fragileFee: number
+  /**
+   * Flat pre-tax price for Express (ASAP) delivery — replaces the calculated
+   * base/distance/size/fragile fees entirely; taxes still apply on top.
+   * Optional: config rows saved before this field existed fall back to 25.
+   */
+  expressFlatFee?: number
   /** ISO 4217 currency code */
   currency: 'CAD'
 }
@@ -166,6 +172,7 @@ const PLACEHOLDER_PRICING: CityPricing = {
   mediumPackageFee: 2,
   largePackageFee: 4,
   fragileFee: 2,
+  expressFlatFee: 25,
   currency: 'CAD',
 }
 
@@ -192,6 +199,7 @@ export const CITY_CONFIGS: CityConfig[] = [
       mediumPackageFee: 2.00,
       largePackageFee: 4.00,
       fragileFee: 2.00,
+      expressFlatFee: 25.00,
       currency: 'CAD',
     },
     taxRates: {

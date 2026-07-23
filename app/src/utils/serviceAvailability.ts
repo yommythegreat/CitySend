@@ -158,8 +158,9 @@ export function computeOrderPrice({
 
   // Express: flat pre-tax price replaces ALL calculated fees. Reuses the
   // baseFee field so downstream breakdown displays (admin, driver payout)
-  // keep working with no new fields.
-  const baseFee = isExpress ? EXPRESS_FLAT_FEE : pricing.baseFee
+  // keep working with no new fields. Admin-managed per city; older config
+  // rows without the field fall back to the legacy constant.
+  const baseFee = isExpress ? (pricing.expressFlatFee ?? EXPRESS_FLAT_FEE) : pricing.baseFee
 
   // Distance surcharge
   const distanceFee = !isExpress && distKm > pricing.baseDistanceKm

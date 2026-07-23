@@ -267,6 +267,21 @@ function PricingTab() {
             <NumInput value={p.fragileFee} onChange={v => update({ fragileFee: v })} step={0.5} />
           </FieldRow>
         </Card>
+        <Card title="Delivery Windows">
+          <FieldRow label="Morning · 10 AM – 2 PM" hint="Scheduled window">
+            <span style={{ fontSize: 13, color: 'var(--a-muted)' }}>
+              Standard rate — base ${(p.baseFee ?? 0).toFixed(2)} + distance + size fees
+            </span>
+          </FieldRow>
+          <FieldRow label="Evening · 6 PM – 10 PM" hint="Scheduled window">
+            <span style={{ fontSize: 13, color: 'var(--a-muted)' }}>
+              Standard rate — base ${(p.baseFee ?? 0).toFixed(2)} + distance + size fees
+            </span>
+          </FieldRow>
+          <FieldRow label="Express Flat Rate ($)" hint="ASAP delivery. Flat pre-tax price replacing base, distance, size and fragile fees; taxes still apply">
+            <NumInput value={p.expressFlatFee ?? 25} onChange={v => update({ expressFlatFee: v })} step={0.5} />
+          </FieldRow>
+        </Card>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
           <SaveBtn onClick={save} saved={saved} />
           {!saved && draft && (
