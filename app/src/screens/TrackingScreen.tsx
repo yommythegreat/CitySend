@@ -469,7 +469,20 @@ export function TrackingScreen({ go, draft, cityConfig, orderId, user }: Props) 
   }, [orderLoading, order?.id])
 
   // ── Init Leaflet ─────────────────────────────────────────────────────────────
+  // Scheduled orders show a timeline (no map) until dispatch — see the
+  // pre-dispatch return below. Computed here because the map effect must know.
+  const orderWindow = (order?.deliveryType ?? order?.parcel?.deliveryWindow) as
+    'morning' | 'evening' | 'express' | undefined
+  const isScheduledType = orderWindow === 'morning' || orderWindow === 'evening'
+  const preDispatchView = !!order && isScheduledType &&
+    (order.status === 'scheduled' || order.status === 'preparing')
+
   useEffect(() => {
+    // No live map while pre-dispatch: the timeline layout has no map container,
+    // and any map created during the initial order load must be torn down so its
+    // Leaflet DOM doesn't survive React's reconciliation into the timeline view.
+    // Re-runs when dispatch flips preDispatchView false → fresh map on the live layout.
+    if (preDispatchView) return
     if (!mapContainerRef.current || mapRef.current) return
     const map = L.map(mapContainerRef.current, {
       center: DEFAULT_CENTER, zoom: 14,
@@ -481,9 +494,16 @@ export function TrackingScreen({ go, draft, cityConfig, orderId, user }: Props) 
     mapRef.current = map
     routeLayer.current = L.layerGroup().addTo(map)
     setMapReady(true)
-    return () => { map.remove(); mapRef.current = null }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+    return () => {
+      map.remove()
+      mapRef.current      = null
+      routeLayer.current  = null
+      pickupMarker.current  = null
+      dropoffMarker.current = null
+      driverMarker.current  = null
+      setMapReady(false)
+    }
+  }, [preDispatchView])
 
   // ── Draw route + markers ─────────────────────────────────────────────────────
   useEffect(() => {
@@ -598,20 +618,16 @@ export function TrackingScreen({ go, draft, cityConfig, orderId, user }: Props) 
 
   // ── Scheduled (Morning/Evening) pre-dispatch: timeline-first, NO live map ────
   // Shown while a scheduled order is still 'scheduled'/'preparing'. Once admin
-  // dispatches it (status → new/offered/assigned/…), this condition goes false
+  // dispatches it (status → new/offered/assigned/…), preDispatchView goes false
   // and the live map layout below renders — realtime setOrder triggers the
   // re-render automatically, so the swap is seamless with no reload.
-  const orderWindow = (order?.deliveryType ?? order?.parcel?.deliveryWindow) as
-    'morning' | 'evening' | 'express' | undefined
-  const isScheduledType = orderWindow === 'morning' || orderWindow === 'evening'
-  const preDispatch = status === 'scheduled' || status === 'preparing'
-
-  if (order && isScheduledType && preDispatch) {
+  // (preDispatchView / orderWindow are computed above the map effect.)
+  if (preDispatchView && order) {
     const opt = DELIVERY_WINDOWS.find(w => w.id === orderWindow)
     const start = order.deliveryWindowStart ? new Date(order.deliveryWindowStart) : null
     const dateLabel = start ? start.toLocaleDateString('en-CA', { weekday: 'long', month: 'short', day: 'numeric' }) : ''
     return (
-      <div style={{ position: 'absolute', inset: 0, background: 'var(--cs-slate-50, #f8f9fb)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <div key="cs-track-scheduled" style={{ position: 'absolute', inset: 0, background: 'var(--cs-slate-50, #f8f9fb)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         {/* Top bar */}
         <div style={{ padding: '56px 16px 0', display: 'flex', gap: 10, flexShrink: 0 }}>
           <IconButton onClick={() => go('back')}><Back /></IconButton>
@@ -663,7 +679,7 @@ export function TrackingScreen({ go, draft, cityConfig, orderId, user }: Props) 
   const showLoadingOverlay = (orderId && orderLoading) || !routeInfo
 
   return (
-    <div style={{ position: 'absolute', inset: 0, overflow: 'hidden' }}>
+    <div key="cs-track-live" style={{ position: 'absolute', inset: 0, overflow: 'hidden' }}>
       {/* Map */}
       <div ref={mapContainerRef} style={{ position: 'absolute', inset: 0, zIndex: 0 }} />
 
