@@ -61,11 +61,11 @@ function round2(n: number): number {
   return Math.round(n * 100) / 100
 }
 
-// Fallback Express flat pre-tax fee, used only when the city's config row
-// predates the pricing.expressFlatFee field. The DB value (admin-managed via
+// Fallback Express base fee, used only when the city's config row predates
+// the pricing.expressBaseFee field. The DB value (admin-managed via
 // Configuration → Pricing) is authoritative; keep this equal to the legacy
-// EXPRESS_FLAT_FEE in app/src/config/cityConfig.ts.
-const EXPRESS_FLAT_FEE = 25
+// EXPRESS_BASE_FEE in app/src/config/cityConfig.ts.
+const EXPRESS_BASE_FEE = 25
 
 interface PriceInputs {
   cityId:         string
@@ -97,17 +97,16 @@ async function computeServerTotal(inputs: PriceInputs): Promise<number | null> {
 
     const isExpress = inputs.deliveryWindow === 'express'
 
-    // Express: flat pre-tax fee replaces base/distance/size/fragile entirely.
-    // Admin-managed per city; fall back for config rows missing the field.
-    const baseFee = isExpress ? (p.expressFlatFee ?? EXPRESS_FLAT_FEE) : p.baseFee
-    const distanceFee = !isExpress && inputs.distanceKm > p.baseDistanceKm
+    // Express swaps in a higher base fee; all other fees apply the same as
+    // scheduled windows. Fall back for config rows missing the field.
+    const baseFee = isExpress ? (p.expressBaseFee ?? EXPRESS_BASE_FEE) : p.baseFee
+    const distanceFee = inputs.distanceKm > p.baseDistanceKm
       ? round2((inputs.distanceKm - p.baseDistanceKm) * p.extraKmFee)
       : 0
-    const sizeFee   = isExpress ? 0
-                    : inputs.parcelSize === 's' ? p.smallPackageFee
+    const sizeFee   = inputs.parcelSize === 's' ? p.smallPackageFee
                     : inputs.parcelSize === 'l' ? p.largePackageFee
                     : p.mediumPackageFee
-    const fragileFee   = (!isExpress && inputs.fragile) ? p.fragileFee : 0
+    const fragileFee   = inputs.fragile ? p.fragileFee : 0
     const subtotal     = round2(baseFee + distanceFee + sizeFee + fragileFee)
     const totalTax     = round2(subtotal * ((t.gst ?? 0) + (t.pst ?? 0) + (t.hst ?? 0) + (t.qst ?? 0)))
     const subtotalTaxed = round2(subtotal + totalTax)

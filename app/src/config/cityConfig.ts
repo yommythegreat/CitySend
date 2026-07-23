@@ -30,12 +30,12 @@ export interface CityPricing {
   /** Surcharge added when parcel is marked fragile */
   fragileFee: number
   /**
-   * Flat pre-tax price for Express (ASAP) delivery — replaces the calculated
-   * base/distance/size/fragile fees entirely; taxes still apply on top.
+   * Base fee for Express (ASAP) orders — replaces baseFee only; distance,
+   * size and fragile fees still apply on top, same as scheduled windows.
    * Optional: city_configs rows saved before this field existed fall back to
-   * EXPRESS_FLAT_FEE (the whole-row merge in fetchCityConfigs never backfills).
+   * EXPRESS_BASE_FEE (the whole-row merge in fetchCityConfigs never backfills).
    */
-  expressFlatFee?: number
+  expressBaseFee?: number
   /** ISO 4217 currency code */
   currency: 'CAD'
 }
@@ -70,10 +70,10 @@ export const DELIVERY_WINDOWS: DeliveryWindowOption[] = [
   { id: 'express', label: 'Express', time: 'ASAP' },
 ]
 
-/** Legacy fallback for CityPricing.expressFlatFee — used when a city_configs
+/** Legacy fallback for CityPricing.expressBaseFee — used when a city_configs
  *  row was saved before the field existed. Admin edits the per-city value in
- *  Configuration → Pricing → Delivery windows. */
-export const EXPRESS_FLAT_FEE = 25
+ *  Configuration → Pricing → Base Fee Structure. */
+export const EXPRESS_BASE_FEE = 25
 
 // ── Window hours + date resolution ────────────────────────────────────────────
 // Local-time hour bounds for each scheduled window. Express has no window.
@@ -260,7 +260,7 @@ const PLACEHOLDER_PRICING: CityPricing = {
   mediumPackageFee: 2,
   largePackageFee: 4,
   fragileFee: 2,
-  expressFlatFee: 25,
+  expressBaseFee: 25,
   currency: 'CAD',
 }
 
@@ -287,7 +287,7 @@ export const CITY_CONFIGS: CityConfig[] = [
       mediumPackageFee: 2.00,
       largePackageFee: 4.00,
       fragileFee: 2.00,
-      expressFlatFee: 25.00,
+      expressBaseFee: 25.00,
       currency: 'CAD',
     },
     taxRates: {

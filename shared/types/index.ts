@@ -68,7 +68,7 @@ export interface ParcelInfo {
   prohibitedItemsDeclarationAccepted?: boolean
   prohibitedItemsDeclarationAcceptedAt?: string
   /** Customer-chosen delivery window. Rides in the parcel JSONB (no migration).
-   *  'express' = ASAP dispatch at flat rate. Absent on pre-feature orders. */
+   *  'express' = ASAP dispatch at a higher base fee. Absent on pre-feature orders. */
   deliveryWindow?: 'morning' | 'evening' | 'express'
 }
 

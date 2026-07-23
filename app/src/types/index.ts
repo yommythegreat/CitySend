@@ -99,7 +99,7 @@ export interface RouteInfo {
 
 /** Delivery scheduling choice made on the Pricing screen.
  *  'morning' / 'evening' are batched windows; 'express' is ASAP dispatch
- *  at a flat rate (see EXPRESS_FLAT_FEE in config/cityConfig.ts). */
+ *  priced from a higher base fee (see expressBaseFee in config/cityConfig.ts). */
 export type DeliveryWindow = 'morning' | 'evening' | 'express'
 
 export interface Draft {

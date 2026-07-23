@@ -241,8 +241,11 @@ function PricingTab() {
       <CityRail configs={state.cityConfigs} selected={selected} onSelect={handleCityChange} />
       <div style={{ flex: 1 }}>
         <Card title="Base Fee Structure">
-          <FieldRow label="Base Fee ($)" hint="Flat fee up to base distance">
+          <FieldRow label="Base Fee ($)" hint="Morning/Evening windows — flat fee up to base distance">
             <NumInput value={p.baseFee} onChange={v => update({ baseFee: v })} step={0.5} />
+          </FieldRow>
+          <FieldRow label="Express Base Fee ($)" hint="Express (ASAP) — replaces the base fee; distance, size and fragile fees still apply">
+            <NumInput value={p.expressBaseFee ?? 25} onChange={v => update({ expressBaseFee: v })} step={0.5} />
           </FieldRow>
           <FieldRow label="Base Distance (km)" hint="Km covered by base fee">
             <NumInput value={p.baseDistanceKm} onChange={v => update({ baseDistanceKm: v })} step={1} min={1} />
@@ -265,21 +268,6 @@ function PricingTab() {
         <Card title="Special Handling">
           <FieldRow label="Fragile Handling ($)" hint="Surcharge for fragile items">
             <NumInput value={p.fragileFee} onChange={v => update({ fragileFee: v })} step={0.5} />
-          </FieldRow>
-        </Card>
-        <Card title="Delivery Windows">
-          <FieldRow label="Morning · 10 AM – 2 PM" hint="Scheduled window">
-            <span style={{ fontSize: 13, color: 'var(--a-muted)' }}>
-              Standard rate — base ${(p.baseFee ?? 0).toFixed(2)} + distance + size fees
-            </span>
-          </FieldRow>
-          <FieldRow label="Evening · 6 PM – 10 PM" hint="Scheduled window">
-            <span style={{ fontSize: 13, color: 'var(--a-muted)' }}>
-              Standard rate — base ${(p.baseFee ?? 0).toFixed(2)} + distance + size fees
-            </span>
-          </FieldRow>
-          <FieldRow label="Express Flat Rate ($)" hint="ASAP delivery. Flat pre-tax price replacing base, distance, size and fragile fees; taxes still apply">
-            <NumInput value={p.expressFlatFee ?? 25} onChange={v => update({ expressFlatFee: v })} step={0.5} />
           </FieldRow>
         </Card>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
