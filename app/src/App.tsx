@@ -87,8 +87,8 @@ async function detectCityFromGeolocation(configs: CityConfig[]): Promise<CityId 
 // the landing page. sessionStorage is tab-scoped and auto-cleared when the tab
 // closes, so there's no cross-session bleed.
 //
-// Guest sessions intentionally bypass this: guests have no persistent identity,
-// so restoring a booking mid-flow after a refresh is impossible.
+// Guests are included: their anonymous Supabase session survives a refresh, so
+// the INITIAL_SESSION guest-restore path can pick the booking back up.
 
 const BOOKING_SCREENS: ScreenName[] = ['new-1', 'new-2', 'new-3', 'pricing', 'pay']
 const SESSION_SCREEN_KEY = 'cs_screen'
@@ -186,13 +186,14 @@ export default function App() {
   )
 
   // Persist active booking screen + draft to sessionStorage so a page refresh
-  // during a booking flow restores the user to where they left off (registered
-  // users only — guests are ephemeral and always start fresh).
+  // during a booking flow restores the user to where they left off. Guests are
+  // included: their anonymous Supabase session survives a refresh, and the
+  // INITIAL_SESSION guest-restore path re-applies this saved booking.
   // Guard: skip the write when neither screen nor the serialized draft changed
   // so typing in a form field doesn't repeatedly serialize the whole object.
   const _prevBookingKey = useRef('')
   useEffect(() => {
-    if (!user || user.id === 'guest') return
+    if (!user) return
     const key = BOOKING_SCREENS.includes(screen) ? `${screen}::${JSON.stringify(draft)}` : screen
     if (key === _prevBookingKey.current) return
     _prevBookingKey.current = key
@@ -474,6 +475,21 @@ export default function App() {
             syncPushTokenToSupabase(authUser.id).catch(err =>
               console.warn('[Push] token sync failed', err)
             )
+          } else if (session?.user?.is_anonymous && event === 'INITIAL_SESSION') {
+            // A lingering anonymous session on page load = a returning guest.
+            // Restore the ephemeral 'guest' identity so their booking/tracking
+            // survives a refresh; the anon session keeps backing DB reads/writes
+            // (orders RLS matches customer_id = anon uid). Guest logout signs the
+            // anon session out, so this only fires for guests who didn't leave.
+            // Mid-flow SIGNED_IN events from ensureGuestSession() stay ignored.
+            const guestUser: AuthUser = { id: 'guest', email: '', name: 'Guest' }
+            setUser(guestUser)
+            userRef.current = guestUser
+            applyRestoredSession()
+            setAuthChecked(true)
+            loadUserData(guestUser).catch(err =>
+              console.error('[Auth] loadUserData failed during guest restore', err)
+            )
           } else {
             // No session — show the auth screen immediately.
             setAuthChecked(true)
@@ -703,13 +719,15 @@ export default function App() {
     // ── Back navigation: pop the history stack ───────────────────────────────
     if (next === 'back') {
       const history = navHistoryRef.current
-      if (history.length > 0) {
-        const prev = history[history.length - 1]
-        navHistoryRef.current = history.slice(0, -1)
-        setScreen(prev)
-      } else {
-        // No history (e.g. direct deep-link or root tab) — fall back to home
-        setScreen('home')
+      // Fall back to home when there's no history (direct deep-link / root tab)
+      const prev = history.length > 0 ? history[history.length - 1] : 'home'
+      navHistoryRef.current = history.slice(0, -1)
+      setScreen(prev)
+      // Leaving an order view via back → clear its /tracking/:id URL so a
+      // refresh doesn't resurrect the order screen the user just left.
+      if (prev !== 'tracking' && prev !== 'scheduled' &&
+          window.location.pathname.startsWith('/tracking/')) {
+        window.history.replaceState({}, '', '/')
       }
       return
     }
@@ -745,8 +763,10 @@ export default function App() {
         setTrackingOrderId(newId)
         trackingOrderIdRef.current = newId
       }
+      // Push the /tracking/:id URL for both destinations so a refresh from
+      // either lands back on this order's tracking view (timeline pre-dispatch).
       const resolvedId = newId ?? trackingOrderIdRef.current
-      if (resolvedId && next === 'tracking') {
+      if (resolvedId) {
         window.history.pushState({}, '', `/tracking/${encodeURIComponent(resolvedId)}`)
       }
     } else {

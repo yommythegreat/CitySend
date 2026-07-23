@@ -45,11 +45,17 @@ export async function ensureGuestSession(): Promise<string | null> {
   return cachedUid
 }
 
-/** Sign out the anonymous session and clear the cache (guest logout). */
+/**
+ * Sign out the anonymous session and clear the cache (guest logout). Checks the
+ * live session rather than the cache: a guest restored on page load never called
+ * ensureGuestSession, so the cache alone would miss their session and a reload
+ * would resurrect the "logged-out" guest.
+ */
 export async function clearGuestSession(): Promise<void> {
-  const hadSession = cachedUid !== null
   cachedUid = null
-  if (isSupabaseConfigured && hadSession) {
-    try { await supabase.auth.signOut() } catch { /* best-effort */ }
-  }
+  if (!isSupabaseConfigured) return
+  try {
+    const { data: { session } } = await supabase.auth.getSession()
+    if (session?.user?.is_anonymous) await supabase.auth.signOut()
+  } catch { /* best-effort */ }
 }
