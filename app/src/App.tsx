@@ -909,6 +909,19 @@ export default function App() {
     setState(s => ({ ...s, pastDeliveries: [newDelivery, ...s.pastDeliveries] }))
   }, [draft, state.pastDeliveries, state.selectedCityId, user])
 
+  // ── Payment readiness gate ──────────────────────────────────────────────────
+  // The order is saved AFTER Stripe charges (onPaymentComplete). A guest write
+  // needs a live anonymous session or the RLS insert is rejected — which would
+  // mean "charged but not saved". PaymentScreen calls this BEFORE it charges and
+  // blocks payment unless it resolves true, so we never take money we can't save
+  // an order for. Registered users and the non-Supabase dev fallback are always
+  // ready; for a guest it (re)establishes the anonymous session.
+  const ensureReadyToPay = useCallback(async (): Promise<boolean> => {
+    const isRegistered = !!userRef.current && userRef.current.id !== 'guest'
+    if (isRegistered || !isSupabaseConfigured) return true
+    return (await ensureGuestSession()) !== null
+  }, [])
+
   // ── Screen renderer ─────────────────────────────────────────────────────────
   const renderScreen = () => {
     switch (screen) {
@@ -954,7 +967,7 @@ export default function App() {
           />
         )
       case 'pay':
-        return <PaymentScreen go={go} state={state} draft={draft} cityConfig={cityConfig} onPaymentComplete={onPaymentComplete} />
+        return <PaymentScreen go={go} state={state} draft={draft} cityConfig={cityConfig} onPaymentComplete={onPaymentComplete} ensureReadyToPay={ensureReadyToPay} />
       case 'scheduled':
         return <ScheduledDeliveryScreen go={go} orderId={trackingOrderId} cityConfig={cityConfig} />
 
