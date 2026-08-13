@@ -16,6 +16,10 @@ interface Props {
   draft: Draft
   cityConfig: CityConfig
   onPaymentComplete: (tip: number, authorizedTotal?: number) => Promise<void>
+  /** Resolves true only once the order can be saved (guest → anon session
+   *  established). Checked before charging so we never take money we can't
+   *  save an order for. */
+  ensureReadyToPay: () => Promise<boolean>
 }
 
 // ── Card element styles matching CitySend design system ─────────────────────
@@ -43,18 +47,40 @@ function ModeNotice({ label, color }: { label: string; color: string }) {
 
 // ── Inner form (needs stripe + elements context) ────────────────────────────
 function CheckoutForm({
-  clientSecret, priceTotal, onSuccess, isMock
+  clientSecret, priceTotal, onSuccess, isMock, ensureReadyToPay
 }: {
   clientSecret: string | null
   priceTotal: number
   onSuccess: () => Promise<void>
   isMock: boolean
+  ensureReadyToPay: () => Promise<boolean>
 }) {
   const stripe   = useStripe()
   const elements = useElements()
   const [error,          setError]          = useState<string | null>(null)
   const [processing,     setProcessing]     = useState(false)
   const [paymentRequest, setPaymentRequest] = useState<PaymentRequest | null>(null)
+  // Guest checkout can only save an order once an anonymous session exists.
+  // Establish it up-front so the pay controls stay disabled until we know the
+  // order will be saveable — otherwise a charge could succeed with no order.
+  const [sessionState, setSessionState] = useState<'checking' | 'ready' | 'error'>('checking')
+
+  useEffect(() => {
+    let cancelled = false
+    ensureReadyToPay()
+      .then(ok => { if (!cancelled) setSessionState(ok ? 'ready' : 'error') })
+      .catch(() => { if (!cancelled) setSessionState('error') })
+    return () => { cancelled = true }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const retrySession = () => {
+    setSessionState('checking')
+    setError(null)
+    ensureReadyToPay()
+      .then(ok => setSessionState(ok ? 'ready' : 'error'))
+      .catch(() => setSessionState('error'))
+  }
 
   // Keep clientSecret in a ref so the paymentmethod handler always uses the latest
   const clientSecretRef = useRef(clientSecret)
@@ -81,6 +107,13 @@ function CheckoutForm({
       if (!secret) {
         e.complete('fail')
         setError('Payment not ready — please try again')
+        return
+      }
+      // Never charge unless the order can be saved (guest → anon session).
+      if (!(await ensureReadyToPay())) {
+        e.complete('fail')
+        setSessionState('error')
+        setError('Could not start a secure session. Please retry.')
         return
       }
       setProcessing(true)
@@ -127,6 +160,13 @@ function CheckoutForm({
   const handleCardPay = async () => {
     setError(null)
 
+    // Never charge unless the order can be saved (guest → anon session).
+    if (!(await ensureReadyToPay())) {
+      setSessionState('error')
+      setError('Could not start a secure session. Please retry.')
+      return
+    }
+
     if (isMock || !stripe || !elements) {
       setProcessing(true)
       await new Promise(r => setTimeout(r, 1400))
@@ -157,8 +197,24 @@ function CheckoutForm({
 
   return (
     <>
+      {/* Session-readiness notice — a guest's anonymous session must exist
+          before we let any charge happen, or the order can't be saved. */}
+      {sessionState === 'error' && (
+        <div style={{
+          padding: '12px 14px', background: '#fffbeb', border: '1px solid #fcd34d',
+          borderRadius: 12, fontSize: 13, color: '#92400e', lineHeight: 1.5, marginBottom: 16,
+        }}>
+          Could not start a secure checkout session, so payment is paused to avoid
+          charging you without saving your order.{' '}
+          <button
+            onClick={retrySession}
+            style={{ background: 'none', border: 'none', padding: 0, color: '#92400e', fontWeight: 700, textDecoration: 'underline', cursor: 'pointer', font: 'inherit' }}
+          >Retry</button>
+        </div>
+      )}
+
       {/* ── Express checkout (Apple Pay / Google Pay) — shown when available ── */}
-      {paymentRequest && (
+      {paymentRequest && sessionState === 'ready' && (
         <>
           <div style={{ marginBottom: 16 }}>
             <div style={{ fontSize: 12, fontFamily: 'var(--cs-mono)', color: 'var(--cs-slate-500)', letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 10 }}>
@@ -213,13 +269,16 @@ function CheckoutForm({
       <Button
         kind="ink" size="lg" full
         onClick={handleCardPay}
-        disabled={processing || (!isMock && !clientSecret)}
-        icon={processing
+        disabled={processing || sessionState !== 'ready' || (!isMock && !clientSecret)}
+        icon={(processing || sessionState === 'checking')
           ? <div style={{ width: 16, height: 16, border: '2px solid rgba(255,255,255,.3)', borderTopColor: '#fff', borderRadius: 8, animation: 'cs-spin 0.7s linear infinite' }} />
           : <Lock color="#fff" size={16} />
         }
       >
-        {processing ? 'Processing…' : `Pay ${fmt(priceTotal)}`}
+        {processing            ? 'Processing…'
+          : sessionState === 'checking' ? 'Preparing secure checkout…'
+          : sessionState === 'error'    ? 'Checkout unavailable'
+          : `Pay ${fmt(priceTotal)}`}
       </Button>
 
       {/* Mode badge */}
@@ -232,7 +291,7 @@ function CheckoutForm({
 }
 
 // ── Outer screen ────────────────────────────────────────────────────────────
-export function PaymentScreen({ go, state, draft, cityConfig, onPaymentComplete }: Props) {
+export function PaymentScreen({ go, state, draft, cityConfig, onPaymentComplete, ensureReadyToPay }: Props) {
   const [tip, setTip]                   = useState(2)
   const [customTipRaw, setCustomTipRaw] = useState('')
   const [showCustom, setShowCustom]     = useState(false)
@@ -507,6 +566,7 @@ export function PaymentScreen({ go, state, draft, cityConfig, onPaymentComplete 
               priceTotal={price.total}
               onSuccess={handlePaymentComplete}
               isMock={isMock}
+              ensureReadyToPay={ensureReadyToPay}
             />
           </Elements>
         )}
