@@ -51,7 +51,9 @@ function CheckoutForm({
 }: {
   clientSecret: string | null
   priceTotal: number
-  onSuccess: () => Promise<void>
+  /** chargedTotal = the amount Stripe actually captured (confirmed intent), in
+   *  dollars. Undefined in mock/dev where nothing is charged. */
+  onSuccess: (chargedTotal?: number) => Promise<void>
   isMock: boolean
   ensureReadyToPay: () => Promise<boolean>
 }) {
@@ -144,7 +146,8 @@ function CheckoutForm({
         }
       }
 
-      await onSuccess()
+      // Save the order against the amount Stripe actually captured.
+      await onSuccess(typeof paymentIntent?.amount === 'number' ? paymentIntent.amount / 100 : undefined)
     })
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stripe, isMock])
@@ -189,7 +192,8 @@ function CheckoutForm({
       setError(stripeErr.message ?? 'Payment failed')
       setProcessing(false)
     } else if (paymentIntent?.status === 'succeeded') {
-      await onSuccess()
+      // Save the order against the amount Stripe actually captured.
+      await onSuccess(typeof paymentIntent.amount === 'number' ? paymentIntent.amount / 100 : undefined)
     }
   }
 
@@ -328,8 +332,19 @@ export function PaymentScreen({ go, state, draft, cityConfig, onPaymentComplete,
   // We send pricing inputs (not the computed total) so the server can
   // recompute the authoritative charge amount independently — preventing
   // a tampered client from paying an arbitrary amount.
+  //
+  // Each tip change supersedes the previous intent: we drop the old client
+  // secret immediately (so a stale amount can never be the one confirmed) and
+  // ignore any out-of-order response from a superseded request via reqId — so
+  // the intent that gets charged always matches the current tip. Without this,
+  // paying just after a tip change could confirm the previous amount while the
+  // order saved the new one (charge/record divergence).
+  const intentReqRef = useRef(0)
   useEffect(() => {
+    const reqId = ++intentReqRef.current
     setIntentLoading(true)
+    setClientSecret(null)
+    setAuthorizedTotal(undefined)
     fetch('/api/create-payment-intent', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -345,6 +360,7 @@ export function PaymentScreen({ go, state, draft, cityConfig, onPaymentComplete,
     })
       .then(r => r.json())
       .then(d => {
+        if (reqId !== intentReqRef.current) return  // superseded by a newer tip
         if (d.mock || !d.clientSecret) {
           if (import.meta.env.DEV) { setIsMock(true) }
           // In production, leave clientSecret null — CheckoutForm will show an error
@@ -354,16 +370,22 @@ export function PaymentScreen({ go, state, draft, cityConfig, onPaymentComplete,
         }
       })
       .catch(() => {
+        if (reqId !== intentReqRef.current) return
         if (import.meta.env.DEV) { setIsMock(true) }
         // In production, leave clientSecret null — CheckoutForm will show an error
       })
-      .finally(() => setIntentLoading(false))
+      .finally(() => {
+        if (reqId === intentReqRef.current) setIntentLoading(false)
+      })
   }, [tip])
 
-  const handlePaymentComplete = async () => {
+  const handlePaymentComplete = async (chargedTotal?: number) => {
     setOrderError(null)
     try {
-      await onPaymentComplete(tip, authorizedTotal)
+      // Prefer the amount Stripe actually charged (from the confirmed intent)
+      // over the client's tracked value, so the saved order can never disagree
+      // with the charge.
+      await onPaymentComplete(tip, chargedTotal ?? authorizedTotal)
       // Express → straight to live tracking (finding driver). Morning/Evening →
       // the Scheduled Delivery confirmation screen (no live tracking yet).
       go((draft.deliveryWindow ?? 'morning') === 'express' ? 'tracking' : 'scheduled')

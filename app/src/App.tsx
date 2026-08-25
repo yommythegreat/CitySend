@@ -824,8 +824,15 @@ export default function App() {
     const isExpress = deliveryWindow === 'express'
     const win       = isExpress ? null : resolveWindow(deliveryWindow, new Date())
     const initialStatus = isExpress ? 'new' : 'scheduled'
-    // If the server returned an authoritative total, trust it over the client-computed value
-    if (authorizedTotal !== undefined) breakdown.total = authorizedTotal
+    // Trust the authoritative total (the amount Stripe actually captured) over
+    // the client-computed value, and reconcile the tip to it — everything except
+    // the tip is server-fixed, so tip = charged − subtotal-with-tax. Keeps the
+    // saved breakdown exactly consistent with the charge even if the displayed
+    // tip and the confirmed intent ever diverged.
+    if (authorizedTotal !== undefined) {
+      breakdown.total = authorizedTotal
+      breakdown.tip   = Math.max(0, Math.round((authorizedTotal - breakdown.subtotalWithTax) * 100) / 100)
+    }
 
     const newDelivery: Delivery = {
       id:     orderId.replace(/^CS-/, ''),
