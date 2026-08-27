@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { Button } from '../components/Button'
 import { Check, Clock, Package } from '../components/Icons'
 import { DeliveryTimeline } from '../components/DeliveryTimeline'
+import { HandoffCodeCard } from '../components/HandoffCodeCard'
 import { getOrderById, subscribeToOrderById, type CustomerOrder } from '../utils/orderStore'
 import { fmt } from '../utils/pricing'
 import { DELIVERY_WINDOWS } from '../config/cityConfig'
@@ -71,6 +72,19 @@ export function ScheduledDeliveryScreen({ go, orderId, cityConfig }: Props) {
       </div>
 
       <div style={{ flex: 1, padding: '0 20px', overflowY: 'auto', scrollbarWidth: 'none' }}>
+
+        {/* Handoff code — the key action on this screen, shown first so it's
+            visible without scrolling past the timeline */}
+        {order?.handoffCode && (
+          <HandoffCodeCard
+            code={order.handoffCode}
+            recipientPhone={order.dropoff?.phone}
+            recipientName={order.dropoff?.name}
+            deliveryType={order.deliveryType ?? order.parcel?.deliveryWindow}
+            windowStart={order.deliveryWindowStart}
+            style={{ marginBottom: 10 }}
+          />
+        )}
 
         {/* Timeline */}
         <div style={{ background: '#fff', borderRadius: 18, border: '1px solid var(--cs-slate-100)', padding: 18, marginBottom: 10 }}>
