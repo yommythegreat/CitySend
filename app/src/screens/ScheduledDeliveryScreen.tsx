@@ -83,7 +83,12 @@ export function ScheduledDeliveryScreen({ go, orderId, cityConfig }: Props) {
 
         {/* Handoff code — available immediately so the sender can relay it */}
         {order?.handoffCode && (
-          <HandoffCodeCard code={order.handoffCode} style={{ marginBottom: 10 }} />
+          <HandoffCodeCard
+            code={order.handoffCode}
+            recipientPhone={order.dropoff?.phone}
+            recipientName={order.dropoff?.name}
+            style={{ marginBottom: 10 }}
+          />
         )}
 
         {/* Route */}

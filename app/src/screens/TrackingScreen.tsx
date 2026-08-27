@@ -674,7 +674,12 @@ export function TrackingScreen({ go, draft, cityConfig, orderId, user }: Props) 
 
           {/* Handoff code — available immediately so the sender can relay it */}
           {order.handoffCode && (
-            <HandoffCodeCard code={order.handoffCode} style={{ marginTop: 12 }} />
+            <HandoffCodeCard
+              code={order.handoffCode}
+              recipientPhone={order.dropoff?.phone}
+              recipientName={order.dropoff?.name}
+              style={{ marginTop: 12 }}
+            />
           )}
         </div>
       </div>
@@ -889,7 +894,12 @@ export function TrackingScreen({ go, draft, cityConfig, orderId, user }: Props) 
                 sender always has it to relay (this layout only renders for
                 active, non-terminal statuses). */}
             {order?.handoffCode && (
-              <HandoffCodeCard code={order.handoffCode} style={{ margin: '14px 20px 0' }} />
+              <HandoffCodeCard
+                code={order.handoffCode}
+                recipientPhone={order.dropoff?.phone}
+                recipientName={order.dropoff?.name}
+                style={{ margin: '14px 20px 0' }}
+              />
             )}
 
             {/* Guest signup nudge — dismissible, non-blocking */}
