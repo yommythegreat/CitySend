@@ -9,9 +9,46 @@ import React from 'react'
  *
  * When a recipient phone is provided, a "Text the code to recipient" button
  * opens the sender's native Messages app pre-filled with the recipient's number
- * and a short message (code + instruction + a CitySend plug). The sender taps
- * send — no server-side messaging, works for guests and registered users alike.
+ * and a short message. The message is delivery-type aware: Express says the
+ * courier is on the way; scheduled says which window it's coming in (so a
+ * recipient who reads it hours early isn't misled into expecting it now).
  */
+
+type DeliveryType = 'express' | 'morning' | 'evening' | undefined
+
+const ADVERT = 'Need to send something across town? visit www.citysend.ca'
+
+/** e.g. "this evening (6–10 PM)", "tomorrow morning (10 AM–2 PM)",
+ *  "evening (6–10 PM) on Wed, Aug 27" — never misleadingly relative. */
+function windowPhrase(type: 'morning' | 'evening', windowStart?: string): string {
+  const period    = type === 'evening' ? 'evening' : 'morning'
+  const timeRange  = type === 'evening' ? '6–10 PM' : '10 AM–2 PM'
+  if (!windowStart) return `in the ${period} (${timeRange})`
+
+  const start = new Date(windowStart)
+  const now   = new Date()
+  const startDay = new Date(start.getFullYear(), start.getMonth(), start.getDate())
+  const today    = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const diffDays = Math.round((startDay.getTime() - today.getTime()) / 86_400_000)
+
+  const day =
+    diffDays <= 0 ? `this ${period}`
+    : diffDays === 1 ? `tomorrow ${period}`
+    : `${period} on ${start.toLocaleDateString('en-CA', { weekday: 'short', month: 'short', day: 'numeric' })}`
+
+  return `${day} (${timeRange})`
+}
+
+function buildMessage(code: string, deliveryType: DeliveryType, windowStart: string | undefined, recipientName?: string): string {
+  const hi = `Hi${recipientName ? ' ' + recipientName.split(' ')[0] : ''}`
+  if (deliveryType === 'morning' || deliveryType === 'evening') {
+    return `${hi} — you've got a CitySend parcel scheduled for delivery ${windowPhrase(deliveryType, windowStart)}. ` +
+      `Your handoff code is ${code} — give it to the driver when they arrive. ${ADVERT}`
+  }
+  // Express (or unknown → treat as immediate)
+  return `${hi} — a CitySend courier is on the way with a parcel for you. ` +
+    `Your handoff code is ${code}. Give it to the driver at the door. ${ADVERT}`
+}
 
 /** Build a cross-platform sms: deep link. iOS uses `&body=`, others `?body=`. */
 function smsHref(phone: string, body: string): string {
@@ -22,19 +59,17 @@ function smsHref(phone: string, body: string): string {
 }
 
 export function HandoffCodeCard({
-  code, recipientPhone, recipientName, style,
+  code, recipientPhone, recipientName, deliveryType, windowStart, style,
 }: {
   code: string
   recipientPhone?: string
   recipientName?: string
+  deliveryType?: DeliveryType
+  windowStart?: string
   style?: React.CSSProperties
 }) {
   const canText = !!recipientPhone && recipientPhone.replace(/[^\d]/g, '').length >= 7
-
-  const message =
-    `Hi${recipientName ? ' ' + recipientName.split(' ')[0] : ''} — a CitySend courier is bringing you a parcel. ` +
-    `Your handoff code is ${code}. Give it to the driver at the door. ` +
-    `Need to send something across town? citysend.ca`
+  const message = buildMessage(code, deliveryType, windowStart, recipientName)
 
   return (
     <div style={{

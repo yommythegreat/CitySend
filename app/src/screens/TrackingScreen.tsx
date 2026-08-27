@@ -678,6 +678,8 @@ export function TrackingScreen({ go, draft, cityConfig, orderId, user }: Props) 
               code={order.handoffCode}
               recipientPhone={order.dropoff?.phone}
               recipientName={order.dropoff?.name}
+              deliveryType={order.deliveryType ?? order.parcel?.deliveryWindow}
+              windowStart={order.deliveryWindowStart}
               style={{ marginTop: 12 }}
             />
           )}
@@ -898,6 +900,8 @@ export function TrackingScreen({ go, draft, cityConfig, orderId, user }: Props) 
                 code={order.handoffCode}
                 recipientPhone={order.dropoff?.phone}
                 recipientName={order.dropoff?.name}
+                deliveryType={order.deliveryType ?? order.parcel?.deliveryWindow}
+                windowStart={order.deliveryWindowStart}
                 style={{ margin: '14px 20px 0' }}
               />
             )}

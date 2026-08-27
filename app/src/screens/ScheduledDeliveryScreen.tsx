@@ -73,6 +73,19 @@ export function ScheduledDeliveryScreen({ go, orderId, cityConfig }: Props) {
 
       <div style={{ flex: 1, padding: '0 20px', overflowY: 'auto', scrollbarWidth: 'none' }}>
 
+        {/* Handoff code — the key action on this screen, shown first so it's
+            visible without scrolling past the timeline */}
+        {order?.handoffCode && (
+          <HandoffCodeCard
+            code={order.handoffCode}
+            recipientPhone={order.dropoff?.phone}
+            recipientName={order.dropoff?.name}
+            deliveryType={order.deliveryType ?? order.parcel?.deliveryWindow}
+            windowStart={order.deliveryWindowStart}
+            style={{ marginBottom: 10 }}
+          />
+        )}
+
         {/* Timeline */}
         <div style={{ background: '#fff', borderRadius: 18, border: '1px solid var(--cs-slate-100)', padding: 18, marginBottom: 10 }}>
           <div style={{ fontFamily: 'var(--cs-mono)', fontSize: 10, color: 'var(--cs-slate-500)', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 14 }}>
@@ -80,16 +93,6 @@ export function ScheduledDeliveryScreen({ go, orderId, cityConfig }: Props) {
           </div>
           <DeliveryTimeline status={status} />
         </div>
-
-        {/* Handoff code — available immediately so the sender can relay it */}
-        {order?.handoffCode && (
-          <HandoffCodeCard
-            code={order.handoffCode}
-            recipientPhone={order.dropoff?.phone}
-            recipientName={order.dropoff?.name}
-            style={{ marginBottom: 10 }}
-          />
-        )}
 
         {/* Route */}
         <div style={{ background: '#fff', borderRadius: 18, border: '1px solid var(--cs-slate-100)', padding: 18, marginBottom: 10 }}>
