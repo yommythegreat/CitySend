@@ -9,6 +9,7 @@ import { getMessages, sendMessage, subscribeToMessages, markMessagesRead, type M
 import { subscribeToDriverLocation } from '../utils/locationStore'
 import { DELIVERY_WINDOWS } from '../config/cityConfig'
 import { DeliveryTimeline } from '../components/DeliveryTimeline'
+import { HandoffCodeCard } from '../components/HandoffCodeCard'
 import type { CityConfig } from '../config/cityConfig'
 import type { AuthUser, Draft, NavOptions, RouteInfo, ScreenName } from '../types'
 
@@ -670,6 +671,11 @@ export function TrackingScreen({ go, draft, cityConfig, orderId, user }: Props) 
             </div>
             <DeliveryTimeline status={status} />
           </div>
+
+          {/* Handoff code — available immediately so the sender can relay it */}
+          {order.handoffCode && (
+            <HandoffCodeCard code={order.handoffCode} style={{ marginTop: 12 }} />
+          )}
         </div>
       </div>
     )
@@ -879,36 +885,11 @@ export function TrackingScreen({ go, draft, cityConfig, orderId, user }: Props) 
               )
             })()}
 
-            {/* Handoff code — shown when driver is on the way to drop-off */}
-            {order?.handoffCode && (status === 'in_transit' || status === 'picked_up') && (
-              <div style={{
-                margin: '14px 20px 0',
-                padding: '14px 16px',
-                background: 'var(--cs-ink)',
-                borderRadius: 16,
-                display: 'flex', alignItems: 'center', gap: 14,
-              }}>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontFamily: 'var(--cs-mono)', fontSize: 10, color: 'rgba(255,255,255,.5)', letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 6 }}>
-                    Handoff code
-                  </div>
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    {order.handoffCode.split('').map((d, i) => (
-                      <div key={i} style={{
-                        width: 44, height: 52, borderRadius: 10,
-                        background: 'rgba(255,255,255,.1)',
-                        border: '1.5px solid rgba(255,255,255,.18)',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontSize: 24, fontWeight: 700, fontFamily: 'var(--cs-mono)',
-                        color: '#fff', letterSpacing: 0,
-                      }}>{d}</div>
-                    ))}
-                  </div>
-                  <div style={{ fontSize: 12, color: 'rgba(255,255,255,.45)', marginTop: 8, lineHeight: 1.4 }}>
-                    Share this code with the person receiving the parcel — the driver will ask for it at the door.
-                  </div>
-                </div>
-              </div>
+            {/* Handoff code — available from booking through delivery so the
+                sender always has it to relay (this layout only renders for
+                active, non-terminal statuses). */}
+            {order?.handoffCode && (
+              <HandoffCodeCard code={order.handoffCode} style={{ margin: '14px 20px 0' }} />
             )}
 
             {/* Guest signup nudge — dismissible, non-blocking */}

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { Button } from '../components/Button'
 import { Check, Clock, Package } from '../components/Icons'
 import { DeliveryTimeline } from '../components/DeliveryTimeline'
+import { HandoffCodeCard } from '../components/HandoffCodeCard'
 import { getOrderById, subscribeToOrderById, type CustomerOrder } from '../utils/orderStore'
 import { fmt } from '../utils/pricing'
 import { DELIVERY_WINDOWS } from '../config/cityConfig'
@@ -79,6 +80,11 @@ export function ScheduledDeliveryScreen({ go, orderId, cityConfig }: Props) {
           </div>
           <DeliveryTimeline status={status} />
         </div>
+
+        {/* Handoff code — available immediately so the sender can relay it */}
+        {order?.handoffCode && (
+          <HandoffCodeCard code={order.handoffCode} style={{ marginBottom: 10 }} />
+        )}
 
         {/* Route */}
         <div style={{ background: '#fff', borderRadius: 18, border: '1px solid var(--cs-slate-100)', padding: 18, marginBottom: 10 }}>
