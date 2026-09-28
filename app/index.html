@@ -16,9 +16,12 @@
 
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <title>CitySend — Same-day delivery</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+    <!-- Fonts are self-hosted (bundled via @fontsource in main.tsx). -->
+    <!-- Warm up connections to the backends we're about to hit, so the first
+         Supabase query and the checkout don't pay DNS + TLS setup cost. -->
+    <link rel="preconnect" href="%VITE_SUPABASE_URL%" crossorigin />
+    <link rel="preconnect" href="https://js.stripe.com" />
+    <link rel="preconnect" href="https://api.stripe.com" crossorigin />
   </head>
   <body>
     <div id="root"></div>

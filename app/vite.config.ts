@@ -19,11 +19,17 @@ export default defineConfig({
     chunkSizeWarningLimit: 600,
     rollupOptions: {
       output: {
-        manualChunks: {
-          'vendor-react':    ['react', 'react-dom'],
-          'vendor-leaflet':  ['leaflet'],
-          'vendor-supabase': ['@supabase/supabase-js'],
-          'vendor-stripe':   ['@stripe/stripe-js', '@stripe/react-stripe-js'],
+        // Path-based (not the object form): with the object form Rollup parked
+        // shared React interop helpers inside vendor-stripe, so the entry
+        // imported — and preloaded — all of Stripe at launch. Matching by path
+        // keeps each vendor chunk to its own package; Stripe and Leaflet now
+        // load only with the (lazy) Payment and Tracking screens.
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return
+          if (/[\\/]node_modules[\\/](react|react-dom|scheduler)[\\/]/.test(id)) return 'vendor-react'
+          if (/[\\/]node_modules[\\/]leaflet[\\/]/.test(id))                    return 'vendor-leaflet'
+          if (/[\\/]node_modules[\\/]@supabase[\\/]/.test(id))                  return 'vendor-supabase'
+          if (/[\\/]node_modules[\\/]@stripe[\\/]/.test(id))                    return 'vendor-stripe'
         },
       },
     },

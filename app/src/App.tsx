@@ -1,30 +1,46 @@
-import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react'
+import React, { useState, useCallback, useEffect, useRef, useMemo, Suspense } from 'react'
+// Eager: what a user sees first (home, booking flow, auth, web landing).
 import { HomeScreen }          from './screens/HomeScreen'
 import { NewRequestScreen }    from './screens/NewRequestScreen'
 import { PricingScreen }       from './screens/PricingScreen'
-import { PaymentScreen }       from './screens/PaymentScreen'
-import { TrackingScreen }      from './screens/TrackingScreen'
-import { HistoryScreen }       from './screens/HistoryScreen'
-import { BillingScreen }       from './screens/BillingScreen'
-import { NotificationsScreen } from './screens/NotificationsScreen'
 import { AuthScreen }          from './screens/AuthScreen'
-import { ForgotPasswordScreen }  from './screens/ForgotPasswordScreen'
-import { ResetPasswordScreen }   from './screens/ResetPasswordScreen'
 import { LandingScreen }        from './screens/LandingScreen'
-import { ProfileScreen }       from './screens/ProfileScreen'
-import { SettingsScreen }      from './screens/SettingsScreen'
-import { AddPlaceScreen }      from './screens/AddPlaceScreen'
-import { CityBlockedScreen }   from './screens/CityBlockedScreen'
-import { PrivacyScreen }       from './screens/PrivacyScreen'
-import { TermsScreen }         from './screens/TermsScreen'
-import { AboutScreen }         from './screens/AboutScreen'
 import { TabBar }              from './components/TabBar'
+import { lazyScreen }          from './lib/lazyScreen'
+
+// Deferred: split out of the startup bundle (Tracking carries Leaflet, Payment
+// carries Stripe) and preloaded once the first frame is idle — see the
+// preload effect in App. Keeps launch fast without a wait on navigation.
+const PaymentScreen        = lazyScreen(() => import('./screens/PaymentScreen').then(m => m.PaymentScreen))
+const TrackingScreen       = lazyScreen(() => import('./screens/TrackingScreen').then(m => m.TrackingScreen))
+const ScheduledDeliveryScreen = lazyScreen(() => import('./screens/ScheduledDeliveryScreen').then(m => m.ScheduledDeliveryScreen))
+const HistoryScreen        = lazyScreen(() => import('./screens/HistoryScreen').then(m => m.HistoryScreen))
+const BillingScreen        = lazyScreen(() => import('./screens/BillingScreen').then(m => m.BillingScreen))
+const NotificationsScreen  = lazyScreen(() => import('./screens/NotificationsScreen').then(m => m.NotificationsScreen))
+const ForgotPasswordScreen = lazyScreen(() => import('./screens/ForgotPasswordScreen').then(m => m.ForgotPasswordScreen))
+const ResetPasswordScreen  = lazyScreen(() => import('./screens/ResetPasswordScreen').then(m => m.ResetPasswordScreen))
+const ProfileScreen        = lazyScreen(() => import('./screens/ProfileScreen').then(m => m.ProfileScreen))
+const SettingsScreen       = lazyScreen(() => import('./screens/SettingsScreen').then(m => m.SettingsScreen))
+const AddPlaceScreen       = lazyScreen(() => import('./screens/AddPlaceScreen').then(m => m.AddPlaceScreen))
+const CityBlockedScreen    = lazyScreen(() => import('./screens/CityBlockedScreen').then(m => m.CityBlockedScreen))
+const PrivacyScreen        = lazyScreen(() => import('./screens/PrivacyScreen').then(m => m.PrivacyScreen))
+const TermsScreen          = lazyScreen(() => import('./screens/TermsScreen').then(m => m.TermsScreen))
+const AboutScreen          = lazyScreen(() => import('./screens/AboutScreen').then(m => m.AboutScreen))
+
+// Most-likely-next screens first, so they land before the rarely used ones.
+const DEFERRED_SCREENS = [
+  TrackingScreen, PaymentScreen, ScheduledDeliveryScreen, HistoryScreen,
+  NotificationsScreen, ProfileScreen, SettingsScreen, AddPlaceScreen,
+  BillingScreen, CityBlockedScreen, ForgotPasswordScreen, ResetPasswordScreen,
+  PrivacyScreen, TermsScreen, AboutScreen,
+]
 import { BLANK_DRAFT, INITIAL_STATE } from './data/mock'
 import { getCityConfig, getCityConfigByDetectedName, computeOrderPrice, canStartOrder } from './utils/serviceAvailability'
 import { fetchCityConfigs, subscribeToCityConfigs } from './utils/configStore'
 import { pushNewOrder, getCustomerOrders, type CustomerOrder } from './utils/orderStore'
 import { pushCustomerNotif, NOTIFS_STORAGE_KEY, subscribeToCustomerNotifs, fetchCustomerNotifs } from './utils/notificationStore'
 import { syncPushTokenToSupabase } from './utils/pushTokenStore'
+import { requestPushPermissionAfterOrder } from './lib/capacitor'
 import { supabase, isSupabaseConfigured } from './lib/supabase'
 import { ensureGuestSession, clearGuestSession } from './lib/guestSession'
 import { Capacitor } from '@capacitor/core'
@@ -32,7 +48,6 @@ import { Capacitor } from '@capacitor/core'
 const IS_NATIVE = Capacitor.isNativePlatform()
 import { CITY_CONFIGS, resolveWindow, defaultDeliveryWindow } from './config/cityConfig'
 import type { CityConfig } from './config/cityConfig'
-import { ScheduledDeliveryScreen } from './screens/ScheduledDeliveryScreen'
 import type { ScreenName, Draft, AppState, NavOptions, AuthUser, CityId, Delivery } from './types'
 
 const TAB_SCREENS: ScreenName[] = ['home', 'history', 'notifications']
@@ -184,6 +199,29 @@ export default function App() {
   const [trackingOrderId, setTrackingOrderId] = useState<string | undefined>(
     () => parseTrackingId(),
   )
+
+  // ── Launch performance ─────────────────────────────────────────────────────
+  // 1. Hide the native splash the instant the first real screen has painted
+  //    (auth resolved → rAF → next paint), instead of a fixed timer. The splash
+  //    covers the blank pre-auth frame, then gets out of the way immediately.
+  useEffect(() => {
+    if (!authChecked || !IS_NATIVE) return
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      import('@capacitor/splash-screen')
+        .then(({ SplashScreen }) => SplashScreen.hide({ fadeOutDuration: 200 }))
+        .catch(() => {})
+    }))
+  }, [authChecked])
+
+  // 2. Once the first screen is up and the main thread is idle, preload every
+  //    deferred screen chunk (most-likely-next first) so navigation never waits.
+  useEffect(() => {
+    if (!authChecked) return
+    const run = () => { DEFERRED_SCREENS.forEach(s => { s.preload().catch(() => {}) }) }
+    const ric = (window as any).requestIdleCallback as ((cb: () => void, o?: { timeout: number }) => number) | undefined
+    if (ric) ric(run, { timeout: 2000 })
+    else setTimeout(run, 1200)   // Safari/WKWebView has no requestIdleCallback
+  }, [authChecked])
 
   // Persist active booking screen + draft to sessionStorage so a page refresh
   // during a booking flow restores the user to where they left off. Guests are
@@ -914,6 +952,17 @@ export default function App() {
     })
 
     setState(s => ({ ...s, pastDeliveries: [newDelivery, ...s.pastDeliveries] }))
+
+    // Ask for push permission now — right after booking, "get updates on your
+    // delivery" is obviously useful (vs a cold prompt at launch). Fire-and-
+    // forget; once granted, sync the token for registered users (the token
+    // arrives asynchronously via the registration listener, hence the delay).
+    requestPushPermissionAfterOrder().then(() => {
+      const uid = userRef.current?.id
+      if (uid && uid !== 'guest') {
+        setTimeout(() => { syncPushTokenToSupabase(uid).catch(() => {}) }, 3000)
+      }
+    })
   }, [draft, state.pastDeliveries, state.selectedCityId, user])
 
   // ── Payment readiness gate ──────────────────────────────────────────────────
@@ -1077,7 +1126,11 @@ export default function App() {
 
   return (
     <div className="cs-shell">
-      {renderScreen()}
+      {/* Only hit when a deferred screen is opened before its idle preload
+          landed — the shell + tab bar stay put while the chunk loads. */}
+      <Suspense fallback={null}>
+        {renderScreen()}
+      </Suspense>
       {TAB_SCREENS.includes(screen) && <TabBar screen={screen} go={go} unreadCount={unreadCount} />}
     </div>
   )
