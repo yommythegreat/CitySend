@@ -58,7 +58,10 @@ export async function setupCapacitor(): Promise<void> {
   ])
 
   // ── Status bar ──────────────────────────────────────────────────────────────
-  StatusBar.setStyle({ style: Style.Dark }).catch(() => {})
+  // Style.Light = DARK text for light backgrounds (Capacitor names the style by
+  // the background, not the text). The UI is always light, so the clock and
+  // icons must be dark — Style.Dark rendered them white-on-white.
+  StatusBar.setStyle({ style: Style.Light }).catch(() => {})
   StatusBar.setBackgroundColor({ color: '#ffffff' }).catch(() => {})
 
   // ── Push notifications ──────────────────────────────────────────────────────
