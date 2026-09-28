@@ -7,7 +7,9 @@ const config: CapacitorConfig = {
 
   plugins: {
     SplashScreen: {
-      launchShowDuration: 1200,
+      // App.tsx hides the splash as soon as the first real screen paints, so
+      // there's no fixed wait. setupCapacitor() has a safety timeout.
+      launchAutoHide:     false,
       backgroundColor:    '#ffffff',
       showSpinner:        false,
     },

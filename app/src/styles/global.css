@@ -52,6 +52,22 @@ button {
   cursor: pointer;
 }
 
+/* Snappy, native-feeling taps:
+   • touch-action: manipulation kills the double-tap-to-zoom delay, so taps
+     fire immediately.
+   • A quick press-down on :active gives instant tactile feedback before the
+     action completes (inline transform/transition styles still win, so
+     components with their own motion are unaffected). */
+button, a, [role="button"] {
+  touch-action: manipulation;
+}
+button:not(:disabled):active,
+a:active,
+[role="button"]:active {
+  transform: scale(0.97);
+  transition: transform 60ms ease-out;
+}
+
 input {
   font-family: var(--cs-font);
 }

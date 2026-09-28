@@ -416,6 +416,61 @@ function CityPanel({
   )
 }
 
+// ── Delete account (Apple 5.1.1(v): account creation requires in-app deletion) ──
+
+function DeleteAccountSection() {
+  const [confirming, setConfirming] = useState(false)
+  const [loading,    setLoading]    = useState(false)
+  const [err,        setErr]        = useState<string | null>(null)
+
+  const del = async () => {
+    setErr(null)
+    setLoading(true)
+    try {
+      if (isSupabaseConfigured) {
+        // SECURITY DEFINER RPC deletes the caller's auth user (cascades to
+        // profile). See migration 022_delete_own_account.sql.
+        const { error } = await supabase.rpc('delete_own_account')
+        if (error) { setErr(error.message); setLoading(false); return }
+        await supabase.auth.signOut()
+        // onAuthStateChange SIGNED_OUT resets the app to the landing screen.
+      }
+    } catch {
+      setErr('Could not delete your account. Please try again.')
+      setLoading(false)
+    }
+  }
+
+  return (
+    <>
+      <SectionHeader label="Danger zone" />
+      <div style={{ background: '#fff', borderRadius: 16, border: '1px solid var(--cs-slate-100)', overflow: 'hidden', marginBottom: 16 }}>
+        {!confirming ? (
+          <RowBtn label="Delete account" sub="Permanently remove your account and data" danger onClick={() => setConfirming(true)} />
+        ) : (
+          <div style={{ padding: '14px 16px' }}>
+            <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--cs-ink)', marginBottom: 4 }}>Delete your account?</div>
+            <div style={{ fontSize: 13, color: 'var(--cs-slate-500)', lineHeight: 1.5, marginBottom: 12 }}>
+              This permanently deletes your CitySend account and profile. It can't be undone. Past delivery records are kept for legal and accounting purposes.
+            </div>
+            {err && <div style={{ fontSize: 13, color: 'var(--cs-err)', marginBottom: 10 }}>{err}</div>}
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={() => { setConfirming(false); setErr(null) }} disabled={loading}
+                style={{ flex: 1, padding: '11px 0', border: '1.5px solid var(--cs-slate-200)', borderRadius: 12, background: '#fff', fontFamily: 'var(--cs-font)', fontSize: 14, fontWeight: 500, cursor: loading ? 'default' : 'pointer', color: 'var(--cs-slate-600)' }}>
+                Cancel
+              </button>
+              <button onClick={del} disabled={loading}
+                style={{ flex: 1, padding: '11px 0', border: 'none', borderRadius: 12, background: 'var(--cs-err)', color: '#fff', fontFamily: 'var(--cs-font)', fontSize: 14, fontWeight: 600, cursor: loading ? 'default' : 'pointer', opacity: loading ? 0.7 : 1 }}>
+                {loading ? 'Deleting…' : 'Delete permanently'}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </>
+  )
+}
+
 // ── Main settings screen ───────────────────────────────────────────────────
 
 const notifPrefsKey = (userId: string) => `cs_notif_prefs_${userId}`
@@ -596,6 +651,8 @@ export function SettingsScreen({ go, state, setState, onCityChange, configs, use
             <Divider />
             <RowBtn label="Terms of Service" onClick={() => go('terms')} />
           </div>
+
+          <DeleteAccountSection />
 
           <div style={{ textAlign: 'center', marginTop: 4, marginBottom: 24 }}>
             <div style={{ fontSize: 11, color: 'var(--cs-slate-400)', fontFamily: 'var(--cs-mono)', letterSpacing: 0.8 }}>CITYSEND v1.1.0 · citysend.ca</div>

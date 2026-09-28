@@ -7,6 +7,7 @@ import { Back, Lock } from '../components/Icons'
 import { fmt } from '../utils/pricing'
 import { computeOrderPrice } from '../utils/serviceAvailability'
 import { stripePromise } from '../lib/stripe'
+import { apiUrl } from '../lib/apiBase'
 import type { CityConfig } from '../config/cityConfig'
 import type { Draft, ScreenName, AppState } from '../types'
 
@@ -345,7 +346,7 @@ export function PaymentScreen({ go, state, draft, cityConfig, onPaymentComplete,
     setIntentLoading(true)
     setClientSecret(null)
     setAuthorizedTotal(undefined)
-    fetch('/api/create-payment-intent', {
+    fetch(apiUrl('/api/create-payment-intent'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
