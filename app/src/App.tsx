@@ -79,34 +79,54 @@ function parseLegalScreen(pathname = window.location.pathname): ScreenName | und
 
 // ── Geolocation city detection ────────────────────────────────────────────────
 
-async function detectCityFromGeolocation(configs: CityConfig[]): Promise<CityId | null> {
+/**
+ * Device position, or null if unavailable/denied.
+ *
+ * Native uses the Capacitor Geolocation plugin (CoreLocation), so iOS shows
+ * only the app's own permission prompt. The web API inside the WebView adds a
+ * second, website-style prompt ("localhost would like to use your current
+ * location… This website…"), which reads as a wrapped web page to App Review.
+ */
+async function getDevicePosition(): Promise<{ latitude: number; longitude: number } | null> {
+  if (IS_NATIVE) {
+    try {
+      const { Geolocation } = await import('@capacitor/geolocation')
+      const pos = await Geolocation.getCurrentPosition({ timeout: 8000, maximumAge: 60_000 })
+      return pos.coords
+    } catch {
+      return null
+    }
+  }
   if (!('geolocation' in navigator)) return null
-
   return new Promise((resolve) => {
     navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        try {
-          const { latitude, longitude } = pos.coords
-          const res = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`,
-            { headers: { 'Accept-Language': 'en' } },
-          )
-          const data = await res.json()
-          const rawCity: string =
-            data?.address?.city ||
-            data?.address?.town ||
-            data?.address?.village ||
-            ''
-          const config = rawCity ? getCityConfigByDetectedName(rawCity, configs) : undefined
-          resolve(config?.cityId ?? null)
-        } catch {
-          resolve(null)
-        }
-      },
+      (pos) => resolve(pos.coords),
       () => resolve(null),
       { timeout: 8000, maximumAge: 60_000 },
     )
   })
+}
+
+async function detectCityFromGeolocation(configs: CityConfig[]): Promise<CityId | null> {
+  const coords = await getDevicePosition()
+  if (!coords) return null
+  try {
+    const { latitude, longitude } = coords
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`,
+      { headers: { 'Accept-Language': 'en' } },
+    )
+    const data = await res.json()
+    const rawCity: string =
+      data?.address?.city ||
+      data?.address?.town ||
+      data?.address?.village ||
+      ''
+    const config = rawCity ? getCityConfigByDetectedName(rawCity, configs) : undefined
+    return config?.cityId ?? null
+  } catch {
+    return null
+  }
 }
 
 // ── Session-storage helpers for booking continuity ───────────────────────────
