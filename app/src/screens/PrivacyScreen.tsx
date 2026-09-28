@@ -70,7 +70,7 @@ export function PrivacyScreen({ go }: Props) {
 
       <div style={S.content}>
         <h1 style={S.h1}>Privacy Policy</h1>
-        <p style={S.meta}>Last updated: May 2026 &nbsp;·&nbsp; CitySend Delivery Co., Winnipeg, MB</p>
+        <p style={S.meta}>Last updated: September 2026 &nbsp;·&nbsp; CitySend Delivery Co., Winnipeg, MB</p>
 
         <p style={S.p}>
           CitySend Delivery Co. ("CitySend", "we", "our", or "us") operates the citysend.ca
@@ -90,6 +90,12 @@ export function PrivacyScreen({ go }: Props) {
         <p style={S.p}><strong>Payment information</strong> — Payments are processed by Stripe, Inc. We do not
           store full card numbers on our servers. Stripe provides us with a tokenised reference
           and the last four digits of your card for display purposes.</p>
+        <p style={S.p}><strong>Location data (customers)</strong> — With your permission, the CitySend app uses
+          your device's approximate location to detect your city and help fill in your pickup
+          address. It is used only while you are using the app, is not tracked in the background,
+          and you can decline or turn it off at any time in your device settings.</p>
+        <p style={S.p}><strong>Device and notification data</strong> — If you allow notifications, we store a
+          push-notification token for your device so we can send you delivery updates.</p>
         <p style={S.p}><strong>Location data (drivers)</strong> — If you use the CitySend Driver app, we collect
           your GPS location during active deliveries to show customers a live map and to calculate
           routes. Location access is only active while a delivery is in progress.</p>
@@ -127,8 +133,9 @@ export function PrivacyScreen({ go }: Props) {
         <p style={S.p}>
           We retain your account information for as long as your account is active. Delivery
           records are retained for a minimum of seven years to comply with applicable tax and
-          accounting requirements. You may request deletion of your account at any time (see
-          Section 6).
+          accounting requirements. You can delete your account at any time directly in the app
+          (see Section 6). Deleting your account permanently removes your login and profile;
+          delivery records are kept only for the tax and accounting period above.
         </p>
 
         <h2 style={S.h2}>5. Cookies and Tracking</h2>
@@ -143,7 +150,8 @@ export function PrivacyScreen({ go }: Props) {
         <ul style={S.ul}>
           <li style={S.li}>Access the personal information we hold about you</li>
           <li style={S.li}>Correct inaccurate or incomplete information</li>
-          <li style={S.li}>Request deletion of your account and associated data</li>
+          <li style={S.li}>Delete your account and associated data — in the app, go to
+            Profile → Settings → Delete account</li>
           <li style={S.li}>Withdraw consent where processing is based on consent</li>
         </ul>
         <p style={S.p}>

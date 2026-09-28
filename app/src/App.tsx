@@ -63,6 +63,20 @@ function parseTrackingId(pathname = window.location.pathname): string | undefine
   return m ? decodeURIComponent(m[1]) : undefined
 }
 
+/**
+ * Public info pages get real URLs so they can be linked directly — App Store
+ * Connect's privacy-policy URL (www.citysend.ca/privacy) must open the policy
+ * itself, not the landing page.
+ */
+const LEGAL_PATHS: Record<string, ScreenName> = {
+  '/privacy': 'privacy',
+  '/terms':   'terms',
+  '/about':   'about',
+}
+function parseLegalScreen(pathname = window.location.pathname): ScreenName | undefined {
+  return LEGAL_PATHS[pathname.replace(/\/+$/, '')]
+}
+
 // ── Geolocation city detection ────────────────────────────────────────────────
 
 async function detectCityFromGeolocation(configs: CityConfig[]): Promise<CityId | null> {
@@ -190,7 +204,7 @@ export default function App() {
   // Initialise screen + trackingOrderId from the URL so that a hard-refresh
   // of /tracking/:orderId lands on the correct screen without a redirect.
   const [screen,          setScreen]          = useState<ScreenName>(() =>
-    parseTrackingId() ? 'tracking' : IS_NATIVE ? 'auth' : 'home',
+    parseTrackingId() ? 'tracking' : parseLegalScreen() ?? (IS_NATIVE ? 'auth' : 'home'),
   )
   const [state,           setState]           = useState<AppState>(INITIAL_STATE)
   const [draft,           setDraft]           = useState<Draft>(BLANK_DRAFT)
@@ -458,6 +472,9 @@ export default function App() {
     // On native (initial screen = 'auth'), always land on 'home' after session
     // restore so the user doesn't see the auth screen when already signed in.
     const applyRestoredSession = () => {
+      // Opened a direct link to a legal page — keep it rather than jumping to
+      // a saved booking or home.
+      if (parseLegalScreen()) return
       const saved = restoreBookingSession()
       if (saved) { setScreen(saved.screen); setDraft(saved.draft) }
       else if (IS_NATIVE) setScreen('home')
@@ -761,10 +778,12 @@ export default function App() {
       const prev = history.length > 0 ? history[history.length - 1] : 'home'
       navHistoryRef.current = history.slice(0, -1)
       setScreen(prev)
-      // Leaving an order view via back → clear its /tracking/:id URL so a
-      // refresh doesn't resurrect the order screen the user just left.
-      if (prev !== 'tracking' && prev !== 'scheduled' &&
-          window.location.pathname.startsWith('/tracking/')) {
+      // Leaving an order view or legal page via back → clear its URL so a
+      // refresh doesn't resurrect the screen the user just left.
+      const path = window.location.pathname
+      const leavingTracking = path.startsWith('/tracking/') && prev !== 'tracking' && prev !== 'scheduled'
+      const leavingLegal    = !!parseLegalScreen(path) && parseLegalScreen(path) !== prev
+      if (leavingTracking || leavingLegal) {
         window.history.replaceState({}, '', '/')
       }
       return
@@ -807,9 +826,13 @@ export default function App() {
       if (resolvedId) {
         window.history.pushState({}, '', `/tracking/${encodeURIComponent(resolvedId)}`)
       }
+    } else if (parseLegalScreen(`/${next}`)) {
+      // Legal pages get their own URL so they're shareable / directly linkable.
+      window.history.pushState({}, '', `/${next}`)
     } else {
-      // Leaving any tracking URL → restore root so deep-link state is clean.
-      if (window.location.pathname.startsWith('/tracking/')) {
+      // Leaving a tracking or legal URL → restore root so deep-link state is clean.
+      const path = window.location.pathname
+      if (path.startsWith('/tracking/') || parseLegalScreen(path)) {
         window.history.replaceState({}, '', '/')
       }
     }
