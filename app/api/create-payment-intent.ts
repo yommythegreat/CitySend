@@ -39,6 +39,32 @@ setInterval(() => {
   }
 }, 5 * 60_000)
 
+// ── CORS ──────────────────────────────────────────────────────────────────────
+// The native apps load bundled assets from a local origin and call this
+// endpoint cross-origin, so the WebView sends an OPTIONS preflight first.
+// Allowlist only our own origins — never a wildcard on a payment endpoint.
+//   capacitor://localhost → iOS Capacitor WebView
+//   https://localhost     → Android Capacitor WebView (default scheme)
+
+const ALLOWED_ORIGINS = new Set([
+  'capacitor://localhost',
+  'https://localhost',
+  'http://localhost',
+  'https://www.citysend.ca',
+  'https://citysend.ca',
+])
+
+function applyCors(req: VercelRequest, res: VercelResponse): void {
+  const origin = req.headers.origin
+  if (typeof origin === 'string' && ALLOWED_ORIGINS.has(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin)
+    res.setHeader('Vary', 'Origin')
+    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
+    res.setHeader('Access-Control-Max-Age', '86400')  // cache preflight 24h
+  }
+}
+
 // ── Stripe ────────────────────────────────────────────────────────────────────
 
 let stripe: Stripe | null = null
@@ -119,6 +145,12 @@ async function computeServerTotal(inputs: PriceInputs): Promise<number | null> {
 // ── Handler ───────────────────────────────────────────────────────────────────
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  applyCors(req, res)
+  // Answer the WebView's preflight before the POST-only guard rejects it.
+  if (req.method === 'OPTIONS') {
+    return res.status(204).end()
+  }
+
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' })
   }
