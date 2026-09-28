@@ -21,8 +21,8 @@ Everything App Store Connect asks for, ready to copy. Bundle ID: `com.citysend.c
 | Export compliance | ✅ `ITSAppUsesNonExemptEncryption = false` |
 | iPhone only (no iPad layout issues) | ✅ remove Mac + Apple Vision in Supported Destinations |
 | **Demo account for login-only features** | ⬜ **You create it — see §6** |
-| **Screenshots (6.9" iPhone)** | ⬜ Capture from Simulator — see §7 |
-| **Build includes the latest privacy text** | ⬜ Upload build 2 after merging — see §8 |
+| Screenshots (6.9" iPhone) | ✅ `docs/app-store/screenshots/` — see §7 |
+| **Build includes the latest fixes** | ⬜ Upload build 3 — see §8 |
 
 ---
 
@@ -169,13 +169,13 @@ The reviewer may test **Delete account** with it — that's expected. Recreate i
 
 ## 7. Screenshots
 
-Required: **6.9" iPhone display** (1320 × 2868) — the iPhone 17 Pro Max Simulator's native size. 3–10 images; suggested set:
+Required: **6.9" iPhone display** (1320 × 2868). Captured in `docs/app-store/screenshots/` — upload in this order:
 
-1. Home — "Send a package"
-2. Booking — delivery window selector with upfront price
-3. Payment summary
-4. Live tracking with the handoff code card
-5. Scheduled delivery confirmation (Booking Confirmed)
+1. `01-home.png` — Home, "Send a package"
+2. `02-review-price.png` — delivery window selector with upfront price
+3. `03-payment.png` — payment with tip and card form
+4. `04-tracking.png` — Express live tracking with the handoff code card
+5. `05-booking-confirmed.png` — scheduled Booking Confirmed
 
 Smaller iPhone sizes are generated from these automatically.
 
@@ -183,9 +183,9 @@ Smaller iPhone sizes are generated from these automatically.
 
 ## 8. Build to submit
 
-The privacy-policy text also ships inside the app. Build **1.0 (1)** was archived before the policy update, so after merging `fix/app-review-readiness`:
+Build 3 includes the privacy-policy update, the native location prompt, and the status-bar fix:
 
 1. `cd app && npm run cap:ios`
-2. Xcode → General → **Build = 2** (version stays 1.0)
+2. Xcode → General → **Build = 3** (version stays 1.0)
 3. Any iOS Device (arm64) → Product → Archive → Distribute App → App Store Connect
-4. In App Store Connect, attach **build 2** to version 1.0, then **Add for Review → Submit**.
+4. In App Store Connect, attach **build 3** to version 1.0, then **Add for Review → Submit**.
