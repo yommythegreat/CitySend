@@ -1,4 +1,5 @@
 import { Capacitor } from '@capacitor/core'
+import { CITY_CONFIGS } from '@shared/config/cityConfig'
 
 /** Haversine distance between two WGS-84 points, in metres. */
 function haversineMeters(lat1: number, lng1: number, lat2: number, lng2: number): number {
@@ -40,17 +41,29 @@ async function getPosition(): Promise<{ coords: Coords }> {
 
 const geocodeCache = new Map<string, { lat: number; lng: number }>()
 
-/** Address → coordinates via Nominatim (cached for the session). */
-export async function geocodeAddress(address: string): Promise<{ lat: number; lng: number } | null> {
-  const hit = geocodeCache.get(address)
+/**
+ * Address → coordinates via Nominatim, searched inside the order's city.
+ * Saved addresses are often just the street line ("134 Princess Street"),
+ * which unbounded matched the same street in another city (Peterborough).
+ * Cached for the session.
+ */
+export async function geocodeAddress(address: string, cityId = 'winnipeg'): Promise<{ lat: number; lng: number } | null> {
+  const key = `${cityId}|${address}`
+  const hit = geocodeCache.get(key)
   if (hit) return hit
+  const city = CITY_CONFIGS.find(c => c.cityId === cityId) ?? CITY_CONFIGS[0]
+  const cityName = city.geocodeContext.split(',')[0].trim().toLowerCase()
+  const q = address.toLowerCase().includes(cityName) ? address : `${address}, ${city.geocodeContext}`
+  const params = new URLSearchParams({
+    q, format: 'json', limit: '1', countrycodes: 'ca',
+    viewbox: city.geocodeBbox, bounded: '1',
+  })
   try {
-    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(address)}&format=json&limit=1&countrycodes=ca`
-    const res  = await fetch(url, { headers: { 'Accept-Language': 'en' } })
+    const res  = await fetch(`https://nominatim.openstreetmap.org/search?${params}`, { headers: { 'Accept-Language': 'en' } })
     const data = await res.json()
     if (!Array.isArray(data) || !data.length) return null
     const point = { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) }
-    geocodeCache.set(address, point)
+    geocodeCache.set(key, point)
     return point
   } catch {
     return null
@@ -72,6 +85,7 @@ const THRESHOLD_METERS = 300
  */
 export async function checkProximity(
   contact: { address: string; lat?: number; lng?: number },
+  cityId?: string,
 ): Promise<ProximityResult> {
   let pos: { coords: Coords }
   try {
@@ -88,7 +102,7 @@ export async function checkProximity(
   let targetLng = contact.lng
 
   if (targetLat == null || targetLng == null) {
-    const geocoded = await geocodeAddress(contact.address)
+    const geocoded = await geocodeAddress(contact.address, cityId)
     if (!geocoded) return { status: 'geocode_failed' }
     targetLat = geocoded.lat
     targetLng = geocoded.lng

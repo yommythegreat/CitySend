@@ -455,9 +455,9 @@ function DeliveryFlow({ order, onBack, onComplete, initialChatOpen = false }: Pr
     setTarget(null)
     if (party.lat != null && party.lng != null) { setTarget({ lat: party.lat, lng: party.lng }); return }
     let cancelled = false
-    geocodeAddress(party.address).then(p => { if (!cancelled && p) setTarget(p) })
+    geocodeAddress(party.address, order.cityId).then(p => { if (!cancelled && p) setTarget(p) })
     return () => { cancelled = true }
-  }, [party.address, party.lat, party.lng])
+  }, [party.address, party.lat, party.lng, order.cityId])
 
   const route = useDrivingRoute(driverPos, target)
   const mapRef = useRef<DeliveryMapHandle>(null)
@@ -495,7 +495,7 @@ function DeliveryFlow({ order, onBack, onComplete, initialChatOpen = false }: Pr
   const handleArrived = useCallback(async () => {
     setArrivalProblem(null)
     setCheckingLocation(true)
-    const result = await checkProximity(party)
+    const result = await checkProximity(party, order.cityId)
     setCheckingLocation(false)
 
     if (result.status !== 'ok') {
@@ -512,7 +512,7 @@ function DeliveryFlow({ order, onBack, onComplete, initialChatOpen = false }: Pr
       dispatch({ type: 'SET_SUBSTEP', orderId, substep: 'at_dropoff' })
       onComplete(orderId)
     }
-  }, [dispatch, orderId, party, isPickup, onComplete])
+  }, [dispatch, orderId, party, isPickup, onComplete, order.cityId])
 
   const handleConfirmPickup = useCallback(async () => {
     setConfirming(true)
