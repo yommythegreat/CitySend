@@ -229,6 +229,20 @@ function reducer(state: DriverState, action: Action): DriverState {
           ),
         }
       }
+      // Accepted: flip offered → assigned locally right away (the DB write in
+      // syncDriverAction follows), so the delivery screen opens on the job
+      // instead of waiting for the realtime echo to mark it accepted.
+      if (action.accepted && state.jobOffer?.order) {
+        const acceptedId = state.jobOffer.order.id
+        return {
+          ...state,
+          jobOffer: null,
+          orders: state.orders.map(o =>
+            o.id !== acceptedId || o.status !== 'offered' ? o
+              : { ...o, status: 'assigned', updatedAt: new Date().toISOString() }
+          ),
+        }
+      }
       return { ...state, jobOffer: null }
     }
 
