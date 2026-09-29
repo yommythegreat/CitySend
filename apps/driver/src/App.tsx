@@ -9,6 +9,9 @@ import { EarningsScreen }         from './screens/EarningsScreen'
 import { HistoryScreen }          from './screens/HistoryScreen'
 import { DriverProfileScreen }    from './screens/DriverProfileScreen'
 import { JobOfferModal }          from './components/JobOfferModal'
+import { setStatusBarForDarkTop }  from './lib/capacitor'
+import { useTheme }                from './lib/theme'
+import { ScreenHeader }            from './ui'
 
 // ── Screen types ──────────────────────────────────────────────────────────────
 
@@ -96,6 +99,11 @@ function DriverApp() {
 
   const [showSignup, setShowSignup] = useState(false)
 
+  // Light status-bar text in night mode (every screen follows the theme).
+  const theme = useTheme()
+  const darkTop = theme === 'dark'
+  useEffect(() => { setStatusBarForDarkTop(darkTop) }, [darkTop])
+
   if (!state.auth) {
     if (showSignup) {
       return <DriverSignupScreen onBackToLogin={() => setShowSignup(false)} />
@@ -139,29 +147,11 @@ function DriverApp() {
 
   const renderTopBar = () => {
     if (screen.name === 'dashboard') {
-      return null  // profile avatar lives inside DashboardScreen's DarkHeader
+      return null  // dashboard renders its own header
     }
 
     if (screen.name === 'history') {
-      return (
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: 14,
-          paddingTop: 'max(52px, env(safe-area-inset-top, 52px))',
-          paddingBottom: 12, paddingLeft: 16, paddingRight: 16,
-          background: '#1a1a1a', color: '#fff', flexShrink: 0,
-        }}>
-          <button
-            onClick={() => navigateTo({ name: 'dashboard' })}
-            style={{
-              width: 40, height: 40, borderRadius: '50%',
-              background: 'rgba(255,255,255,0.1)', border: 'none',
-              color: '#fff', fontSize: 20, cursor: 'pointer',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}
-          >‹</button>
-          <div style={{ fontSize: 18, fontWeight: 700 }}>Delivery History</div>
-        </div>
-      )
+      return <ScreenHeader title="History" onBack={() => navigateTo({ name: 'dashboard' })} />
     }
 
     return null

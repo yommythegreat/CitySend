@@ -4,9 +4,15 @@ import { driverPayout } from '../utils/payout'
 import type { DeliverySubstep } from '../store/DriverContext'
 import { Toast } from '../components/Toast'
 import { SlideAction } from '../components/SlideAction'
-import { NavigationBanner } from '../components/NavigationBanner'
 import { PhotoCapture } from '../components/PhotoCapture'
-import { checkProximity, formatDistance } from '../utils/proximity'
+import { DeliveryMap, type DeliveryMapHandle } from '../components/DeliveryMap'
+import { checkProximity, formatDistance, geocodeAddress, type ProximityResult } from '../utils/proximity'
+import { subscribePosition, type Fix } from '../lib/locationBroadcast'
+import { useDrivingRoute } from '../lib/route'
+import { NAV_APPS, getNavApp, setNavApp, openNavigation, type NavApp } from '../lib/navigation'
+import { haptic } from '../lib/haptics'
+import { BackButton, Button, Icon, ScreenHeader, type IconName } from '../ui'
+import { Capacitor } from '@capacitor/core'
 import { DELIVERY_WINDOW_LABELS } from '@shared/types'
 import type { Order } from '@shared/types'
 import { addIncident, newIncidentId } from '@shared/utils/incidentStore'
@@ -27,14 +33,6 @@ interface Props {
 const SIZE_LABEL: Record<string, string> = { s: 'Small  · ~5 lb max', m: 'Medium · ~10 lb max', l: 'Large · ~25 lb max' }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-function googleMapsEmbedUrl(address: string): string {
-  return `https://maps.google.com/maps?q=${encodeURIComponent(address)}&t=m&z=15&output=embed&iwloc=near`
-}
-
-function openMapsNav(address: string) {
-  window.open(`https://maps.google.com/?q=${encodeURIComponent(address)}&dirflg=d`, '_blank')
-}
 
 function initials(name: string) {
   return name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
@@ -75,15 +73,15 @@ function ReportIssueSheet({
     <div onClick={onClose} style={{ position: 'absolute', inset: 0, zIndex: 200, background: 'rgba(0,0,0,0.5)' }}>
       <div onClick={e => e.stopPropagation()} style={{
         position: 'absolute', bottom: 0, left: 0, right: 0,
-        background: '#fff', borderRadius: '20px 20px 0 0',
+        background: 'var(--d-surface)', borderRadius: '20px 20px 0 0',
         paddingBottom: 'env(safe-area-inset-bottom, 20px)',
         maxHeight: '85vh', overflowY: 'auto',
       }}>
         <div style={{ padding: 8, display: 'flex', justifyContent: 'center' }}>
-          <div style={{ width: 40, height: 4, background: '#e0e0e0', borderRadius: 2 }} />
+          <div style={{ width: 40, height: 4, background: 'var(--d-border)', borderRadius: 2 }} />
         </div>
-        <div style={{ padding: '4px 20px 16px', fontSize: 18, fontWeight: 700, color: 'var(--d-ink)' }}>
-          Report an Issue
+        <div style={{ padding: '4px 20px 16px', fontSize: 20, fontWeight: 650, letterSpacing: -0.4, color: 'var(--d-ink)' }}>
+          Report a problem
         </div>
         <div style={{ padding: '0 4px 4px 20px', fontSize: 13, color: 'var(--d-muted)', marginBottom: 8 }}>
           {order.id} · {order.pickup.name} → {order.dropoff.name}
@@ -92,8 +90,8 @@ function ReportIssueSheet({
           {ISSUE_TYPES.map(type => (
             <button key={type} onClick={() => setSelected(type)} style={{
               width: '100%', padding: '12px 14px', marginBottom: 6,
-              background: selected === type ? 'rgba(201,74,27,0.06)' : '#f8f9fb',
-              border: `1.5px solid ${selected === type ? 'var(--d-accent)' : '#e8ebf0'}`,
+              background: selected === type ? 'var(--d-accent-lt)' : 'var(--d-surface-2)',
+              border: `1.5px solid ${selected === type ? 'var(--d-accent)' : 'var(--d-border)'}`,
               borderRadius: 10, textAlign: 'left', cursor: 'pointer',
               fontSize: 14, fontWeight: selected === type ? 600 : 400,
               color: selected === type ? 'var(--d-accent)' : 'var(--d-ink)',
@@ -102,15 +100,15 @@ function ReportIssueSheet({
           <textarea
             value={detail} onChange={e => setDetail(e.target.value)}
             placeholder="Additional details (optional)…"
-            style={{ marginTop: 6, minHeight: 70, width: '100%', boxSizing: 'border-box', border: '1.5px solid #e8ebf0', borderRadius: 10, padding: '10px 12px', fontSize: 14, fontFamily: 'inherit', resize: 'vertical', outline: 'none' }}
+            style={{ marginTop: 6, minHeight: 70, width: '100%', boxSizing: 'border-box', border: '1.5px solid var(--d-border)', borderRadius: 10, padding: '10px 12px', fontSize: 14, fontFamily: 'inherit', resize: 'vertical', outline: 'none', background: 'var(--d-surface-2)', color: 'var(--d-ink)' }}
           />
           <div style={{ display: 'flex', gap: 10, marginTop: 12, paddingBottom: 8 }}>
-            <button onClick={onClose} style={{ flex: 1, padding: '12px 0', border: '1.5px solid #e8ebf0', borderRadius: 10, background: '#fff', cursor: 'pointer', fontSize: 14, fontWeight: 600, color: 'var(--d-ink)' }}>
+            <button onClick={onClose} style={{ flex: 1, padding: '12px 0', border: '1.5px solid var(--d-border)', borderRadius: 10, background: 'var(--d-surface)', cursor: 'pointer', fontSize: 14, fontWeight: 600, color: 'var(--d-ink)' }}>
               Cancel
             </button>
             <button disabled={!selected} onClick={() => selected && onSubmit(selected, detail)} style={{
               flex: 2, padding: '12px 0', border: 'none', borderRadius: 10,
-              background: selected ? '#ef4444' : '#e8ebf0', color: selected ? '#fff' : '#aaa',
+              background: selected ? 'var(--d-err)' : 'var(--d-surface-2)', color: selected ? '#fff' : 'var(--d-muted-lt)',
               cursor: selected ? 'pointer' : 'default', fontSize: 14, fontWeight: 700,
             }}>Submit Report</button>
           </div>
@@ -139,28 +137,25 @@ function ChatPanel({ order, myId, messages, fetchError, sending, inputText, call
 
   return (
     <div style={{ position: 'absolute', inset: 0, zIndex: 150, background: 'var(--d-surface)', display: 'flex', flexDirection: 'column' }}>
-      <div style={{ padding: '12px 16px', paddingTop: 'max(12px, env(safe-area-inset-top))', background: 'var(--d-accent)', display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
-        <button onClick={onClose} style={{ width: 36, height: 36, borderRadius: '50%', border: 'none', background: 'rgba(255,255,255,0.18)', color: '#fff', fontSize: 18, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>←</button>
-        <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 15, fontWeight: 700, color: '#fff' }}>{order.customerId ? order.dropoff.name : order.pickup.name}</div>
-          <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.75)', marginTop: 1 }}>{order.id} · {isTerminal ? 'Delivery closed' : 'Customer'}</div>
-        </div>
-      </div>
+      <ScreenHeader
+        title={order.customerName || 'Customer'}
+        subtitle={`${order.id} · ${isTerminal ? 'Delivery closed' : 'Messages'}`}
+        onBack={onClose}
+      />
 
       {callNotice && (
-        <div style={{ padding: '10px 16px', background: '#fff7ed', borderBottom: '1px solid #fed7aa', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-          <span style={{ fontSize: 16 }}>📵</span>
-          <span style={{ flex: 1, fontSize: 13, color: '#92400e' }}><strong>Calling is not available yet.</strong> Please message the customer instead.</span>
-          <button onClick={onDismissCallNotice} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: '#92400e', lineHeight: 1, padding: '0 4px' }}>×</button>
+        <div style={{ padding: '10px 16px', background: 'var(--d-warn-bg)', borderBottom: '1px solid var(--d-warn-border)', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+          <span style={{ flex: 1, fontSize: 13, color: 'var(--d-warn)' }}><strong>Calling is not available yet.</strong> Please message the customer instead.</span>
+          <button onClick={onDismissCallNotice} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: 'var(--d-warn)', lineHeight: 1, padding: '0 4px' }}>×</button>
         </div>
       )}
 
       <div style={{ flex: 1, overflowY: 'auto', padding: '16px 12px', display: 'flex', flexDirection: 'column', gap: 8, scrollbarWidth: 'none' }}>
         {fetchError ? (
           <div style={{ textAlign: 'center', padding: '40px 16px' }}>
-            <div style={{ fontSize: 13, color: '#dc2626', fontWeight: 600, marginBottom: 6 }}>Unable to load messages.</div>
+            <div style={{ fontSize: 13, color: 'var(--d-err)', fontWeight: 600, marginBottom: 6 }}>Unable to load messages.</div>
             <div style={{ fontSize: 11, color: 'var(--d-muted)', marginBottom: 12, fontFamily: 'monospace' }}>{fetchError}</div>
-            <button onClick={onRetry} style={{ padding: '8px 18px', border: '1.5px solid var(--d-border)', borderRadius: 10, background: '#fff', fontSize: 13, cursor: 'pointer' }}>Retry</button>
+            <button onClick={onRetry} style={{ padding: '8px 18px', border: '1.5px solid var(--d-border)', borderRadius: 10, background: 'var(--d-surface)', fontSize: 13, cursor: 'pointer' }}>Retry</button>
           </div>
         ) : messages.length === 0 ? (
           <div style={{ textAlign: 'center', color: 'var(--d-muted)', fontSize: 13, marginTop: 40 }}>No messages yet.</div>
@@ -168,7 +163,7 @@ function ChatPanel({ order, myId, messages, fetchError, sending, inputText, call
           const isMine = m.senderId === myId
           return (
             <div key={m.id} style={{ display: 'flex', justifyContent: isMine ? 'flex-end' : 'flex-start' }}>
-              <div style={{ maxWidth: '78%', padding: '9px 13px', background: isMine ? 'var(--d-accent)' : '#fff', color: isMine ? '#fff' : 'var(--d-ink)', borderRadius: isMine ? '14px 14px 4px 14px' : '14px 14px 14px 4px', boxShadow: '0 1px 3px rgba(0,0,0,0.08)', fontSize: 14, lineHeight: 1.45 }}>
+              <div style={{ maxWidth: '78%', padding: '9px 13px', background: isMine ? 'var(--d-accent)' : 'var(--d-surface)', color: isMine ? '#fff' : 'var(--d-ink)', borderRadius: isMine ? '14px 14px 4px 14px' : '14px 14px 14px 4px', boxShadow: '0 1px 3px rgba(0,0,0,0.08)', fontSize: 14, lineHeight: 1.45 }}>
                 {m.messageText}
                 <div style={{ fontSize: 10, marginTop: 4, opacity: 0.7, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 3 }}>
                   {fmtTime(m.createdAt)}
@@ -184,7 +179,7 @@ function ChatPanel({ order, myId, messages, fetchError, sending, inputText, call
       {!isTerminal && !fetchError && (
         <div style={{ display: 'flex', gap: 8, padding: '6px 12px', overflowX: 'auto', scrollbarWidth: 'none', flexShrink: 0, background: 'var(--d-surface)' }}>
           {QUICK_REPLIES.map(reply => (
-            <button key={reply} onClick={() => onSend(reply)} disabled={sending} style={{ flexShrink: 0, padding: '6px 12px', border: '1.5px solid var(--d-accent)', borderRadius: 20, background: '#fff', color: 'var(--d-accent)', fontSize: 12, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', opacity: sending ? 0.6 : 1 }}>
+            <button key={reply} onClick={() => onSend(reply)} disabled={sending} style={{ flexShrink: 0, padding: '6px 12px', border: '1.5px solid var(--d-accent)', borderRadius: 20, background: 'var(--d-surface)', color: 'var(--d-accent)', fontSize: 12, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', opacity: sending ? 0.6 : 1 }}>
               {reply}
             </button>
           ))}
@@ -192,16 +187,16 @@ function ChatPanel({ order, myId, messages, fetchError, sending, inputText, call
       )}
 
       {isTerminal ? (
-        <div style={{ padding: '14px 16px', paddingBottom: 'max(14px, env(safe-area-inset-bottom))', background: '#fff', borderTop: '1px solid var(--d-border)', textAlign: 'center', fontSize: 13, color: 'var(--d-muted)' }}>
+        <div style={{ padding: '14px 16px', paddingBottom: 'max(14px, env(safe-area-inset-bottom))', background: 'var(--d-surface)', borderTop: '1px solid var(--d-border)', textAlign: 'center', fontSize: 13, color: 'var(--d-muted)' }}>
           Messaging is closed for this delivery.
         </div>
       ) : (
-        <div style={{ padding: '10px 12px', paddingBottom: 'max(10px, env(safe-area-inset-bottom))', background: '#fff', borderTop: '1px solid var(--d-border)', display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+        <div style={{ padding: '10px 12px', paddingBottom: 'max(10px, env(safe-area-inset-bottom))', background: 'var(--d-surface)', borderTop: '1px solid var(--d-border)', display: 'flex', gap: 8, alignItems: 'flex-end' }}>
           <textarea
             value={inputText} onChange={e => onInputChange(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); onSend() } }}
             placeholder="Message customer…" rows={1}
-            style={{ flex: 1, resize: 'none', border: '1.5px solid var(--d-border)', borderRadius: 20, padding: '9px 14px', fontSize: 14, outline: 'none', fontFamily: 'inherit', lineHeight: 1.4, background: '#f5f6f8' }}
+            style={{ flex: 1, resize: 'none', border: '1.5px solid var(--d-border)', borderRadius: 20, padding: '9px 14px', fontSize: 14, outline: 'none', fontFamily: 'inherit', lineHeight: 1.4, background: 'var(--d-surface-2)', color: 'var(--d-ink)' }}
           />
           <button onClick={() => onSend()} disabled={!inputText.trim() || sending} style={{ width: 40, height: 40, borderRadius: '50%', border: 'none', background: inputText.trim() && !sending ? 'var(--d-accent)' : 'var(--d-border)', color: inputText.trim() && !sending ? '#fff' : 'var(--d-muted)', fontSize: 16, cursor: inputText.trim() && !sending ? 'pointer' : 'default', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>↑</button>
         </div>
@@ -210,10 +205,152 @@ function ChatPanel({ order, myId, messages, fetchError, sending, inputText, call
   )
 }
 
-// ── Main screen ───────────────────────────────────────────────────────────────
+// ── Small pieces ──────────────────────────────────────────────────────────────
 
-export function DeliveryScreen({ orderId, onBack, onComplete, initialChatOpen = false }: Props) {
-  const { state, dispatch, completedOrders } = useDriver()
+function Stepper({ step }: { step: FlowStep }) {
+  const onDropoffLeg = step === 'en_route_dropoff'
+  const dot = (state: 'done' | 'active' | 'todo') => ({
+    width: 10, height: 10, borderRadius: 5, flexShrink: 0,
+    background: state === 'todo' ? 'transparent' : state === 'done' ? 'var(--d-ok)' : 'var(--d-accent)',
+    border: state === 'todo' ? '2px solid var(--d-border)' : 'none',
+  } as React.CSSProperties)
+  const label = (active: boolean) => ({
+    fontSize: 12, fontWeight: active ? 650 : 500, color: active ? 'var(--d-ink)' : 'var(--d-muted)',
+  } as React.CSSProperties)
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }} aria-label={onDropoffLeg ? 'Step 2 of 2' : 'Step 1 of 2'}>
+      <span style={dot(onDropoffLeg ? 'done' : 'active')} />
+      <span style={label(!onDropoffLeg)}>Pickup</span>
+      <span style={{ flex: 1, height: 2, borderRadius: 1, background: onDropoffLeg ? 'var(--d-ok)' : 'var(--d-border)', maxWidth: 56 }} />
+      <span style={dot(onDropoffLeg ? 'active' : 'todo')} />
+      <span style={label(onDropoffLeg)}>Drop-off</span>
+    </div>
+  )
+}
+
+function ActionTile({ icon, label, onClick, badge, tone }: {
+  icon: IconName; label: string; onClick: () => void; badge?: number; tone?: 'danger'
+}) {
+  return (
+    <button className="d-press" onClick={() => { haptic('tap'); onClick() }} style={{
+      flex: 1, height: 64, borderRadius: 16, cursor: 'pointer', position: 'relative',
+      background: 'var(--d-surface-2)', border: '1px solid var(--d-border)',
+      color: tone === 'danger' ? 'var(--d-err)' : 'var(--d-ink)',
+      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 5,
+      fontSize: 12, fontWeight: 600,
+    }}>
+      <Icon name={icon} size={19} />
+      {label}
+      {!!badge && (
+        <span style={{
+          position: 'absolute', top: 8, right: 'calc(50% - 22px)', minWidth: 18, height: 18, padding: '0 5px', borderRadius: 9,
+          background: 'var(--d-accent)', color: '#fff', fontSize: 11, fontWeight: 700,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>{badge}</span>
+      )}
+    </button>
+  )
+}
+
+function NoteCard({ label, text }: { label: string; text: string }) {
+  return (
+    <div style={{
+      display: 'flex', gap: 10, padding: '12px 14px', borderRadius: 14,
+      background: 'var(--d-info-bg)', color: 'var(--d-ink)',
+    }}>
+      <span style={{ color: 'var(--d-info)', paddingTop: 1 }}><Icon name="note" size={17} /></span>
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontSize: 12, fontWeight: 650, color: 'var(--d-info)', marginBottom: 2 }}>{label}</div>
+        <div style={{ fontSize: 14, lineHeight: 1.45 }}>{text}</div>
+      </div>
+    </div>
+  )
+}
+
+/** Inline explanation when the arrival check fails — replaces a fleeting toast. */
+function ArrivalProblem({ result, place, onRetry, onDismiss }: {
+  result: ProximityResult; place: string; onRetry: () => void; onDismiss: () => void
+}) {
+  if (result.status === 'ok') return null
+  const copy = {
+    too_far:         { title: `You're ${result.status === 'too_far' ? formatDistance(result.distanceMeters) : ''} from the ${place}`, body: 'Get within 300 m, then slide again.' },
+    location_denied: { title: 'Location is turned off', body: 'CitySend Driver needs your location to confirm you\'ve arrived.' },
+    location_error:  { title: "Couldn't get your location", body: 'Check you have GPS signal, then try again.' },
+    geocode_failed:  { title: `We couldn't find the ${place} on the map`, body: 'Try again, or call the customer or report a problem.' },
+  }[result.status]
+  const canOpenSettings = result.status === 'location_denied' && Capacitor.isNativePlatform()
+  return (
+    <div role="alert" style={{
+      padding: '14px 16px', borderRadius: 16, background: 'var(--d-warn-bg)', border: '1px solid var(--d-warn-border)',
+    }}>
+      <div style={{ display: 'flex', gap: 10 }}>
+        <span style={{ color: 'var(--d-warn)', paddingTop: 1 }}><Icon name="alert" size={18} /></span>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 15, fontWeight: 650, color: 'var(--d-ink)' }}>{copy.title}</div>
+          <div style={{ fontSize: 13, color: 'var(--d-ink-2)', marginTop: 2, lineHeight: 1.45 }}>{copy.body}</div>
+        </div>
+        <button onClick={onDismiss} aria-label="Dismiss" style={{ background: 'none', border: 'none', color: 'var(--d-muted)', fontSize: 20, lineHeight: 1, cursor: 'pointer', padding: 0, height: 20 }}>×</button>
+      </div>
+      {(canOpenSettings || result.status === 'location_error' || result.status === 'geocode_failed') && (
+        <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+          {canOpenSettings
+            ? <Button size="md" variant="secondary" onClick={() => {
+                import('@capgo/background-geolocation').then(({ BackgroundGeolocation }) => BackgroundGeolocation.openSettings()).catch(() => {})
+              }}>Open Settings</Button>
+            : <Button size="md" variant="secondary" onClick={onRetry}>Try again</Button>}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function NavChooser({ onPick, onClose }: { onPick: (app: NavApp, remember: boolean) => void; onClose: () => void }) {
+  const [remember, setRemember] = useState(true)
+  return (
+    <div onClick={onClose} style={{ position: 'absolute', inset: 0, zIndex: 220, background: 'var(--d-overlay)', display: 'flex', alignItems: 'flex-end', animation: 'd-fade-in .18s ease' }}>
+      <div onClick={e => e.stopPropagation()} style={{
+        width: '100%', background: 'var(--d-surface)', borderRadius: '24px 24px 0 0',
+        padding: '20px 16px calc(env(safe-area-inset-bottom, 0px) + 16px)', animation: 'd-slide-up .22s ease',
+      }}>
+        <div style={{ fontSize: 20, fontWeight: 650, letterSpacing: -0.4, color: 'var(--d-ink)', margin: '0 4px 14px' }}>Navigate with</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {NAV_APPS.map(a => (
+            <Button key={a.id} variant="secondary" onClick={() => onPick(a.id, remember)}>{a.label}</Button>
+          ))}
+        </div>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '16px 4px 4px', fontSize: 14, color: 'var(--d-ink-2)' }}>
+          <input type="checkbox" checked={remember} onChange={e => setRemember(e.target.checked)} style={{ width: 18, height: 18, accentColor: 'var(--d-accent)' }} />
+          Always use this app
+        </label>
+      </div>
+    </div>
+  )
+}
+
+// ── Screen ────────────────────────────────────────────────────────────────────
+
+export function DeliveryScreen(props: Props) {
+  const { state } = useDriver()
+  const order = state.orders.find(o => o.id === props.orderId)
+
+  // Order not in state yet (first load) — separate component so the flow's
+  // hooks always run in the same order.
+  if (!order) {
+    return (
+      <div style={{ position: 'absolute', inset: 0, background: 'var(--d-bg)', display: 'flex', flexDirection: 'column' }}>
+        <ScreenHeader title="Loading job…" subtitle={props.orderId} onBack={props.onBack} />
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--d-muted)', fontSize: 14 }}>
+          Fetching the latest details
+        </div>
+      </div>
+    )
+  }
+  return <DeliveryFlow {...props} order={order} />
+}
+
+function DeliveryFlow({ order, onBack, onComplete, initialChatOpen = false }: Props & { order: Order }) {
+  const { state, dispatch } = useDriver()
+  const orderId = order.id
 
   const [toast,            setToast]           = useState('')
   const [showIssue,        setShowIssue]       = useState(false)
@@ -223,40 +360,34 @@ export function DeliveryScreen({ orderId, onBack, onComplete, initialChatOpen = 
   const [photoUrl,         setPhotoUrl]        = useState<string | null>(null)
   const [photoUploading,   setPhotoUploading]  = useState(false)
   const [confirming,       setConfirming]      = useState(false)
-  const [sheetOpen,        setSheetOpen]       = useState(true)
   const [checkingLocation, setCheckingLocation] = useState(false)
+  const [arrivalProblem,   setArrivalProblem]  = useState<ProximityResult | null>(null)
+  const [navChooser,       setNavChooser]      = useState(false)
 
   const [messages,   setMessages]   = useState<Message[]>([])
   const [fetchError, setFetchError] = useState<string | null>(null)
   const [inputText,  setInputText]  = useState('')
   const [sending,    setSending]    = useState(false)
 
-  const myId  = state.auth?.driverId ?? ''
-  const order = state.orders.find(o => o.id === orderId)
+  const myId = state.auth?.driverId ?? ''
 
   // Watchdog: if admin unassigns this order from the driver mid-delivery
   // (assignment cleared or reassigned, or order cancelled), bail back to the
   // dashboard. Without this, the driver keeps swiping through stale screens.
-  // The check waits until `order` is loaded — we don't bail just because the
-  // initial fetch hasn't returned yet (that would loop the driver out on first
-  // open if state.orders hasn't populated).
   const removedRef = useRef(false)
   useEffect(() => {
-    if (!order || !myId || removedRef.current) return
+    if (!myId || removedRef.current) return
     const taken = order.assignedDriverId !== myId
     const cancelled = order.status === 'cancelled'
     if (taken || cancelled) {
       removedRef.current = true
-      setToast(cancelled
-        ? 'This order was cancelled.'
-        : 'This order was removed from your queue.')
+      setToast(cancelled ? 'This order was cancelled.' : 'This order was removed from your queue.')
       // Brief delay so the toast is visible before we navigate away.
       setTimeout(() => onBack(), 1500)
     }
-  }, [order?.assignedDriverId, order?.status, myId, onBack])
+  }, [order.assignedDriverId, order.status, myId, onBack])
 
   const loadMessages = useCallback(async () => {
-    if (!orderId) return
     try {
       const msgs = await getMessages(orderId)
       setMessages(msgs)
@@ -285,8 +416,8 @@ export function DeliveryScreen({ orderId, onBack, onComplete, initialChatOpen = 
     if (count > prevUnreadRef.current) {
       const latest = [...messages].reverse().find(m => m.receiverId === myId && !m.isRead)
       if (latest) {
-        setToast(`💬 "${latest.messageText.slice(0, 40)}${latest.messageText.length > 40 ? '…' : ''}"`)
-        setTimeout(() => setToast(''), 4000)
+        haptic('tap')
+        setToast(`New message: "${latest.messageText.slice(0, 40)}${latest.messageText.length > 40 ? '…' : ''}"`)
       }
     }
     prevUnreadRef.current = count
@@ -294,32 +425,40 @@ export function DeliveryScreen({ orderId, onBack, onComplete, initialChatOpen = 
 
   const unreadCount = messages.filter(m => m.receiverId === myId && !m.isRead).length
 
-  if (!order) {
-    return (
-      <div style={{ position: 'absolute', inset: 0, background: 'var(--d-bg)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 32, textAlign: 'center' }}>
-        <div style={{ fontSize: 32, marginBottom: 12 }}>📦</div>
-        <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--d-ink)', marginBottom: 6 }}>Loading order…</div>
-        <div style={{ fontSize: 13, color: 'var(--d-muted)', marginBottom: 24 }}>{orderId}</div>
-        <button onClick={onBack} style={{ padding: '10px 24px', background: 'var(--d-accent)', border: 'none', borderRadius: 10, color: '#fff', cursor: 'pointer', fontSize: 14, fontWeight: 600 }}>Back to Dashboard</button>
-      </div>
-    )
-  }
-
-  const substep  = state.substeps[order.id]
+  const substep  = state.substeps[orderId]
   const step     = resolveStep(order, substep)
-  const mapAddr  = step === 'en_route_pickup' ? order.pickup.address : order.dropoff.address
-  const payout   = `$${driverPayout(order).toFixed(2)}`
+  const isPickup = step !== 'en_route_dropoff'
+  const party    = isPickup ? order.pickup : order.dropoff
+  const place    = isPickup ? 'pickup' : 'drop-off'
 
-  const navInstruction = step === 'en_route_pickup'
-    ? `Head to ${order.pickup.address.split(',')[0]}`
-    : `Head to ${order.dropoff.address.split(',')[0]}`
+  // ── Live map data ─────────────────────────────────────────────────────────
 
-  const todayCompleted = completedOrders.filter(o => {
-    const d = new Date(o.updatedAt)
-    return d.toDateString() === new Date().toDateString()
-  })
-  const earningsToday = todayCompleted.reduce((sum, o) => sum + driverPayout(o), 0)
-  const todayJobs = todayCompleted.length
+  const [driverPos, setDriverPos] = useState<Fix | null>(null)
+  useEffect(() => subscribePosition(setDriverPos), [])
+
+  const [target, setTarget] = useState<{ lat: number; lng: number } | null>(null)
+  useEffect(() => {
+    setTarget(null)
+    if (party.lat != null && party.lng != null) { setTarget({ lat: party.lat, lng: party.lng }); return }
+    let cancelled = false
+    geocodeAddress(party.address).then(p => { if (!cancelled && p) setTarget(p) })
+    return () => { cancelled = true }
+  }, [party.address, party.lat, party.lng])
+
+  const route = useDrivingRoute(driverPos, target)
+  const mapRef = useRef<DeliveryMapHandle>(null)
+
+  const sheetRef = useRef<HTMLDivElement>(null)
+  const [sheetH, setSheetH] = useState(360)
+  useEffect(() => {
+    const el = sheetRef.current
+    if (!el) return
+    const ro = new ResizeObserver(() => setSheetH(el.offsetHeight))
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [step])
+
+  useEffect(() => { setArrivalProblem(null) }, [step])
 
   // ── Handlers ─────────────────────────────────────────────────────────────
 
@@ -331,45 +470,35 @@ export function DeliveryScreen({ orderId, onBack, onComplete, initialChatOpen = 
     setSending(true)
     if (!text) setInputText('')
     try {
-      await sendMessage({ orderId: order.id, senderId: myId, senderRole: 'driver', receiverId: customerId, receiverRole: 'customer', messageText: msg })
+      await sendMessage({ orderId, senderId: myId, senderRole: 'driver', receiverId: customerId, receiverRole: 'customer', messageText: msg })
       await loadMessages()
     } catch {
-      setToast('Failed to send message.')
-      setTimeout(() => setToast(''), 3000)
+      setToast('Message not sent. Try again.')
     }
     setSending(false)
-  }, [inputText, order.id, order.customerId, order.status, myId, loadMessages])
+  }, [inputText, orderId, order.customerId, order.status, myId, loadMessages])
 
-  const handleArrivedPickup = useCallback(async () => {
+  const handleArrived = useCallback(async () => {
+    setArrivalProblem(null)
     setCheckingLocation(true)
-    const result = await checkProximity(order.pickup)
+    const result = await checkProximity(party)
     setCheckingLocation(false)
 
-    if (result.status === 'too_far') {
-      setToast(`You're ${formatDistance(result.distanceMeters)} from the pickup. Get closer to continue.`)
-      setTimeout(() => setToast(''), 4000)
-      return
-    }
-    if (result.status === 'location_denied') {
-      setToast('Location access is off. Enable it in Settings to verify arrival.')
-      setTimeout(() => setToast(''), 4000)
-      return
-    }
-    if (result.status === 'geocode_failed') {
-      setToast("Couldn't verify the pickup address. Try again with location enabled.")
-      setTimeout(() => setToast(''), 5000)
-      return
-    }
-    if (result.status === 'location_error') {
-      setToast('GPS error. Make sure location is enabled and try again.')
-      setTimeout(() => setToast(''), 4000)
+    if (result.status !== 'ok') {
+      haptic('warning')
+      setArrivalProblem(result)
       return
     }
 
-    dispatch({ type: 'SET_SUBSTEP', orderId, substep: 'at_pickup' })
-    setToast('Arrived at pickup! Confirm the parcel.')
-    setTimeout(() => setToast(''), 2000)
-  }, [dispatch, orderId, order.pickup])
+    haptic('success')
+    if (isPickup) {
+      dispatch({ type: 'SET_SUBSTEP', orderId, substep: 'at_pickup' })
+    } else {
+      dispatch({ type: 'UPDATE_STATUS', orderId, status: 'in_transit' })
+      dispatch({ type: 'SET_SUBSTEP', orderId, substep: 'at_dropoff' })
+      onComplete(orderId)
+    }
+  }, [dispatch, orderId, party, isPickup, onComplete])
 
   const handleConfirmPickup = useCallback(async () => {
     setConfirming(true)
@@ -388,42 +517,10 @@ export function DeliveryScreen({ orderId, onBack, onComplete, initialChatOpen = 
         },
       })
     }
-    // banner always visible
     setConfirming(false)
-    setToast('Parcel confirmed! Heading to drop-off.')
-    setTimeout(() => setToast(''), 2200)
+    haptic('success')
+    setToast('Parcel picked up. Head to the drop-off.')
   }, [dispatch, orderId, photoUrl, photoPreview, state.auth?.name])
-
-  const handleArrivedDropoff = useCallback(async () => {
-    setCheckingLocation(true)
-    const result = await checkProximity(order.dropoff)
-    setCheckingLocation(false)
-
-    if (result.status === 'too_far') {
-      setToast(`You're ${formatDistance(result.distanceMeters)} from the drop-off. Get closer to continue.`)
-      setTimeout(() => setToast(''), 4000)
-      return
-    }
-    if (result.status === 'location_denied') {
-      setToast('Location access is off. Enable it in Settings to verify arrival.')
-      setTimeout(() => setToast(''), 4000)
-      return
-    }
-    if (result.status === 'geocode_failed') {
-      setToast("Couldn't verify the drop-off address. Try again with location enabled.")
-      setTimeout(() => setToast(''), 5000)
-      return
-    }
-    if (result.status === 'location_error') {
-      setToast('GPS error. Make sure location is enabled and try again.')
-      setTimeout(() => setToast(''), 4000)
-      return
-    }
-
-    dispatch({ type: 'UPDATE_STATUS', orderId, status: 'in_transit' })
-    dispatch({ type: 'SET_SUBSTEP', orderId, substep: 'at_dropoff' })
-    onComplete(orderId)
-  }, [dispatch, orderId, order.dropoff, onComplete])
 
   const handleIssueSubmit = useCallback(async (issueType: string, detail: string) => {
     setShowIssue(false)
@@ -431,299 +528,225 @@ export function DeliveryScreen({ orderId, onBack, onComplete, initialChatOpen = 
     dispatch({ type: 'ADD_NOTE', orderId, note })
     await addIncident({ id: newIncidentId(), orderId, source: 'driver', reporterId: myId, reporterName: state.auth?.name ?? 'Driver', category: issueType, description: detail, severity: 'medium', status: 'new', assignedTo: undefined, notes: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() })
     await pushNotification({ event: 'issue_reported', audience: 'admin', orderId, title: 'Issue Reported', body: `Driver reported: ${issueType}`, driverId: myId })
-    setToast('Issue reported to admin.')
-    setTimeout(() => setToast(''), 2500)
+    setToast('Problem reported. Dispatch will follow up.')
   }, [dispatch, myId, orderId, state.auth?.name])
 
-  // ── AT PICKUP: full-screen view (no map) ──────────────────────────────────
+  const callParty = (phone?: string) => {
+    if (phone) window.open(`tel:${phone.replace(/\s/g, '')}`)
+    else setToast('No phone number on this order.')
+  }
+
+  const navigate = () => {
+    const dest = { address: party.address, lat: target?.lat, lng: target?.lng }
+    const app = getNavApp()
+    if (app) openNavigation(app, dest)
+    else setNavChooser(true)
+  }
+
+  const overlays = (
+    <>
+      {toast     && <Toast message={toast} duration={3500} onDone={() => setToast('')} />}
+      {showIssue && <ReportIssueSheet order={order} onClose={() => setShowIssue(false)} onSubmit={handleIssueSubmit} />}
+      {navChooser && (
+        <NavChooser
+          onClose={() => setNavChooser(false)}
+          onPick={(app, remember) => {
+            if (remember) setNavApp(app)
+            setNavChooser(false)
+            openNavigation(app, { address: party.address, lat: target?.lat, lng: target?.lng })
+          }}
+        />
+      )}
+      {chatOpen && (
+        <ChatPanel order={order} myId={myId} messages={messages} fetchError={fetchError} sending={sending} inputText={inputText} callNotice={callNotice} onSend={handleSend} onInputChange={setInputText} onRetry={loadMessages} onDismissCallNotice={() => setCallNotice(false)} onClose={() => { setChatOpen(false); setCallNotice(false) }} />
+      )}
+    </>
+  )
+
+  // ── AT PICKUP: confirm the parcel ────────────────────────────────────────
 
   if (step === 'at_pickup') {
+    const rows = [
+      { label: 'Size',     value: SIZE_LABEL[order.parcel.size] ?? order.parcel.size },
+      { label: 'Contents', value: order.parcel.desc },
+      ...(order.parcel.deliveryWindow ? [{ label: 'Window', value: DELIVERY_WINDOW_LABELS[order.parcel.deliveryWindow] }] : []),
+    ]
     return (
-      <div style={{ position: 'absolute', inset: 0, background: 'var(--d-bg)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <div style={{ position: 'absolute', inset: 0, background: 'var(--d-bg)', display: 'flex', flexDirection: 'column', overflow: 'hidden', color: 'var(--d-ink)' }}>
+        <ScreenHeader title="At pickup" subtitle={order.id} onBack={onBack} />
 
-        {/* Dark header */}
-        <div style={{ background: '#111827', paddingTop: 'max(52px, env(safe-area-inset-top, 52px))', paddingBottom: 16, paddingLeft: 20, paddingRight: 20, flexShrink: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(34,197,94,0.15)', borderRadius: 99, padding: '4px 10px' }}>
-              <div style={{ width: 7, height: 7, borderRadius: '50%', background: '#22c55e' }} />
-              <span style={{ fontSize: 11, fontWeight: 700, color: '#fff', letterSpacing: 0.6 }}>ONLINE</span>
-            </div>
-            <div style={{ textAlign: 'right' }}>
-              <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.45)' }}>TODAY</div>
-              <div style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>${earningsToday.toFixed(2)} · {todayJobs} Jobs</div>
+        <div style={{ flex: 1, overflowY: 'auto', scrollbarWidth: 'none' }}>
+        <div style={{ padding: '4px 16px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div style={{ padding: '0 4px' }}><Stepper step={step} /></div>
+
+          <div style={{ padding: '0 4px' }}>
+            <div style={{ fontSize: 26, fontWeight: 700, letterSpacing: -0.7 }}>Confirm the parcel</div>
+            <div style={{ fontSize: 15, color: 'var(--d-muted)', marginTop: 4, lineHeight: 1.45 }}>
+              Check it matches the details below, then slide to confirm pickup.
             </div>
           </div>
-        </div>
 
-        {/* Content */}
-        <div style={{ flex: 1, overflowY: 'auto', scrollbarWidth: 'none' }}>
-          <div style={{ padding: '20px 20px 0' }}>
-
-            {/* Tag */}
-            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'rgba(201,74,27,0.1)', color: 'var(--d-accent)', padding: '5px 12px', borderRadius: 99, fontSize: 11, fontWeight: 700, letterSpacing: 0.5, marginBottom: 14 }}>
-              <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--d-accent)' }} />
-              AT PICKUP
+          {/* Sender */}
+          <div style={{ background: 'var(--d-surface)', border: '1px solid var(--d-border)', borderRadius: 20, padding: 16, display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{ width: 44, height: 44, borderRadius: 22, background: 'var(--d-surface-2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 650, fontSize: 15, flexShrink: 0 }}>
+              {initials(order.pickup.name)}
             </div>
-
-            {/* Heading */}
-            <div style={{ fontSize: 28, fontWeight: 800, color: 'var(--d-ink)', letterSpacing: -0.5, marginBottom: 6 }}>
-              Confirm the parcel.
-            </div>
-            <div style={{ fontSize: 14, color: 'var(--d-muted)', lineHeight: 1.5, marginBottom: 20 }}>
-              Match the description, snap a photo for the sender's records, then slide to confirm pickup.
-            </div>
-
-            {/* Contact card */}
-            <div style={{ background: '#fff', border: '1px solid var(--d-border)', borderRadius: 12, padding: '14px', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 12 }}>
-              <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--d-accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 700, fontSize: 14, flexShrink: 0 }}>
-                {initials(order.pickup.name)}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 16, fontWeight: 650 }}>{order.pickup.name}</div>
+              <div style={{ fontSize: 13, color: 'var(--d-muted)', marginTop: 1 }}>
+                {order.pickup.address.split(',')[0]}{order.pickup.unit ? ` · ${order.pickup.unit}` : ''}
               </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--d-ink)' }}>{order.pickup.name}</div>
-                <div style={{ fontSize: 12, color: 'var(--d-muted)', marginTop: 1 }}>
-                  {order.pickup.address.split(',')[0]}{order.pickup.unit ? ` · ${order.pickup.unit}` : ''}
-                </div>
+            </div>
+            <Button size="md" variant="secondary" full={false} icon="phone" onClick={() => callParty(order.pickup.phone)}>Call</Button>
+          </div>
+
+          {/* Parcel */}
+          <div style={{ background: 'var(--d-surface)', border: '1px solid var(--d-border)', borderRadius: 20, overflow: 'hidden' }}>
+            {rows.map((row, i) => (
+              <div key={row.label} style={{ display: 'flex', gap: 12, padding: '14px 16px', borderTop: i > 0 ? '1px solid var(--d-border)' : 'none' }}>
+                <div style={{ width: 84, fontSize: 13, color: 'var(--d-muted)', flexShrink: 0 }}>{row.label}</div>
+                <div style={{ fontSize: 15, fontWeight: 500 }}>{row.value}</div>
               </div>
-              <button
-                onClick={() => order.pickup.phone ? window.open(`tel:${order.pickup.phone.replace(/\s/g, '')}`) : undefined}
-                style={{ width: 36, height: 36, borderRadius: '50%', border: '1px solid var(--d-border)', background: 'var(--d-bg)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
-              >
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="var(--d-ink)" strokeWidth="1.5" strokeLinecap="round"><path d="M3 3c0 0 1 0 2 2s.5 3.5 2 5 3 3 5 3"/></svg>
-              </button>
-            </div>
-
-            {/* Parcel details table */}
-            <div style={{ background: '#fff', border: '1px solid var(--d-border)', borderRadius: 12, padding: '4px 0', marginBottom: 14, overflow: 'hidden' }}>
-              {[
-                { label: 'SIZE',        value: SIZE_LABEL[order.parcel.size] ?? order.parcel.size },
-                { label: 'DESCRIPTION', value: order.parcel.desc },
-                ...(order.parcel.fragile ? [{ label: 'HANDLING', value: 'Fragile · keep upright' }] : []),
-                ...(order.parcel.deliveryWindow ? [{ label: 'WINDOW', value: DELIVERY_WINDOW_LABELS[order.parcel.deliveryWindow] }] : []),
-              ].map((row, i, arr) => (
-                <div key={row.label} style={{ display: 'flex', padding: '12px 14px', borderTop: i > 0 ? '1px solid var(--d-border)' : 'none' }}>
-                  <div style={{ width: 100, fontSize: 11, fontWeight: 700, color: 'var(--d-muted)', letterSpacing: 0.5, textTransform: 'uppercase', flexShrink: 0, paddingTop: 1 }}>{row.label}</div>
-                  <div style={{ fontSize: 14, color: 'var(--d-ink)' }}>{row.value}</div>
-                </div>
-              ))}
-            </div>
-
-            {/* Admin notes */}
-            {order.notes.length > 0 && (
-              <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10, padding: '10px 12px', marginBottom: 14, fontSize: 13, color: '#92400e' }}>
-                {order.notes.map(n => n.text).join(' · ')}
+            ))}
+            {order.parcel.fragile && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 16px', background: 'var(--d-warn-bg)', color: 'var(--d-warn)', fontSize: 14, fontWeight: 650 }}>
+                <Icon name="alert" size={16} /> Fragile. Keep it upright.
               </div>
             )}
+          </div>
 
-            {/* Photo proof */}
-            <div style={{ marginBottom: 20 }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--d-muted)', letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 8 }}>
-                Photo Proof
-              </div>
-              <PhotoCapture
-                orderId={orderId}
-                label="pickup"
-                required
-                captured={!!photoPreview}
-                previewUrl={photoPreview}
-                uploading={photoUploading}
-                onCapture={(preview, storage) => {
-                  setPhotoPreview(preview)
-                  setPhotoUploading(storage === null && preview !== null)
-                  if (storage !== null) { setPhotoUrl(storage); setPhotoUploading(false) }
-                }}
-                onClear={() => { setPhotoPreview(null); setPhotoUrl(null) }}
-              />
-            </div>
+          {order.pickup.note && <NoteCard label="Pickup note" text={order.pickup.note} />}
+          {order.notes.length > 0 && <NoteCard label="From dispatch" text={order.notes.map(n => n.text).join(' · ')} />}
 
+          <div>
+            <div style={{ fontSize: 13, color: 'var(--d-muted)', margin: '0 4px 8px' }}>Photo of the parcel (optional)</div>
+            <PhotoCapture
+              orderId={orderId}
+              label="pickup"
+              captured={!!photoPreview}
+              previewUrl={photoPreview}
+              uploading={photoUploading}
+              onCapture={(preview, storage) => {
+                setPhotoPreview(preview)
+                setPhotoUploading(storage === null && preview !== null)
+                if (storage !== null) { setPhotoUrl(storage); setPhotoUploading(false) }
+              }}
+              onClear={() => { setPhotoPreview(null); setPhotoUrl(null) }}
+            />
           </div>
         </div>
+        </div>
 
-        {/* Bottom action */}
-        <div style={{ padding: '12px 20px', paddingBottom: 'max(12px, env(safe-area-inset-bottom, 12px))', background: '#fff', borderTop: '1px solid var(--d-border)', flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div style={{ padding: '12px 16px calc(env(safe-area-inset-bottom, 0px) + 12px)', background: 'var(--d-surface)', borderTop: '1px solid var(--d-border)', flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 10 }}>
           <SlideAction
             label={confirming ? 'Confirming…' : 'Slide to confirm pickup'}
             variant="green"
             onSlideComplete={handleConfirmPickup}
             disabled={confirming}
           />
-          <div style={{ display: 'flex', gap: 10 }}>
-            <button onClick={() => setShowIssue(true)} style={{ flex: 1, padding: '11px 0', border: '1px solid var(--d-border)', borderRadius: 10, background: '#fff', fontSize: 13, fontWeight: 500, color: 'var(--d-ink)', cursor: 'pointer' }}>
-              Wrong parcel?
-            </button>
-            <button onClick={() => {
-              if (window.confirm('Cancel this job? This action cannot be undone.')) {
+          <div style={{ display: 'flex', gap: 8 }}>
+            <Button size="md" variant="ghost" icon="alert" onClick={() => setShowIssue(true)}>Report a problem</Button>
+            <Button size="md" variant="ghost" style={{ color: 'var(--d-err)' }} onClick={() => {
+              if (window.confirm('Cancel this job? This can\'t be undone.')) {
                 dispatch({ type: 'UPDATE_STATUS', orderId, status: 'cancelled' })
                 onBack()
               }
-            }} style={{ flex: 1, padding: '11px 0', border: '1px solid var(--d-border)', borderRadius: 10, background: '#fff', fontSize: 13, fontWeight: 500, color: '#ef4444', cursor: 'pointer' }}>
-              Cancel job
-            </button>
+            }}>Cancel job</Button>
           </div>
         </div>
 
-        {toast    && <Toast message={toast} onDone={() => setToast('')} />}
-        {showIssue && <ReportIssueSheet order={order} onClose={() => setShowIssue(false)} onSubmit={handleIssueSubmit} />}
-        {chatOpen && (
-          <ChatPanel order={order} myId={myId} messages={messages} fetchError={fetchError} sending={sending} inputText={inputText} callNotice={callNotice} onSend={handleSend} onInputChange={setInputText} onRetry={loadMessages} onDismissCallNotice={() => setCallNotice(false)} onClose={() => { setChatOpen(false); setCallNotice(false) }} />
-        )}
+        {overlays}
       </div>
     )
   }
 
-  // ── Map-first view (en-route steps) ──────────────────────────────────────
+  // ── EN ROUTE: map + one action ───────────────────────────────────────────
 
-  const isPickup = step === 'en_route_pickup'
-  const party    = isPickup ? order.pickup : order.dropoff
-  const tagLabel = isPickup ? `PICKUP · ${order.id}` : `DROP-OFF · ${order.id}`
-  const neighborhood = party.address.split(',').slice(1).join(',').trim()
-  const subtitle = `${neighborhood ? neighborhood + ' · ' : ''}${party.name}`
-
-  const sheetContent = (
-    <>
-      {/* Tag */}
-      <div style={{
-        display: 'inline-flex', alignItems: 'center', gap: 5, marginBottom: 10,
-        background: isPickup ? 'rgba(201,74,27,0.1)' : 'rgba(17,24,39,0.08)',
-        color: isPickup ? 'var(--d-accent)' : 'var(--d-ink)',
-        padding: '5px 12px', borderRadius: 99, fontSize: 11, fontWeight: 700, letterSpacing: 0.5,
-      }}>
-        <div style={{ width: 6, height: 6, borderRadius: '50%', background: isPickup ? 'var(--d-accent)' : 'var(--d-ink)' }} />
-        {tagLabel}
-      </div>
-
-      {/* Address + subtitle */}
-      <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--d-ink)', marginBottom: 2, letterSpacing: -0.3 }}>
-        {party.address.split(',')[0]}
-        {!isPickup && order.dropoff.unit ? ` · ${order.dropoff.unit}` : ''}
-      </div>
-      <div style={{ fontSize: 13, color: 'var(--d-muted)', marginBottom: 14 }}>{subtitle}</div>
-
-      {/* Sender note (drop-off only) */}
-      {!isPickup && order.dropoff.note && (
-        <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 10, padding: '10px 12px', marginBottom: 14 }}>
-          <div style={{ fontSize: 10, fontWeight: 700, color: '#3b82f6', letterSpacing: 0.5, marginBottom: 4, textTransform: 'uppercase' }}>Note from sender</div>
-          <div style={{ fontSize: 13, color: '#1e3a5f' }}>{order.dropoff.note}</div>
-        </div>
-      )}
-
-      {/* Stats */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 16 }}>
-        {[
-          { label: 'ETA',      value: `~${Math.round(order.distanceKm * 3 + 5)} min` },
-          { label: 'Distance', value: `${order.distanceKm} km`     },
-          { label: 'Payout',   value: payout, accent: true          },
-        ].map(s => (
-          <div key={s.label} style={{ padding: 10, background: '#f9fafb', borderRadius: 10 }}>
-            <div style={{ fontFamily: 'monospace', fontSize: 9, color: 'var(--d-muted)', letterSpacing: 1, textTransform: 'uppercase' }}>{s.label}</div>
-            <div style={{ fontSize: 15, fontWeight: 600, color: (s as any).accent ? 'var(--d-accent)' : 'var(--d-ink)', marginTop: 2, letterSpacing: -0.2 }}>{s.value}</div>
-          </div>
-        ))}
-      </div>
-
-      {/* Navigation helper */}
-      <button onClick={() => openMapsNav(party.address)} style={{ width: '100%', padding: '10px', border: '1px solid var(--d-border)', borderRadius: 10, background: '#fff', fontSize: 13, fontWeight: 500, color: 'var(--d-ink)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, marginBottom: 12 }}>
-        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M7 1l5.5 11.5L7 10.5 1.5 12.5z"/></svg>
-        Open in Maps
-      </button>
-
-      {/* Slide action */}
-      <SlideAction
-        label={checkingLocation ? 'Checking location…' : "Slide when you've arrived"}
-        variant="dark"
-        disabled={checkingLocation}
-        onSlideComplete={isPickup ? handleArrivedPickup : handleArrivedDropoff}
-      />
-    </>
-  )
+  const etaMin   = route ? Math.max(1, Math.round(route.durationS / 60)) : null
+  const distKm   = route ? route.distanceM / 1000 : null
+  const note     = isPickup ? order.pickup.note : order.dropoff.note
+  const unit     = party.unit
+  const phone    = isPickup ? order.pickup.phone : order.dropoff.phone
 
   return (
-    <div style={{ position: 'absolute', inset: 0, background: '#e5e5e5', overflow: 'hidden' }}>
+    <div style={{ position: 'absolute', inset: 0, background: 'var(--d-surface-2)', overflow: 'hidden', color: 'var(--d-ink)' }}>
+      <DeliveryMap ref={mapRef} target={target ?? undefined} targetKind={isPickup ? 'pickup' : 'dropoff'} driver={driverPos} route={route?.coords} bottomInset={sheetH} />
 
-      {/* Map */}
-      <iframe
-        src={googleMapsEmbedUrl(mapAddr)}
-        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 'none', zIndex: 0 }}
-        loading="lazy" title="Map" referrerPolicy="no-referrer-when-downgrade"
-      />
+      {/* Floating controls */}
+      <div style={{ position: 'absolute', top: 'calc(env(safe-area-inset-top, 0px) + 12px)', left: 16, zIndex: 60, borderRadius: 22, boxShadow: 'var(--d-shadow-md)' }}>
+        <BackButton onClick={onBack} />
+      </div>
+      <button
+        onClick={() => { haptic('tap'); mapRef.current?.recenter() }}
+        aria-label="Recenter map"
+        className="d-press"
+        style={{
+          position: 'absolute', right: 16, bottom: sheetH + 14, zIndex: 60,
+          width: 44, height: 44, borderRadius: 22, border: 'none', cursor: 'pointer',
+          background: 'var(--d-surface)', color: 'var(--d-ink)', boxShadow: 'var(--d-shadow-md)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}
+      ><Icon name="locate" size={20} /></button>
 
-      {/* Back */}
-      <button onClick={onBack} style={{ position: 'absolute', top: 'max(16px, env(safe-area-inset-top, 16px))', left: 16, zIndex: 60, width: 40, height: 40, borderRadius: '50%', background: '#fff', border: 'none', boxShadow: '0 2px 8px rgba(0,0,0,0.15)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="var(--d-ink)" strokeWidth="2.2" strokeLinecap="round"><path d="M9 2L4 7l5 5"/></svg>
-      </button>
-
-
-      {/* Navigation banner */}
-      {navInstruction && (
-        <NavigationBanner instruction={navInstruction} distanceCue={`${order.distanceKm.toFixed(1)} km`} />
-      )}
-
-      {/* Right-rail glass buttons (phone + message) */}
-      <div style={{
-        position: 'absolute', top: 130, right: 12, zIndex: 5,
-        display: 'flex', flexDirection: 'column', gap: 10,
+      {/* Sheet */}
+      <div ref={sheetRef} style={{
+        position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 60,
+        background: 'var(--d-surface)', borderRadius: '26px 26px 0 0',
+        boxShadow: '0 -8px 30px rgba(0,0,0,.18)',
+        padding: '10px 16px calc(env(safe-area-inset-bottom, 0px) + 14px)',
+        maxHeight: '72vh', overflowY: 'auto', scrollbarWidth: 'none',
+        display: 'flex', flexDirection: 'column', gap: 14,
       }}>
-        <button
-          onClick={() => {
-            const phone = isPickup ? order.pickup.phone : order.dropoff.phone
-            if (phone) window.open(`tel:${phone.replace(/\s/g, '')}`)
-          }}
-          style={{
-            width: 40, height: 40, borderRadius: 20, border: 'none', cursor: 'pointer',
-            background: 'rgba(255,255,255,0.92)', backdropFilter: 'blur(10px)',
-            boxShadow: '0 4px 12px rgba(11,18,32,.12)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}
-        >
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#111827" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M3 3c0 0 1 0 2 2s.5 3.5 2 5 3 3 5 3"/>
-          </svg>
-        </button>
-        <button
-          onClick={() => setChatOpen(true)}
-          style={{
-            width: 40, height: 40, borderRadius: 20, border: 'none', cursor: 'pointer',
-            background: 'rgba(255,255,255,0.92)', backdropFilter: 'blur(10px)',
-            boxShadow: '0 4px 12px rgba(11,18,32,.12)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            position: 'relative',
-          }}
-        >
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#111827" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M14 2H2a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h2v3l4-3h6a1 1 0 0 0 1-1V3a1 1 0 0 0-1-1z"/>
-          </svg>
-          {unreadCount > 0 && (
-            <div style={{ position: 'absolute', top: -2, right: -2, width: 14, height: 14, borderRadius: '50%', background: '#c94a1b', border: '2px solid #fff', fontSize: 9, fontWeight: 700, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              {unreadCount}
+        <div style={{ width: 38, height: 5, borderRadius: 3, background: 'var(--d-border)', margin: '0 auto' }} />
+
+        <div style={{ padding: '0 4px' }}><Stepper step={step} /></div>
+
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '0 4px' }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 13, color: 'var(--d-muted)' }}>{isPickup ? 'Pick up from' : 'Deliver to'} {party.name}</div>
+            <div style={{ fontSize: 24, fontWeight: 700, letterSpacing: -0.6, lineHeight: 1.2, marginTop: 2 }}>
+              {party.address.split(',')[0]}{unit ? ` · ${unit}` : ''}
+            </div>
+          </div>
+          {etaMin != null && distKm != null ? (
+            <div style={{ textAlign: 'right', flexShrink: 0 }}>
+              <div style={{ fontSize: 24, fontWeight: 700, letterSpacing: -0.6, lineHeight: 1.2, fontVariantNumeric: 'tabular-nums' }}>{etaMin} min</div>
+              <div style={{ fontSize: 13, color: 'var(--d-muted)', marginTop: 2 }}>{distKm.toFixed(1)} km</div>
+            </div>
+          ) : (
+            <div style={{ fontSize: 13, color: 'var(--d-muted)', flexShrink: 0, paddingTop: 4 }}>
+              {driverPos ? 'Finding route…' : 'Locating you…'}
             </div>
           )}
-        </button>
-      </div>
-
-      {/* Bottom sheet */}
-      <div style={{
-        position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 60,
-        background: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20,
-        boxShadow: '0 -4px 24px rgba(0,0,0,0.14)',
-        transform: sheetOpen ? 'translateY(0)' : 'translateY(calc(100% - 64px))',
-        transition: 'transform 0.28s ease-out',
-        paddingBottom: 'env(safe-area-inset-bottom, 16px)',
-        maxHeight: '58vh', display: 'flex', flexDirection: 'column',
-      }}>
-        {/* Handle */}
-        <div onClick={() => setSheetOpen(v => !v)} style={{ padding: '10px 20px 6px', cursor: 'pointer', display: 'flex', justifyContent: 'center', flexShrink: 0 }}>
-          <div style={{ width: 36, height: 4, background: '#d1d5db', borderRadius: 2 }} />
         </div>
 
-        <div style={{ flex: 1, overflowY: 'auto', padding: '8px 20px 16px', scrollbarWidth: 'none' }}>
-          {sheetContent}
+        {note && <NoteCard label={isPickup ? 'Pickup note' : 'Note from sender'} text={note} />}
+
+        <div style={{ display: 'flex', gap: 8 }}>
+          <ActionTile icon="phone"   label="Call"    onClick={() => callParty(phone)} />
+          <ActionTile icon="message" label="Message" onClick={() => setChatOpen(true)} badge={unreadCount} />
+          <ActionTile icon="alert"   label="Problem" onClick={() => setShowIssue(true)} />
+        </div>
+
+        <Button size="xl" icon="navigate" onClick={navigate}>Navigate to {place}</Button>
+
+        {arrivalProblem && (
+          <ArrivalProblem result={arrivalProblem} place={place} onRetry={handleArrived} onDismiss={() => setArrivalProblem(null)} />
+        )}
+
+        <SlideAction
+          label={checkingLocation ? 'Checking location…' : "Slide when you've arrived"}
+          disabled={checkingLocation}
+          onSlideComplete={handleArrived}
+        />
+
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--d-muted-lt)', padding: '0 4px' }}>
+          <span>{order.id}</span>
+          <span>You earn {`$${driverPayout(order).toFixed(2)}`}</span>
         </div>
       </div>
 
-      {toast     && <Toast message={toast} onDone={() => setToast('')} />}
-      {showIssue && <ReportIssueSheet order={order} onClose={() => setShowIssue(false)} onSubmit={handleIssueSubmit} />}
-      {chatOpen  && (
-        <ChatPanel order={order} myId={myId} messages={messages} fetchError={fetchError} sending={sending} inputText={inputText} callNotice={callNotice} onSend={handleSend} onInputChange={setInputText} onRetry={loadMessages} onDismissCallNotice={() => setCallNotice(false)} onClose={() => { setChatOpen(false); setCallNotice(false) }} />
-      )}
+      {overlays}
     </div>
   )
 }

@@ -1,404 +1,421 @@
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useEffect } from 'react'
 import { useDriver } from '../store/DriverContext'
-import { SlideAction } from '../components/SlideAction'
+import type { DeliverySubstep } from '../store/DriverContext'
 import type { Order } from '@shared/types'
 import { driverPayout } from '../utils/payout'
+import { Button, Card, Icon, SectionLabel, TextLink, money } from '../ui'
+import { haptic } from '../lib/haptics'
 
 interface Props {
   onSelectOrder: (orderId: string) => void
   onGoHistory:   () => void
   onGoProfile:   () => void
-  onGoEarnings?: () => void
 }
 
-// ── Top status bar (always dark) ──────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
-function DarkHeader({
-  isOnline, earningsToday, todayJobs, kmToday, hoursToday, barData, driverName, onGoProfile,
-}: { isOnline: boolean; earningsToday: number; todayJobs: number; kmToday: number; hoursToday: number; barData: { label: string; earnings: number; isToday: boolean }[]; driverName: string; onGoProfile: () => void }) {
-  const initials = driverName.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2) || '?'
-  const dollars = Math.floor(earningsToday)
-  const cents   = String(Math.round((earningsToday % 1) * 100)).padStart(2, '0')
+const street = (address: string) => address.split(',')[0]
 
+function greeting(now = new Date()): string {
+  const h = now.getHours()
+  if (h < 12) return 'Good morning'
+  if (h < 18) return 'Good afternoon'
+  return 'Good evening'
+}
+
+function timeAgo(iso: string): string {
+  const mins = Math.round((Date.now() - new Date(iso).getTime()) / 60_000)
+  if (mins < 1)  return 'just now'
+  if (mins < 60) return `${mins} min ago`
+  const hrs = Math.round(mins / 60)
+  if (hrs < 24)  return `${hrs} h ago`
+  return new Date(iso).toLocaleDateString('en-CA', { weekday: 'short', month: 'short', day: 'numeric' })
+}
+
+/** Where the driver is in a job, and what the one button should say. */
+function jobStage(order: Order, substep: DeliverySubstep | undefined) {
+  if (substep === 'at_dropoff')                                   return { label: 'At drop-off',         action: 'Hand off the parcel' }
+  if (substep === 'picked_up' || order.status === 'picked_up' ||
+      order.status === 'in_transit')                              return { label: 'Heading to drop-off', action: 'Navigate to drop-off' }
+  if (substep === 'at_pickup')                                    return { label: 'At pickup',           action: 'Confirm pickup' }
+  return { label: 'Heading to pickup', action: 'Navigate to pickup' }
+}
+
+function windowLabel(order: Order): string | null {
+  const t = order.deliveryType ?? order.parcel?.deliveryWindow
+  if (!t) return null
+  return t === 'express' ? 'Express' : t === 'morning' ? 'Morning' : t === 'evening' ? 'Evening' : t
+}
+
+const onlineKey = (driverId: string) => `cs_driver_online_${driverId}`
+
+// ── Pieces ────────────────────────────────────────────────────────────────────
+
+function Chip({ children, tone = 'neutral' }: { children: React.ReactNode; tone?: 'neutral' | 'accent' | 'ok' }) {
+  const tones = {
+    neutral: { background: 'var(--d-surface-2)', color: 'var(--d-ink-2)' },
+    accent:  { background: 'var(--d-accent-lt)', color: 'var(--d-accent)' },
+    ok:      { background: 'var(--d-ok-bg)',     color: 'var(--d-ok)' },
+  }[tone]
   return (
-    <div style={{
-      background: '#111827',
-      paddingTop: 'max(52px, env(safe-area-inset-top, 52px))',
-      paddingBottom: 20,
-      paddingLeft: 20,
-      paddingRight: 20,
-      flexShrink: 0,
-    }}>
-      {/* Row 1: status pill + today summary + avatar */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: 6,
-          background: isOnline ? 'rgba(34,197,94,0.15)' : 'rgba(255,255,255,0.08)',
-          borderRadius: 99, padding: '4px 10px',
-        }}>
-          <div style={{
-            width: 7, height: 7, borderRadius: '50%',
-            background: isOnline ? '#22c55e' : '#6b7280',
-          }} />
-          <span style={{ fontSize: 11, fontWeight: 700, color: '#fff', letterSpacing: 0.6 }}>
-            {isOnline ? 'ONLINE' : 'OFFLINE'}
-          </span>
-        </div>
-        <div style={{ textAlign: 'right', marginRight: 10 }}>
-          <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.45)', letterSpacing: 0.4 }}>TODAY</div>
-          <div style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>
-            ${earningsToday.toFixed(2)} · {todayJobs} Jobs
-          </div>
-        </div>
-        <button
-          onClick={onGoProfile}
-          title="My profile"
-          style={{
-            width: 34, height: 34, borderRadius: '50%',
-            background: 'linear-gradient(135deg, #c94a1b, #e06840)',
-            border: '2px solid rgba(255,255,255,0.2)',
-            color: '#fff', fontSize: 11, fontWeight: 700, cursor: 'pointer',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            flexShrink: 0,
-          }}
-        >
-          {initials}
-        </button>
-      </div>
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', height: 24, padding: '0 10px', borderRadius: 12,
+      fontSize: 12, fontWeight: 600, letterSpacing: -0.1, whiteSpace: 'nowrap', ...tones,
+    }}>{children}</span>
+  )
+}
 
-      {/* Row 2: day label */}
-      <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.45)', letterSpacing: 1, marginBottom: 4 }}>
-        EARNINGS · {new Date().toLocaleDateString('en-CA', { weekday: 'short' }).toUpperCase()}
+function RouteLines({ order }: { order: Order }) {
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: '14px 1fr', columnGap: 12, rowGap: 14 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', paddingTop: 5 }}>
+        <span style={{ width: 10, height: 10, borderRadius: 5, border: '2.5px solid var(--d-ink)' }} />
+        <span style={{ flex: 1, width: 2, background: 'var(--d-border)', margin: '4px 0 -14px' }} />
       </div>
-
-      {/* Row 3: large earnings */}
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 2, marginBottom: 8 }}>
-        <span style={{ fontSize: 48, fontWeight: 800, color: '#fff', letterSpacing: -2, lineHeight: 1 }}>
-          ${dollars}
-        </span>
-        <span style={{ fontSize: 24, fontWeight: 700, color: '#fff' }}>.{cents}</span>
-        <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.4)', marginLeft: 4 }}>CAD</span>
+      <div>
+        <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--d-ink)' }}>{street(order.pickup.address)}</div>
+        <div style={{ fontSize: 13, color: 'var(--d-muted)', marginTop: 1 }}>Pickup · {order.pickup.name}</div>
       </div>
-
-      {/* Row 4: inline stats */}
-      <div style={{ display: 'flex', gap: 24, marginTop: 8, fontSize: 13, color: 'rgba(255,255,255,.7)' }}>
-        <div><span style={{ color: '#fff', fontWeight: 600 }}>{todayJobs}</span> jobs</div>
-        <div><span style={{ color: '#fff', fontWeight: 600 }}>{hoursToday < 1 ? `${Math.round(hoursToday * 60)}m` : `${hoursToday.toFixed(1)}h`}</span> on the road</div>
-        <div><span style={{ color: '#fff', fontWeight: 600 }}>{kmToday.toFixed(1)} km</span> driven</div>
+      <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 5 }}>
+        <span style={{ width: 10, height: 10, borderRadius: 2, background: 'var(--d-accent)' }} />
       </div>
-
-      {/* 7-day bar chart */}
-      <div style={{ marginTop: 22, display: 'flex', alignItems: 'flex-end', gap: 10, height: 64 }}>
-        {barData.map((day, i) => {
-          const maxEarnings = Math.max(...barData.map(d => d.earnings), 1)
-          const h = day.earnings / maxEarnings
-          return (
-            <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
-              <div style={{
-                width: '100%', height: `${Math.max(h * 100, day.earnings > 0 ? 8 : 4)}%`, borderRadius: 3,
-                background: day.isToday ? '#c94a1b' : 'rgba(255,255,255,.22)',
-              }}/>
-              <div style={{
-                fontFamily: 'monospace', fontSize: 9, letterSpacing: 1,
-                color: day.isToday ? '#fff' : 'rgba(255,255,255,.4)',
-              }}>{day.label}</div>
-            </div>
-          )
-        })}
+      <div>
+        <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--d-ink)' }}>{street(order.dropoff.address)}</div>
+        <div style={{ fontSize: 13, color: 'var(--d-muted)', marginTop: 1 }}>Drop-off · {order.dropoff.name}</div>
       </div>
     </div>
   )
 }
 
-// ── Main component ────────────────────────────────────────────────────────────
+function StatusCard({ online, onToggle }: { online: boolean; onToggle: (next: boolean) => void }) {
+  if (!online) {
+    return (
+      <Card style={{ padding: 20 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 18 }}>
+          <div style={{
+            width: 48, height: 48, borderRadius: 24, flexShrink: 0,
+            background: 'var(--d-surface-2)', color: 'var(--d-muted)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            <Icon name="power" size={22} stroke={2.2} />
+          </div>
+          <div>
+            <div style={{ fontSize: 20, fontWeight: 650, letterSpacing: -0.4 }}>You're offline</div>
+            <div style={{ fontSize: 14, color: 'var(--d-muted)', marginTop: 2 }}>Go online to start getting delivery offers.</div>
+          </div>
+        </div>
+        <Button variant="go" size="xl" icon="power" onClick={() => onToggle(true)}>Go online</Button>
+      </Card>
+    )
+  }
 
-export function DashboardScreen({ onSelectOrder, onGoHistory, onGoProfile, onGoEarnings }: Props) {
+  return (
+    <Card style={{ padding: 20 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+        <div style={{ position: 'relative', width: 48, height: 48, flexShrink: 0 }}>
+          <span style={{ position: 'absolute', inset: 0, borderRadius: 24, background: 'var(--d-ok)', opacity: .25, animation: 'd-ping 1.8s ease-out infinite' }} />
+          <span style={{
+            position: 'absolute', inset: 0, borderRadius: 24, background: 'var(--d-ok-bg)', color: 'var(--d-ok)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            <Icon name="bolt" size={22} stroke={2.2} />
+          </span>
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 20, fontWeight: 650, letterSpacing: -0.4 }}>You're online</div>
+          <div style={{ fontSize: 14, color: 'var(--d-muted)', marginTop: 2 }}>We'll alert you when a job comes in.</div>
+        </div>
+      </div>
+      <Button variant="secondary" size="md" onClick={() => onToggle(false)} style={{ marginTop: 16 }}>Go offline</Button>
+    </Card>
+  )
+}
+
+function CurrentJob({ order, substep, onOpen }: { order: Order; substep: DeliverySubstep | undefined; onOpen: () => void }) {
+  const stage = jobStage(order, substep)
+  const win = windowLabel(order)
+  return (
+    <Card style={{ padding: 20, borderColor: 'var(--d-accent)', boxShadow: 'var(--d-shadow-md)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+        <Chip tone="accent">{stage.label}</Chip>
+        {win && <Chip>{win}</Chip>}
+        <div style={{ flex: 1 }} />
+        <div style={{ textAlign: 'right' }}>
+          <div style={{ fontSize: 20, fontWeight: 700, letterSpacing: -0.4, fontVariantNumeric: 'tabular-nums' }}>{money(driverPayout(order))}</div>
+          <div style={{ fontSize: 12, color: 'var(--d-muted)' }}>{order.distanceKm.toFixed(1)} km</div>
+        </div>
+      </div>
+      <RouteLines order={order} />
+      <Button size="xl" onClick={onOpen} style={{ marginTop: 20 }}>{stage.action}</Button>
+    </Card>
+  )
+}
+
+function Stat({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <div style={{ fontSize: 22, fontWeight: 650, letterSpacing: -0.5, fontVariantNumeric: 'tabular-nums' }}>{value}</div>
+      <div style={{ fontSize: 13, color: 'var(--d-muted)', marginTop: 2 }}>{label}</div>
+    </div>
+  )
+}
+
+function WeekChart({ days, total }: { days: { label: string; earnings: number; isToday: boolean }[]; total: number }) {
+  const max = Math.max(...days.map(d => d.earnings), 1)
+  return (
+    <Card>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 16 }}>
+        <div style={{ fontSize: 14, color: 'var(--d-muted)' }}>Last 7 days</div>
+        <div style={{ fontSize: 18, fontWeight: 650, fontVariantNumeric: 'tabular-nums' }}>{money(total)}</div>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8, height: 72 }}>
+        {days.map((d, i) => (
+          <div key={i} style={{ flex: 1, height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', alignItems: 'center', gap: 6 }}>
+            <div style={{
+              width: '100%', borderRadius: 6,
+              height: d.earnings > 0 ? `${Math.max((d.earnings / max) * 100, 8)}%` : 4,
+              background: d.isToday ? 'var(--d-accent)' : d.earnings > 0 ? 'var(--d-ink-2)' : 'var(--d-border)',
+              opacity: d.isToday || d.earnings === 0 ? 1 : 0.35,
+            }} />
+            <div style={{ fontFamily: 'var(--d-mono)', fontSize: 10, color: d.isToday ? 'var(--d-ink)' : 'var(--d-muted-lt)' }}>{d.label}</div>
+          </div>
+        ))}
+      </div>
+    </Card>
+  )
+}
+
+// ── Screen ────────────────────────────────────────────────────────────────────
+
+export function DashboardScreen({ onSelectOrder, onGoHistory, onGoProfile }: Props) {
   const { state, completedOrders, activeOrders, dispatch, connectionStatus } = useDriver()
-  const [isOnline, setIsOnline] = useState(true)
-
   const { auth } = state
 
-  const todayCompleted = useMemo(() =>
-    completedOrders.filter(o => {
-      const d = new Date(o.updatedAt)
-      return d.toDateString() === new Date().toDateString()
-    }),
-    [completedOrders],
-  )
+  const [online, setOnline] = useState(() => {
+    if (!auth) return true
+    try { return localStorage.getItem(onlineKey(auth.driverId)) !== 'false' } catch { return true }
+  })
+  useEffect(() => {
+    if (!auth) return
+    try { localStorage.setItem(onlineKey(auth.driverId), String(online)) } catch {}
+  }, [online, auth?.driverId])
 
-  const earningsToday = useMemo(() =>
-    todayCompleted.reduce((sum, o) => sum + driverPayout(o), 0),
-    [todayCompleted],
-  )
+  const delivered = useMemo(() => completedOrders.filter(o => o.status === 'delivered'), [completedOrders])
 
-  const kmToday = useMemo(() =>
-    todayCompleted.reduce((sum, o) => sum + (o.distanceKm ?? 0), 0),
-    [todayCompleted],
-  )
-  // Estimate hours: 10 min base + 4 min/km average city speed
-  const hoursToday = useMemo(() =>
-    todayCompleted.reduce((sum, o) => sum + (10 + (o.distanceKm ?? 0) * 4) / 60, 0),
-    [todayCompleted],
-  )
+  const today = useMemo(() => {
+    const key = new Date().toDateString()
+    const list = delivered.filter(o => new Date(o.updatedAt).toDateString() === key)
+    return {
+      count:    list.length,
+      earnings: list.reduce((s, o) => s + driverPayout(o), 0),
+      km:       list.reduce((s, o) => s + (o.distanceKm ?? 0), 0),
+    }
+  }, [delivered])
 
-  const todayJobs = auth ? auth.completedOrders + todayCompleted.length : todayCompleted.length
-
-  const DAY_LABELS = ['S','M','T','W','T','F','S']
-  const barData = useMemo(() => {
-    const today = new Date()
-    return Array.from({ length: 7 }, (_, i) => {
-      const d = new Date(today)
+  const week = useMemo(() => {
+    const LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
+    const now = new Date()
+    const days = Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(now)
       d.setDate(d.getDate() - (6 - i))
-      const dayStr = d.toDateString()
-      const earnings = completedOrders
-        .filter(o => o.status === 'delivered' && new Date(o.updatedAt).toDateString() === dayStr)
-        .reduce((sum, o) => sum + driverPayout(o), 0)
-      return { label: DAY_LABELS[d.getDay()], earnings, isToday: i === 6 }
+      const key = d.toDateString()
+      const earnings = delivered
+        .filter(o => new Date(o.updatedAt).toDateString() === key)
+        .reduce((s, o) => s + driverPayout(o), 0)
+      return { label: LABELS[d.getDay()], earnings, isToday: i === 6 }
     })
-  }, [completedOrders])
+    return { days, total: days.reduce((s, d) => s + d.earnings, 0) }
+  }, [delivered])
 
   if (!auth) return null
+
+  const [current, ...queued] = activeOrders
+  const recent = completedOrders.slice(0, 3)
+  const firstName = auth.name.split(' ')[0]
+  const initials = auth.name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2) || '?'
+
+  const toggleOnline = (next: boolean) => {
+    haptic(next ? 'success' : 'tap')
+    setOnline(next)
+  }
 
   const handleSimulate = () => {
     const realJob = activeOrders.find(o => o.status === 'assigned' && !state.substeps[o.id])
     if (realJob) { dispatch({ type: 'SHOW_JOB_OFFER', order: realJob }); return }
-
-    const mock: import('@shared/types').Order = {
-      id:               `CS-DEMO-${Date.now().toString().slice(-4)}`,
-      status:           'assigned',
-      customerId:       'demo-customer',
-      customerName:     'Jordan Lee',
+    const mock: Order = {
+      id:                 `CS-DEMO-${Date.now().toString().slice(-4)}`,
+      status:             'assigned',
+      customerId:         'demo-customer',
+      customerName:       'Jordan Lee',
       assignedDriverId:   auth.driverId,
       assignedDriverName: auth.name,
-      cityId:           'winnipeg',
-      createdAt:        new Date().toISOString(),
-      updatedAt:        new Date().toISOString(),
-      distanceKm:       4.2,
+      cityId:             'winnipeg',
+      createdAt:          new Date().toISOString(),
+      updatedAt:          new Date().toISOString(),
+      distanceKm:         4.2,
       priceBreakdown: {
         baseFee: 5.99, distanceFee: 6.30, sizeFee: 0, fragileFee: 1.50,
         subtotalPreTax: 13.79, gst: 0.69, pst: 0, hst: 0, qst: 0,
         totalTax: 0.69, subtotalWithTax: 14.48, tip: 2.00, total: 16.48,
       },
-      pickup: { name: 'Sasha Novak', phone: '204 555 0198', address: '134 Princess St, Exchange District', unit: '', note: 'Buzz 302' },
+      pickup:  { name: 'Sasha Novak', phone: '204 555 0198', address: '134 Princess St, Exchange District', unit: '', note: 'Buzz 302' },
       dropoff: { name: 'Mei Tanaka', phone: '204 555 0771', address: '88 Osborne St, Osborne Village', unit: 'Apt 3', note: 'Leave at front desk if no answer.' },
-      parcel: { size: 'm', desc: 'Birthday cake — chocolate', fragile: true, prohibitedItemsDeclarationAccepted: true },
+      parcel:  { size: 'm', desc: 'Birthday cake — chocolate', fragile: true, prohibitedItemsDeclarationAccepted: true },
       notes: [],
     }
     dispatch({ type: 'SHOW_JOB_OFFER', order: mock })
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: 'var(--d-bg)', overflow: 'hidden' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: 'var(--d-bg)', color: 'var(--d-ink)', overflow: 'hidden' }}>
 
-      {/* Network connection banner */}
       {connectionStatus !== 'online' && (
-        <div style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-          padding: '8px 16px', zIndex: 200, flexShrink: 0,
-          background: connectionStatus === 'offline' ? '#7f1d1d' : '#78350f',
-          fontSize: 13, fontWeight: 600, color: '#fff',
+        <div role="status" style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, flexShrink: 0,
+          padding: 'calc(env(safe-area-inset-top, 0px) + 8px) 16px 8px',
+          background: connectionStatus === 'offline' ? 'var(--d-err-bg)' : 'var(--d-warn-bg)',
+          color: connectionStatus === 'offline' ? 'var(--d-err)' : 'var(--d-warn)',
+          fontSize: 13, fontWeight: 600,
         }}>
-          {connectionStatus === 'offline'
-            ? '📵 No network connection — updates paused'
-            : '🔄 Reconnecting and syncing orders…'}
+          <Icon name="wifiOff" size={16} />
+          {connectionStatus === 'offline' ? 'No connection. Updates are paused.' : 'Reconnecting…'}
         </div>
       )}
 
-      {/* Dark header */}
-      <DarkHeader isOnline={isOnline} earningsToday={earningsToday} todayJobs={todayJobs} kmToday={kmToday} hoursToday={hoursToday} barData={barData} driverName={auth.name} onGoProfile={onGoProfile} />
+      <div style={{ flex: 1, overflowY: 'auto', scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch' }}>
 
-      {/* Scrollable body */}
-      <div style={{ flex: 1, overflowY: 'auto', scrollbarWidth: 'none' }}>
-
-        {/* ── Offline: slide to go online ─────────────────────────────────── */}
-        {!isOnline && (
-          <div style={{ padding: '20px 20px 0' }}>
-            <SlideAction
-              label="Slide to go online"
-              variant="green"
-              onSlideComplete={() => setIsOnline(true)}
-            />
+        {/* Greeting */}
+        <header style={{
+          display: 'flex', alignItems: 'center', gap: 12,
+          padding: `calc(${connectionStatus !== 'online' ? '0px' : 'env(safe-area-inset-top, 0px)'} + 16px) 20px 18px`,
+        }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 14, color: 'var(--d-muted)' }}>{greeting()}</div>
+            <div style={{ fontSize: 28, fontWeight: 700, letterSpacing: -0.8, lineHeight: 1.15 }}>{firstName}</div>
           </div>
-        )}
+          <button
+            onClick={() => { haptic('tap'); onGoProfile() }}
+            aria-label="My profile"
+            className="d-press"
+            style={{
+              width: 44, height: 44, borderRadius: 22, flexShrink: 0, cursor: 'pointer',
+              background: 'var(--d-surface)', border: '1px solid var(--d-border)', color: 'var(--d-ink)',
+              fontSize: 14, fontWeight: 650, display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}
+          >{initials}</button>
+        </header>
 
-        {/* ── Online: status + simulate ────────────────────────────────────── */}
-        {isOnline && (
-          <div style={{ padding: '16px 20px 0', display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {/* Status row */}
-            <div style={{
-              background: '#fff', border: '1px solid var(--d-border)', borderRadius: 18, padding: 18,
-              display: 'flex', alignItems: 'center', gap: 14,
-            }}>
-              {/* Ping ring icon */}
-              <div style={{
-                width: 44, height: 44, borderRadius: 22,
-                background: 'rgba(63,185,107,.12)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                position: 'relative', flexShrink: 0,
-              }}>
-                <div style={{
-                  position: 'absolute', inset: 0, borderRadius: 22, border: '2px solid #3fb96b',
-                  animation: 'cs-ping 1.6s ease-out infinite',
-                }}/>
-                {/* Flash bolt */}
-                <svg width="18" height="18" viewBox="0 0 18 18" fill="#166b3a">
-                  <path d="M10.5 2L4 10h5.5L7.5 16 14 8H8.5z"/>
-                </svg>
-              </div>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--d-ink)', letterSpacing: -0.2 }}>Looking for jobs nearby</div>
-                <div style={{ fontSize: 13, color: 'var(--d-muted)', marginTop: 2 }}>Avg wait this hour · 6 min</div>
-              </div>
-              <button
-                onClick={() => setIsOnline(false)}
-                style={{
-                  padding: '8px 14px', background: '#f3f4f6',
-                  border: 'none', borderRadius: 999,
-                  fontSize: 13, fontWeight: 500, color: 'var(--d-ink)', cursor: 'pointer', fontFamily: 'inherit',
-                }}
-              >Stop</button>
-            </div>
+        <main style={{ padding: '0 16px 32px', display: 'flex', flexDirection: 'column', gap: 28 }}>
 
-            {/* Simulate button — dev only */}
-            {import.meta.env.DEV && (
-              <button
-                onClick={handleSimulate}
-                style={{
-                  width: '100%', padding: '13px 0',
-                  background: 'var(--d-accent)', border: 'none', borderRadius: 12,
-                  color: '#fff', fontSize: 14, fontWeight: 700, cursor: 'pointer',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                }}
-              >
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                  <path d="M3 2l10 6-10 6V2z"/>
-                </svg>
-                Simulate incoming job
-              </button>
-            )}
-          </div>
-        )}
+          {/* Current job takes over the top slot; availability sits below it */}
+          {current ? (
+            <section>
+              <SectionLabel>Current job</SectionLabel>
+              <CurrentJob order={current} substep={state.substeps[current.id]} onOpen={() => onSelectOrder(current.id)} />
+              {queued.length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 10 }}>
+                  {queued.map(o => (
+                    <Card key={o.id} onClick={() => onSelectOrder(o.id)} style={{ padding: '14px 16px', display: 'flex' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 12, color: 'var(--d-muted)', marginBottom: 2 }}>Up next</div>
+                          <div style={{ fontSize: 15, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {street(o.pickup.address)} → {street(o.dropoff.address)}
+                          </div>
+                        </div>
+                        <div style={{ fontSize: 15, fontWeight: 650, fontVariantNumeric: 'tabular-nums' }}>{money(driverPayout(o))}</div>
+                        <span style={{ color: 'var(--d-muted-lt)' }}><Icon name="chevron" size={18} /></span>
+                      </div>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </section>
+          ) : (
+            <StatusCard online={online} onToggle={toggleOnline} />
+          )}
 
-        {/* ── Active jobs ──────────────────────────────────────────────────── */}
-        {activeOrders.length > 0 && (
-          <div style={{ padding: '20px 20px 0' }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--d-muted)', letterSpacing: 1, marginBottom: 10, textTransform: 'uppercase' }}>
-              Active Jobs
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {activeOrders.slice(0, 3).map(order => (
-                <button
-                  key={order.id}
-                  onClick={() => onSelectOrder(order.id)}
-                  style={{
-                    width: '100%', background: '#fff',
-                    border: `1.5px solid ${order.status === 'assigned' ? 'var(--d-accent)' : 'var(--d-border)'}`,
-                    borderRadius: 12, padding: '12px 14px',
-                    cursor: 'pointer', textAlign: 'left',
-                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                  }}
-                >
-                  <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
-                      <span style={{ fontSize: 11, color: 'var(--d-accent)', fontWeight: 700, letterSpacing: 0.3 }}>
-                        {order.id}
-                      </span>
-                      {(() => {
-                        const t = order.deliveryType ?? order.parcel?.deliveryWindow
-                        if (!t) return null
-                        const express = t === 'express'
-                        return (
-                          <span style={{
-                            fontSize: 9, fontWeight: 700, letterSpacing: 0.3, textTransform: 'uppercase',
-                            padding: '1px 6px', borderRadius: 99,
-                            background: express ? 'rgba(201,74,27,0.1)' : 'rgba(37,99,235,0.1)',
-                            color: express ? '#c94a1b' : '#2563eb',
-                          }}>{t}</span>
-                        )
-                      })()}
-                    </div>
-                    <div style={{ fontSize: 13, color: 'var(--d-ink)', fontWeight: 500 }}>
-                      {order.pickup.address.split(',')[0]}
-                    </div>
-                    <div style={{ fontSize: 12, color: 'var(--d-muted)', marginTop: 2 }}>
-                      → {order.dropoff.address.split(',')[0]}
-                    </div>
+          {/* Today */}
+          <section>
+            <SectionLabel action={<TextLink onClick={onGoHistory}>Earnings</TextLink>}>Today</SectionLabel>
+            <Card>
+              <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12 }}>
+                <div>
+                  <div style={{ fontSize: 40, fontWeight: 700, letterSpacing: -1.5, lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>
+                    {money(today.earnings)}
                   </div>
-                  <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--d-ink)' }}>
-                      ${driverPayout(order).toFixed(2)}
-                    </div>
-                    <div style={{ fontSize: 11, color: 'var(--d-muted)' }}>{order.distanceKm} km</div>
-                  </div>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* ── Bottom action grid ────────────────────────────────────────────── */}
-        <div style={{ padding: '20px 20px 0', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
-          {([
-            { label: 'Earnings', icon: (
-              <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="2" y="5" width="16" height="12" rx="2"/><path d="M6 5V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v1"/><path d="M10 10v2m0-4v.5"/>
-              </svg>
-            ), onClick: onGoHistory },
-            { label: 'Schedule', icon: (
-              <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="3" y="4" width="14" height="14" rx="2"/><path d="M7 2v2M13 2v2M3 8h14"/>
-              </svg>
-            ), onClick: null },
-            { label: 'Help', icon: (
-              <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="10" cy="10" r="7"/><path d="M10 14v.5"/><path d="M10 11a2.5 2.5 0 1 0-2.5-2.5"/>
-              </svg>
-            ), onClick: null },
-          ] as { label: string; icon: React.ReactNode; onClick: (() => void) | null }[]).map(a => (
-            <button key={a.label} onClick={a.onClick ?? undefined} style={{
-              padding: '14px 10px', background: '#fff', border: '1px solid var(--d-border)',
-              borderRadius: 14, cursor: a.onClick ? 'pointer' : 'default', fontFamily: 'inherit',
-              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
-              color: a.onClick ? 'var(--d-ink)' : 'var(--d-muted-lt)',
-              opacity: a.onClick ? 1 : 0.5,
-            }}>
-              {a.icon}
-              <span style={{ fontSize: 12, fontWeight: 500 }}>{a.label}</span>
-            </button>
-          ))}
-        </div>
-
-        {/* History link */}
-        {completedOrders.length > 0 && (
-          <div style={{ padding: '20px 20px 0' }}>
-            <button
-              onClick={onGoHistory}
-              style={{
-                width: '100%', padding: '13px 16px',
-                background: '#fff', border: '1px solid var(--d-border)',
-                borderRadius: 12, cursor: 'pointer',
-                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-              }}
-            >
-              <div>
-                <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--d-ink)', textAlign: 'left' }}>Delivery History</div>
-                <div style={{ fontSize: 12, color: 'var(--d-muted)', marginTop: 1, textAlign: 'left' }}>
-                  {completedOrders.length} completed
+                  <div style={{ fontSize: 13, color: 'var(--d-muted)', marginTop: 6 }}>Earned today, including tips</div>
                 </div>
               </div>
-              <span style={{ color: 'var(--d-muted)', fontSize: 18 }}>›</span>
+              <div style={{ height: 1, background: 'var(--d-border)', margin: '18px 0 16px' }} />
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <Stat label={today.count === 1 ? 'Delivery' : 'Deliveries'} value={String(today.count)} />
+                <Stat label="Driven" value={`${today.km.toFixed(1)} km`} />
+              </div>
+            </Card>
+          </section>
+
+          {/* Availability, when a job occupies the top slot */}
+          {current && <StatusCard online={online} onToggle={toggleOnline} />}
+
+          {/* Week — only once there's something to show */}
+          {week.total > 0 && (
+            <section>
+              <SectionLabel>This week</SectionLabel>
+              <WeekChart days={week.days} total={week.total} />
+            </section>
+          )}
+
+          {/* Recent */}
+          {recent.length > 0 && (
+            <section>
+              <SectionLabel action={<TextLink onClick={onGoHistory}>See all</TextLink>}>Recent</SectionLabel>
+              <Card padded={false}>
+                {recent.map((o, i) => (
+                  <div key={o.id} style={{
+                    display: 'flex', alignItems: 'center', gap: 12, padding: '14px 18px',
+                    borderTop: i === 0 ? 'none' : '1px solid var(--d-border)',
+                  }}>
+                    <div style={{
+                      width: 36, height: 36, borderRadius: 18, flexShrink: 0,
+                      background: o.status === 'delivered' ? 'var(--d-ok-bg)' : 'var(--d-surface-2)',
+                      color: o.status === 'delivered' ? 'var(--d-ok)' : 'var(--d-muted)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    }}>
+                      <Icon name="box" size={17} />
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 15, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {street(o.dropoff.address)}
+                      </div>
+                      <div style={{ fontSize: 13, color: 'var(--d-muted)' }}>
+                        {o.status === 'cancelled' ? 'Cancelled' : 'Delivered'} · {timeAgo(o.updatedAt)}
+                      </div>
+                    </div>
+                    <div style={{
+                      fontSize: 15, fontWeight: 650, fontVariantNumeric: 'tabular-nums',
+                      color: o.status === 'cancelled' ? 'var(--d-muted-lt)' : 'var(--d-ink)',
+                      textDecoration: o.status === 'cancelled' ? 'line-through' : 'none',
+                    }}>
+                      {money(driverPayout(o))}
+                    </div>
+                  </div>
+                ))}
+              </Card>
+            </section>
+          )}
+
+          {import.meta.env.DEV && (
+            <button onClick={handleSimulate} style={{
+              height: 44, borderRadius: 22, border: '1.5px dashed var(--d-border)', background: 'transparent',
+              color: 'var(--d-muted)', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+            }}>
+              <Icon name="flask" size={15} /> Simulate incoming job (dev only)
             </button>
-          </div>
-        )}
-
-        <div style={{ height: 24 }} />
+          )}
+        </main>
       </div>
-
-
-      <style>{`
-        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
-        @keyframes cs-ping { 0%{transform:scale(1);opacity:.6} 100%{transform:scale(1.7);opacity:0} }
-      `}</style>
     </div>
   )
 }

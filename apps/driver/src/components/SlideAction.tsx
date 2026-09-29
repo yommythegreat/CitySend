@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react'
+import { haptic } from '../lib/haptics'
 
 interface Props {
   label:           string
@@ -18,9 +19,9 @@ export function SlideAction({ label, onSlideComplete, variant = 'dark', disabled
 
   const THUMB = 56
 
-  const bg = disabled ? '#9ca3af'
-           : variant === 'green' ? '#166b3a'
-           : '#111827'
+  const bg = disabled ? 'var(--d-muted-lt)'
+           : variant === 'green' ? 'var(--d-ok)'
+           : 'var(--d-strong)'
 
   const onDown = (clientX: number) => {
     if (disabled || done) return
@@ -43,6 +44,7 @@ export function SlideAction({ label, onSlideComplete, variant = 'dark', disabled
     if (drag > 0.92) {
       setDrag(1)
       setDone(true)
+      haptic('confirm')
       setTimeout(() => {
         onSlideComplete()
         setDrag(0)
@@ -127,12 +129,12 @@ export function SlideAction({ label, onSlideComplete, variant = 'dark', disabled
         {done ? (
           /* Check icon */
           <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-            <path d="M4 10l4.5 4.5L16 6" stroke={bg} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+            <path d="M4 10l4.5 4.5L16 6" style={{ stroke: bg }} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
           </svg>
         ) : (
           /* Arrow icon */
           <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-            <path d="M6 4l5 5-5 5" stroke={bg} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
+            <path d="M6 4l5 5-5 5" style={{ stroke: bg }} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
           </svg>
         )}
       </div>

@@ -105,10 +105,10 @@ export function PhotoCapture({ orderId, label, onCapture, onClear, captured, pre
     <button
       onClick={() => inputRef.current?.click()}
       style={{
-        width: '100%', aspectRatio: '4/3',
-        border: '1.5px dashed #d1d5db',
+        width: '100%', height: 132,
+        border: '1.5px dashed var(--d-border)',
         borderRadius: 16, cursor: 'pointer',
-        background: '#f9fafb',
+        background: 'var(--d-surface-2)',
         display: 'flex', flexDirection: 'column',
         alignItems: 'center', justifyContent: 'center', gap: 10,
       }}
@@ -116,20 +116,20 @@ export function PhotoCapture({ orderId, label, onCapture, onClear, captured, pre
       {/* Camera icon */}
       <div style={{
         width: 52, height: 52, borderRadius: 26,
-        background: '#f3f4f6',
+        background: 'var(--d-surface)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
       }}>
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--d-muted)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
           <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
           <circle cx="12" cy="13" r="4"/>
         </svg>
       </div>
-      <div style={{ fontSize: 14, color: '#6b7280', fontWeight: 500 }}>
+      <div style={{ fontSize: 14, color: 'var(--d-muted)', fontWeight: 500 }}>
         {label === 'pickup' ? 'Tap to photograph the parcel' : 'Tap to photograph the door'}
       </div>
-      <div style={{ fontSize: 11, fontFamily: 'monospace', color: '#c94a1b', letterSpacing: 0.5, fontWeight: 600 }}>
-        {required ? 'REQUIRED' : 'RECOMMENDED'}
-      </div>
+      {required && (
+        <div style={{ fontSize: 12, color: 'var(--d-accent)', fontWeight: 650 }}>Required</div>
+      )}
       <input
         ref={inputRef}
         type="file"

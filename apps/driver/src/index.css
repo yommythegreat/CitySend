@@ -2,57 +2,110 @@
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+/* Palette matches the customer app (app/src/styles/global.css).
+   Night mode: lib/theme.ts sets <html data-theme="dark"> after local sunset
+   or when the phone is in dark mode. Always style with these tokens. */
 :root {
+  color-scheme: light;
+
   /* Brand */
   --d-accent:     #c94a1b;
   --d-accent-dk:  #a83916;
-  --d-accent-lt:  #fef3ef;
+  --d-accent-lt:  #fdf1ec;
+  --d-on-accent:  #ffffff;
+  --d-on-ok:      #ffffff;
 
   /* Surface */
-  --d-bg:         #f0f2f5;
+  --d-bg:         #f3f4f6;
   --d-surface:    #ffffff;
-  --d-surface-2:  #f7f8fa;
-  --d-border:     #e2e5ea;
+  --d-surface-2:  #f5f6f8;
+  --d-border:     #e4e7ec;
+  --d-overlay:    rgba(11,18,32,.45);
+  --d-strong:     #0b1220;   /* dark action bars (slide-to-confirm) */
 
   /* Text */
-  --d-ink:        #111827;
-  --d-ink-2:      #374151;
-  --d-muted:      #6b7280;
-  --d-muted-lt:   #9ca3af;
+  --d-ink:        #0b1220;
+  --d-ink-2:      #2b3548;
+  --d-muted:      #5b657a;
+  --d-muted-lt:   #8590a6;
 
   /* Status */
-  --d-ok:         #16a34a;
-  --d-ok-bg:      #f0fdf4;
-  --d-ok-border:  #bbf7d0;
-  --d-warn:       #d97706;
-  --d-warn-bg:    #fffbeb;
-  --d-warn-border:#fde68a;
-  --d-err:        #dc2626;
-  --d-err-bg:     #fef2f2;
-  --d-err-border: #fecaca;
+  --d-ok:         #16803f;
+  --d-ok-bg:      #eaf6ee;
+  --d-ok-border:  #bfe3cc;
+  --d-warn:       #b45f06;
+  --d-warn-bg:    #fdf6e7;
+  --d-warn-border:#f3d9a4;
+  --d-err:        #c2261e;
+  --d-err-bg:     #fcefee;
+  --d-err-border: #f4c7c3;
   --d-info:       #2563eb;
-  --d-info-bg:    #eff6ff;
+  --d-info-bg:    #edf3ff;
   --d-purple:     #7c3aed;
   --d-purple-bg:  #f5f3ff;
 
   /* Radius / shadow */
-  --d-radius:     12px;
-  --d-radius-sm:  8px;
-  --d-shadow:     0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.04);
-  --d-shadow-md:  0 4px 12px rgba(0,0,0,.10), 0 2px 4px rgba(0,0,0,.06);
+  --d-radius-lg:  20px;
+  --d-radius:     14px;
+  --d-radius-sm:  10px;
+  --d-shadow:     0 1px 2px rgba(11,18,32,.05), 0 1px 3px rgba(11,18,32,.06);
+  --d-shadow-md:  0 6px 20px rgba(11,18,32,.10), 0 2px 6px rgba(11,18,32,.06);
 
   /* Typography */
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --d-font:       'Geist', -apple-system, system-ui, sans-serif;
+  --d-mono:       'Geist Mono', ui-monospace, Menlo, monospace;
+  font-family: var(--d-font);
   font-size: 16px;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --d-accent:     #e5652f;
+  --d-accent-dk:  #c94a1b;
+  --d-accent-lt:  rgba(229,101,47,.14);
+
+  --d-bg:         #0a0e15;
+  --d-surface:    #131924;
+  --d-surface-2:  #1a2130;
+  --d-border:     #242c3a;
+  --d-overlay:    rgba(0,0,0,.6);
+  --d-strong:     #273042;
+
+  --d-ink:        #eef1f6;
+  --d-ink-2:      #c9d0db;
+  --d-muted:      #8d97a9;
+  --d-muted-lt:   #677286;
+
+  --d-ok:         #46c077;
+  --d-on-ok:      #052e16;
+  --d-ok-bg:      rgba(70,192,119,.12);
+  --d-ok-border:  rgba(70,192,119,.32);
+  --d-warn:       #f0a23a;
+  --d-warn-bg:    rgba(240,162,58,.12);
+  --d-warn-border:rgba(240,162,58,.32);
+  --d-err:        #f26b5e;
+  --d-err-bg:     rgba(242,107,94,.12);
+  --d-err-border: rgba(242,107,94,.32);
+  --d-info:       #6fa1ff;
+  --d-info-bg:    rgba(111,161,255,.12);
+  --d-purple:     #a78bfa;
+  --d-purple-bg:  rgba(167,139,250,.12);
+
+  --d-shadow:     0 0 0 1px rgba(255,255,255,.02);
+  --d-shadow-md:  0 8px 24px rgba(0,0,0,.45);
+}
+
+button, input, textarea, select { font-family: inherit; }
 
 html, body, #root {
   height: 100%;
   background: var(--d-bg);
   color: var(--d-ink);
   overscroll-behavior: none;
+  transition: background-color .3s ease;
 }
 
 /* ── App shell ──────────────────────────────────────────────────────────── */
@@ -158,7 +211,7 @@ html, body, #root {
   background: var(--d-ok);
   color: #fff;
 }
-.d-btn-success:hover { background: #15803d; }
+.d-btn-success:hover { filter: brightness(.95); }
 
 .d-btn-outline {
   background: transparent;
@@ -281,10 +334,10 @@ html, body, #root {
 .d-badge-picked_up { background: var(--d-warn-bg);   color: var(--d-warn);   }
 .d-badge-in_transit{ background: var(--d-purple-bg); color: var(--d-purple); }
 .d-badge-delivered { background: var(--d-ok-bg);     color: var(--d-ok);     }
-.d-badge-cancelled { background: #f3f4f6;             color: var(--d-muted);  }
+.d-badge-cancelled { background: var(--d-surface-2); color: var(--d-muted);  }
 .d-badge-available { background: var(--d-ok-bg);     color: var(--d-ok);     }
 .d-badge-busy      { background: var(--d-warn-bg);   color: var(--d-warn);   }
-.d-badge-offline   { background: #f3f4f6;             color: var(--d-muted);  }
+.d-badge-offline   { background: var(--d-surface-2); color: var(--d-muted);  }
 
 /* ── Step indicator ──────────────────────────────────────────────────────── */
 
@@ -368,12 +421,12 @@ html, body, #root {
   align-items: center;
   gap: 8px;
   padding: 10px 14px;
-  background: #fffbeb;
-  border: 1px solid #fde68a;
+  background: var(--d-warn-bg);
+  border: 1px solid var(--d-warn-border);
   border-radius: var(--d-radius-sm);
   font-size: 13px;
   font-weight: 600;
-  color: #92400e;
+  color: var(--d-warn);
 }
 
 /* ── Modal overlay ───────────────────────────────────────────────────────── */
@@ -381,7 +434,7 @@ html, body, #root {
 .d-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,.45);
+  background: var(--d-overlay);
   z-index: 50;
   display: flex;
   align-items: flex-end;
@@ -472,7 +525,7 @@ textarea.d-input {
   left: 50%;
   transform: translateX(-50%);
   background: var(--d-ink);
-  color: #fff;
+  color: var(--d-bg);
   padding: 10px 20px;
   border-radius: 999px;
   font-size: 14px;
@@ -481,4 +534,49 @@ textarea.d-input {
   white-space: nowrap;
   animation: d-pop-in 0.2s ease;
   box-shadow: var(--d-shadow-md);
+}
+
+/* ── Motion & touch ─────────────────────────────────────────────────────── */
+
+@keyframes d-ping  { 0% { transform: scale(1); opacity: .55 } 100% { transform: scale(1.9); opacity: 0 } }
+@keyframes d-rise  { from { transform: translateY(6px); opacity: 0 } to { transform: none; opacity: 1 } }
+
+.d-press { -webkit-tap-highlight-color: transparent; transition: transform .12s ease, filter .12s ease; }
+.d-press:active { transform: scale(.975); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}
+
+/* ── Delivery map (components/DeliveryMap.tsx) ───────────────────────────── */
+
+.dmap { background: var(--d-surface-2); }
+.dmap .leaflet-control-attribution {
+  background: transparent; font-size: 9px; color: var(--d-muted-lt);
+}
+.dmap .leaflet-control-attribution a { color: inherit; }
+:root[data-theme="dark"] .dmap .leaflet-tile-pane {
+  filter: invert(1) hue-rotate(180deg) brightness(.92) contrast(.88) saturate(.6);
+}
+.dmap-route-casing { stroke: var(--d-surface); }
+.dmap-route        { stroke: var(--d-info); }
+.dmap-pin { width: 22px; height: 22px; box-shadow: 0 3px 10px rgba(11,18,32,.35); }
+.dmap-pickup  { border-radius: 50%; background: #fff; border: 5px solid #0b1220; }
+.dmap-dropoff { border-radius: 5px; background: var(--d-accent); border: 3px solid #fff; }
+.dmap-driver {
+  width: 26px; height: 26px; border-radius: 50%;
+  background: rgba(37,99,235,.18); display: flex; align-items: center; justify-content: center;
+  animation: dmap-breathe 2.4s ease-in-out infinite;
+}
+.dmap-driver span { width: 14px; height: 14px; border-radius: 50%; background: #2563eb; border: 3px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,.35); }
+@keyframes dmap-breathe { 0%,100% { box-shadow: 0 0 0 0 rgba(37,99,235,.25) } 50% { box-shadow: 0 0 0 8px rgba(37,99,235,0) } }
+
+/* Scrolling flex columns: never let cards shrink (overflow:hidden children
+   would otherwise collapse to fit instead of scrolling). */
+.d-stack > * { flex-shrink: 0; }
+
+@keyframes d-shake {
+  0%, 100% { transform: none }
+  20% { transform: translateX(-6px) } 40% { transform: translateX(6px) }
+  60% { transform: translateX(-4px) } 80% { transform: translateX(4px) }
 }

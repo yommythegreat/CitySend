@@ -97,8 +97,13 @@ export function PrivacyScreen({ go }: Props) {
         <p style={S.p}><strong>Device and notification data</strong> — If you allow notifications, we store a
           push-notification token for your device so we can send you delivery updates.</p>
         <p style={S.p}><strong>Location data (drivers)</strong> — If you use the CitySend Driver app, we collect
-          your GPS location during active deliveries to show customers a live map and to calculate
-          routes. Location access is only active while a delivery is in progress.</p>
+          your GPS location while you are signed in and the app is open, so we can offer you nearby
+          deliveries. During an active delivery we also collect it while the app is in the background
+          (for example while you navigate in another app), so the customer can follow the delivery on a
+          live map; iOS shows a location indicator while this happens. Background location stops when the
+          delivery ends, and all location sharing stops when you sign out.</p>
+        <p style={S.p}><strong>Proof of delivery (drivers)</strong> — When completing a delivery, drivers may
+          take a photo and collect the recipient's signature. These are stored with the delivery record.</p>
         <p style={S.p}><strong>Usage data</strong> — We collect standard server logs (IP address, browser type,
           pages visited, timestamps) to operate and improve the service.</p>
 

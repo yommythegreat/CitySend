@@ -22,7 +22,8 @@ import {
   startLocationBroadcast,
   stopLocationBroadcast,
   updateBroadcastOrder,
-} from '@shared/utils/locationStore'
+} from '../lib/locationBroadcast'
+import { ensurePushRegistered } from '../lib/capacitor'
 
 // ── Driver sub-steps (local UI only, not in shared model) ─────────────────────
 
@@ -457,6 +458,7 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
   const [subscribeKey, setSubscribeKey] = useState(0)
 
   const snapshotRef = React.useRef<DriverState>(state)
+  const ordersHydratedRef = React.useRef(false)
   useEffect(() => { snapshotRef.current = state }, [state])
 
   const dispatch = useCallback((action: Action) => {
@@ -494,6 +496,16 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
         if (sessionStorage.getItem('cs_driver_auth')) {
           baseDispatch({ type: 'LOGOUT' })
         }
+      } else if (event === 'INITIAL_SESSION' && session && !sessionStorage.getItem('cs_driver_auth')) {
+        // Cold start (iOS cleared sessionStorage) with a still-valid Supabase
+        // session — restore the driver instead of forcing a fresh sign-in.
+        // Deferred: supabase calls inside this callback can deadlock the client.
+        const userId = session.user.id
+        setTimeout(() => {
+          loadDriverAuth(userId).then(auth => {
+            if (auth) baseDispatch({ type: 'LOGIN', auth })
+          })
+        }, 0)
       }
     })
 
@@ -514,12 +526,14 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
       } catch {
         if (!cancelled) baseDispatch({ type: '_HYDRATE_ORDERS', orders: getSharedOrders() })
       }
+      ordersHydratedRef.current = true
     }
     load()
     return () => { cancelled = true }
   }, [state.auth?.driverId])
 
-  // Sync push-notification device token (cached by setupCapacitor) into the
+  // Ask for push permission after sign-in (not at launch), then sync the
+  // device token into the
   // push_tokens table for THIS driver's auth.users.id. The Edge Function uses
   // it to deliver job-offer pushes to the right device. push_tokens.user_id
   // is the Supabase auth UUID, not driverId, so we fetch it from the session.
@@ -531,6 +545,8 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
         const { data } = await supabase.auth.getUser()
         const authUserId = data?.user?.id
         if (!authUserId || cancelled) return
+        await ensurePushRegistered()
+        if (cancelled) return
         await syncPushTokenToSupabase(authUserId, 'driver')
       } catch (err) {
         console.warn('[Push] driver token sync failed', err)
@@ -539,9 +555,13 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
     return () => { cancelled = true }
   }, [state.auth?.driverId])
 
-  // Push order status changes to shared store (localStorage fallback)
+  // Push order status changes to shared store (localStorage fallback).
+  // Skip until the first load has hydrated (else the initial [] wipes the
+  // stored orders) and skip no-op writes: setSharedOrders fires a same-tab
+  // storage event that re-hydrates state, which would loop forever.
   useEffect(() => {
-    if (isSupabaseConfigured) return
+    if (isSupabaseConfigured || !ordersHydratedRef.current) return
+    if (localStorage.getItem(ORDERS_STORAGE_KEY) === JSON.stringify(state.orders)) return
     setSharedOrders(state.orders)
   }, [state.orders])
 
@@ -674,6 +694,27 @@ export function useDriver() {
 
 // ── Authentication ────────────────────────────────────────────────────────────
 
+/** Load the driver record linked to an auth user (via user_id, not email). */
+async function loadDriverAuth(userId: string): Promise<DriverAuth | null> {
+  const { data: driverRow } = await supabase
+    .from('drivers')
+    .select('*')
+    .eq('user_id', userId)
+    .maybeSingle()
+
+  if (!driverRow) return null
+
+  return {
+    driverId:        driverRow.id,
+    name:            driverRow.name,
+    email:           driverRow.email,
+    vehicle:         driverRow.vehicle,
+    phone:           driverRow.phone,
+    rating:          Number(driverRow.rating),
+    completedOrders: driverRow.completed_orders,
+  }
+}
+
 /**
  * Sign in a driver using Supabase Auth.
  * Falls back to mock credentials when Supabase is not configured.
@@ -689,25 +730,7 @@ export async function authenticateDriver(
       email: canonEmail, password,
     })
     if (error || !data.user) return null
-
-    // Load driver record linked to this auth user via user_id (not email)
-    const { data: driverRow } = await supabase
-      .from('drivers')
-      .select('*')
-      .eq('user_id', data.user.id)
-      .maybeSingle()
-
-    if (!driverRow) return null
-
-    return {
-      driverId:        driverRow.id,
-      name:            driverRow.name,
-      email:           driverRow.email,
-      vehicle:         driverRow.vehicle,
-      phone:           driverRow.phone,
-      rating:          Number(driverRow.rating),
-      completedOrders: driverRow.completed_orders,
-    }
+    return loadDriverAuth(data.user.id)
   }
 
   // Supabase auth is required — no offline fallback in production

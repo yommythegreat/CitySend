@@ -1,207 +1,198 @@
-import React, { useState } from 'react'
+import React, { useState, useMemo } from 'react'
 import { useDriver } from '../store/DriverContext'
-import { OrderStatusPill } from '../components/StatusPill'
 import type { Order } from '@shared/types'
 import { driverPayout } from '../utils/payout'
+import { Card, Icon, money } from '../ui'
+import { PayoutRows } from '../components/PayoutRows'
+import { haptic } from '../lib/haptics'
 
 interface Props {
   onSelectOrder: (orderId: string) => void
 }
 
+type Filter = 'all' | 'delivered' | 'cancelled'
 const SIZE_LABEL: Record<string, string> = { s: 'Small', m: 'Medium', l: 'Large' }
+const street = (a: string) => a.split(',')[0]
 
-function fmt(n: number) { return `$${n.toFixed(2)}` }
-
-function fmtDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('en-CA', {
-    month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
-  })
+function dayLabel(iso: string): string {
+  const d = new Date(iso)
+  const today = new Date()
+  const yesterday = new Date(); yesterday.setDate(today.getDate() - 1)
+  if (d.toDateString() === today.toDateString()) return 'Today'
+  if (d.toDateString() === yesterday.toDateString()) return 'Yesterday'
+  return d.toLocaleDateString('en-CA', { weekday: 'long', month: 'short', day: 'numeric' })
 }
 
-function HistoryCard({ order, onSelect }: { order: Order; onSelect: () => void }) {
-  const isCancelled = order.status === 'cancelled'
+const time = (iso: string) => new Date(iso).toLocaleTimeString('en-CA', { hour: 'numeric', minute: '2-digit' })
+
+function Row({ order, first, onOpen }: { order: Order; first: boolean; onOpen: () => void }) {
+  const cancelled = order.status === 'cancelled'
   return (
-    <button
-      onClick={onSelect}
-      style={{
-        width: '100%', textAlign: 'left',
-        background: 'var(--d-surface)',
-        border: '1px solid var(--d-border)',
-        borderRadius: 'var(--d-radius)', padding: '14px 16px',
-        cursor: 'pointer', display: 'block',
-        boxShadow: 'var(--d-shadow)',
-        opacity: isCancelled ? 0.7 : 1,
-      }}
-    >
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
-        <div>
-          <div style={{ fontSize: 13, fontFamily: 'monospace', fontWeight: 700, color: 'var(--d-muted)', marginBottom: 3 }}>
-            {order.id}
-          </div>
-          <OrderStatusPill status={order.status} />
-        </div>
-        {!isCancelled && (
-          <div style={{ textAlign: 'right' }}>
-            <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--d-ok)' }}>
-              {fmt(driverPayout(order))}
-            </div>
-            {order.priceBreakdown.tip > 0 && (
-              <div style={{ fontSize: 11, color: 'var(--d-muted)' }}>+{fmt(order.priceBreakdown.tip)} tip</div>
-            )}
-          </div>
-        )}
+    <button className="d-press" onClick={() => { haptic('tap'); onOpen() }} style={{
+      width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', textAlign: 'left',
+      background: 'none', border: 'none', borderTop: first ? 'none' : '1px solid var(--d-border)', cursor: 'pointer', color: 'var(--d-ink)',
+    }}>
+      <div style={{
+        width: 36, height: 36, borderRadius: 18, flexShrink: 0,
+        background: cancelled ? 'var(--d-surface-2)' : 'var(--d-ok-bg)', color: cancelled ? 'var(--d-muted)' : 'var(--d-ok)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}>
+        <Icon name={cancelled ? 'alert' : 'box'} size={17} />
       </div>
-
-      <div style={{ fontSize: 13, color: 'var(--d-ink-2)', marginBottom: 2 }}>
-        {order.dropoff.address.split(',')[0]}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 15, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{street(order.dropoff.address)}</div>
+        <div style={{ fontSize: 13, color: 'var(--d-muted)' }}>{cancelled ? 'Cancelled' : 'Delivered'} · {time(order.updatedAt)}</div>
       </div>
-      <div style={{ fontSize: 11, color: 'var(--d-muted)' }}>
-        {order.pickup.address.split(',')[0]} → {order.dropoff.address.split(',')[0]}
-      </div>
-
-      <div style={{ display: 'flex', gap: 8, marginTop: 8, justifyContent: 'space-between', alignItems: 'center' }}>
-        <div style={{ display: 'flex', gap: 6 }}>
-          <span style={{ fontSize: 11, color: 'var(--d-muted)', background: 'var(--d-bg)', padding: '2px 7px', borderRadius: 5 }}>
-            {order.distanceKm} km
-          </span>
-          <span style={{ fontSize: 11, color: 'var(--d-muted)', background: 'var(--d-bg)', padding: '2px 7px', borderRadius: 5 }}>
-            {SIZE_LABEL[order.parcel.size]}
-          </span>
-        </div>
-        <div style={{ fontSize: 11, color: 'var(--d-muted)' }}>{fmtDate(order.updatedAt)}</div>
-      </div>
+      <div style={{
+        fontSize: 15, fontWeight: 650, fontVariantNumeric: 'tabular-nums',
+        color: cancelled ? 'var(--d-muted-lt)' : 'var(--d-ink)', textDecoration: cancelled ? 'line-through' : 'none',
+      }}>{money(driverPayout(order))}</div>
+      <span style={{ color: 'var(--d-muted-lt)' }}><Icon name="chevron" size={16} /></span>
     </button>
   )
 }
 
-export function HistoryScreen({ onSelectOrder }: Props) {
+function DetailSheet({ order, onClose }: { order: Order; onClose: () => void }) {
+  const cancelled = order.status === 'cancelled'
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 100, background: 'var(--d-overlay)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', animation: 'd-fade-in .18s ease' }}>
+      <div onClick={e => e.stopPropagation()} style={{
+        width: '100%', maxWidth: 430, background: 'var(--d-surface)', color: 'var(--d-ink)', borderRadius: '24px 24px 0 0',
+        padding: '10px 16px calc(env(safe-area-inset-bottom, 0px) + 20px)', maxHeight: '85vh', overflowY: 'auto', animation: 'd-slide-up .22s ease',
+      }}>
+        <div style={{ width: 38, height: 5, borderRadius: 3, background: 'var(--d-border)', margin: '0 auto 16px' }} />
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, margin: '0 4px 18px' }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 13, color: 'var(--d-muted)' }}>{order.id} · {dayLabel(order.updatedAt)}, {time(order.updatedAt)}</div>
+            <div style={{ fontSize: 22, fontWeight: 700, letterSpacing: -0.5, marginTop: 2 }}>{cancelled ? 'Cancelled' : 'Delivered'}</div>
+          </div>
+          <button onClick={onClose} aria-label="Close" style={{ width: 36, height: 36, borderRadius: 18, border: 'none', background: 'var(--d-surface-2)', color: 'var(--d-ink)', fontSize: 20, cursor: 'pointer' }}>×</button>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div style={{ background: 'var(--d-surface-2)', borderRadius: 16, padding: 16, display: 'grid', gridTemplateColumns: '14px 1fr', columnGap: 12, rowGap: 14 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', paddingTop: 5 }}>
+              <span style={{ width: 10, height: 10, borderRadius: 5, border: '2.5px solid var(--d-ink)' }} />
+              <span style={{ flex: 1, width: 2, background: 'var(--d-border)', margin: '4px 0 -14px' }} />
+            </div>
+            <div>
+              <div style={{ fontSize: 15, fontWeight: 600 }}>{street(order.pickup.address)}</div>
+              <div style={{ fontSize: 13, color: 'var(--d-muted)' }}>Pickup · {order.pickup.name}</div>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 5 }}>
+              <span style={{ width: 10, height: 10, borderRadius: 2, background: 'var(--d-accent)' }} />
+            </div>
+            <div>
+              <div style={{ fontSize: 15, fontWeight: 600 }}>{street(order.dropoff.address)}{order.dropoff.unit ? ` · ${order.dropoff.unit}` : ''}</div>
+              <div style={{ fontSize: 13, color: 'var(--d-muted)' }}>Drop-off · {order.dropoff.name}</div>
+            </div>
+          </div>
+
+          {cancelled ? (
+            <div style={{ background: 'var(--d-surface-2)', borderRadius: 16, padding: 16, fontSize: 14, color: 'var(--d-ink-2)' }}>
+              No earnings for cancelled deliveries.
+            </div>
+          ) : (
+            <div style={{ background: 'var(--d-surface-2)', borderRadius: 16, padding: 16 }}>
+              <PayoutRows order={order} />
+            </div>
+          )}
+
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', padding: '0 4px', fontSize: 13, color: 'var(--d-muted)' }}>
+            <span>{order.distanceKm.toFixed(1)} km</span>·
+            <span>{SIZE_LABEL[order.parcel.size] ?? 'Medium'} parcel</span>
+            {order.parcel.desc && <>·<span>{order.parcel.desc}</span></>}
+            {order.parcel.fragile && <>·<span style={{ color: 'var(--d-warn)' }}>Fragile</span></>}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export function HistoryScreen(_: Props) {
   const { completedOrders } = useDriver()
-  const [filter, setFilter] = useState<'all' | 'delivered' | 'cancelled'>('all')
-  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
+  const [filter, setFilter] = useState<Filter>('all')
+  const [selected, setSelected] = useState<Order | null>(null)
 
-  const filtered = filter === 'all' ? completedOrders
-    : completedOrders.filter(o => o.status === filter)
+  const delivered = completedOrders.filter(o => o.status === 'delivered')
+  const cancelledCount = completedOrders.length - delivered.length
+  const totalEarned = delivered.reduce((s, o) => s + driverPayout(o), 0)
+  const totalTips = delivered.reduce((s, o) => s + o.priceBreakdown.tip, 0)
 
-  const totalEarned = completedOrders
-    .filter(o => o.status === 'delivered')
-    .reduce((s, o) => s + driverPayout(o), 0)
+  const groups = useMemo(() => {
+    const list = filter === 'all' ? completedOrders : completedOrders.filter(o => o.status === filter)
+    const out: { label: string; orders: Order[]; total: number }[] = []
+    for (const o of list) {
+      const label = dayLabel(o.updatedAt)
+      let g = out[out.length - 1]
+      if (!g || g.label !== label) { g = { label, orders: [], total: 0 }; out.push(g) }
+      g.orders.push(o)
+      if (o.status === 'delivered') g.total += driverPayout(o)
+    }
+    return out
+  }, [completedOrders, filter])
 
-  const totalTips = completedOrders
-    .filter(o => o.status === 'delivered')
-    .reduce((s, o) => s + o.priceBreakdown.tip, 0)
-
-  const deliveredCount = completedOrders.filter(o => o.status === 'delivered').length
-  const cancelledCount = completedOrders.filter(o => o.status === 'cancelled').length
+  const FILTERS: { id: Filter; label: string }[] = [
+    { id: 'all', label: `All ${completedOrders.length}` },
+    { id: 'delivered', label: `Delivered ${delivered.length}` },
+    { id: 'cancelled', label: `Cancelled ${cancelledCount}` },
+  ]
 
   return (
-    <div className="d-scroll">
-      {/* Summary */}
-      <div style={{ padding: '16px 12px 8px' }}>
-        <div className="d-stat-grid">
-          <div className="d-stat-tile" style={{ gridColumn: '1 / -1', background: 'var(--d-accent)', borderRadius: 'var(--d-radius)' }}>
-            <div style={{ fontSize: 11, color: 'rgba(255,255,255,.65)', fontWeight: 500, marginBottom: 4 }}>Total Earned</div>
-            <div style={{ fontSize: 28, fontWeight: 700, color: '#fff', lineHeight: 1 }}>{fmt(totalEarned)}</div>
-            <div style={{ fontSize: 11, color: 'rgba(255,255,255,.55)', marginTop: 4 }}>
-              incl. {fmt(totalTips)} in tips · {deliveredCount} deliveries
+    <div className="d-scroll" style={{ color: 'var(--d-ink)' }}>
+      <div className="d-stack" style={{ padding: '4px 16px 24px', display: 'flex', flexDirection: 'column', gap: 20 }}>
+
+        {/* Summary */}
+        <Card style={{ padding: 20 }}>
+          <div style={{ fontSize: 13, color: 'var(--d-muted)' }}>Earned, last 90 days</div>
+          <div style={{ fontSize: 40, fontWeight: 700, letterSpacing: -1.5, lineHeight: 1.1, fontVariantNumeric: 'tabular-nums', marginTop: 4 }}>{money(totalEarned)}</div>
+          <div style={{ fontSize: 14, color: 'var(--d-muted)', marginTop: 6 }}>
+            {delivered.length} {delivered.length === 1 ? 'delivery' : 'deliveries'}{totalTips > 0 ? ` · ${money(totalTips)} in tips` : ''}
+          </div>
+        </Card>
+
+        {/* Filter */}
+        <div role="tablist" style={{ display: 'flex', gap: 4, padding: 4, borderRadius: 16, background: 'var(--d-surface-2)', border: '1px solid var(--d-border)' }}>
+          {FILTERS.map(f => {
+            const on = filter === f.id
+            return (
+              <button key={f.id} role="tab" aria-selected={on} onClick={() => { haptic('tap'); setFilter(f.id) }} style={{
+                flex: 1, height: 38, borderRadius: 12, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: on ? 650 : 500,
+                background: on ? 'var(--d-surface)' : 'transparent', color: on ? 'var(--d-ink)' : 'var(--d-muted)',
+                boxShadow: on ? 'var(--d-shadow)' : 'none',
+              }}>{f.label}</button>
+            )
+          })}
+        </div>
+
+        {/* List, by day */}
+        {groups.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '48px 24px', color: 'var(--d-muted)' }}>
+            <div style={{ display: 'inline-flex', width: 56, height: 56, borderRadius: 28, background: 'var(--d-surface-2)', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
+              <Icon name="box" size={24} />
+            </div>
+            <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--d-ink)' }}>
+              {filter === 'cancelled' ? 'No cancelled deliveries' : 'No deliveries yet'}
+            </div>
+            <div style={{ fontSize: 14, marginTop: 4 }}>
+              {filter === 'cancelled' ? 'Nice.' : 'Completed jobs will show up here.'}
             </div>
           </div>
-          <div className="d-stat-tile">
-            <div className="d-stat-label">Delivered</div>
-            <div className="d-stat-value" style={{ color: 'var(--d-ok)' }}>{deliveredCount}</div>
-          </div>
-          <div className="d-stat-tile">
-            <div className="d-stat-label">Cancelled</div>
-            <div className="d-stat-value" style={{ color: 'var(--d-muted)' }}>{cancelledCount}</div>
-          </div>
-        </div>
-      </div>
-
-      {/* Filter tabs */}
-      <div style={{ display: 'flex', gap: 6, padding: '8px 12px', background: 'var(--d-bg)' }}>
-        {(['all', 'delivered', 'cancelled'] as const).map(f => (
-          <button
-            key={f}
-            onClick={() => setFilter(f)}
-            style={{
-              padding: '7px 14px',
-              border: filter === f ? 'none' : '1px solid var(--d-border)',
-              borderRadius: 999,
-              background: filter === f ? 'var(--d-ink)' : 'var(--d-surface)',
-              color: filter === f ? '#fff' : 'var(--d-muted)',
-              fontSize: 13, fontWeight: filter === f ? 600 : 400,
-              cursor: 'pointer',
-            }}
-          >
-            {f === 'all' ? `All (${completedOrders.length})` :
-             f === 'delivered' ? `Delivered (${deliveredCount})` :
-             `Cancelled (${cancelledCount})`}
-          </button>
+        ) : groups.map(g => (
+          <section key={g.label}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', margin: '0 4px 10px' }}>
+              <div style={{ fontFamily: 'var(--d-mono)', fontSize: 11, fontWeight: 500, letterSpacing: 1.2, textTransform: 'uppercase', color: 'var(--d-muted)' }}>{g.label}</div>
+              {g.total > 0 && <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--d-ink-2)', fontVariantNumeric: 'tabular-nums' }}>{money(g.total)}</div>}
+            </div>
+            <Card padded={false} style={{ overflow: 'hidden' }}>
+              {g.orders.map((o, i) => <Row key={o.id} order={o} first={i === 0} onOpen={() => setSelected(o)} />)}
+            </Card>
+          </section>
         ))}
       </div>
 
-      {/* List */}
-      <div style={{ padding: '8px 12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {filtered.length === 0 ? (
-          <div className="d-empty">
-            <div className="d-empty-icon">📭</div>
-            <div className="d-empty-text">No {filter === 'all' ? '' : filter} orders yet.</div>
-          </div>
-        ) : filtered.map(o => (
-          <HistoryCard key={o.id} order={o} onSelect={() => setSelectedOrder(o)} />
-        ))}
-      </div>
-
-      <div style={{ height: 24 }} />
-
-      {selectedOrder && (
-        <div onClick={() => setSelectedOrder(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 100, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
-          <div onClick={e => e.stopPropagation()} style={{ width: '100%', maxWidth: 430, background: '#fff', borderRadius: '20px 20px 0 0', padding: '0 0 32px', maxHeight: '85vh', overflowY: 'auto' }}>
-            <div style={{ padding: 8, display: 'flex', justifyContent: 'center' }}>
-              <div style={{ width: 40, height: 4, background: '#e0e0e0', borderRadius: 2 }} />
-            </div>
-            <div style={{ padding: '4px 20px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div>
-                <div style={{ fontSize: 13, fontFamily: 'monospace', color: 'var(--d-muted)', marginBottom: 2 }}>{selectedOrder.id}</div>
-                <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--d-ink)' }}>Delivery Details</div>
-              </div>
-              <button onClick={() => setSelectedOrder(null)} style={{ width: 32, height: 32, borderRadius: '50%', border: '1px solid var(--d-border)', background: '#fff', cursor: 'pointer', fontSize: 18, color: 'var(--d-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
-            </div>
-            <div style={{ padding: '0 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
-              {/* Route */}
-              <div style={{ background: 'var(--d-bg)', borderRadius: 12, padding: 14 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--d-muted)', letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 10 }}>Route</div>
-                <div style={{ fontSize: 10, color: 'var(--d-muted)', marginBottom: 2, textTransform: 'uppercase', letterSpacing: 0.5 }}>Pickup</div>
-                <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--d-ink)', marginBottom: 8 }}>{selectedOrder.pickup.address}</div>
-                <div style={{ fontSize: 10, color: 'var(--d-muted)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 }}>Drop-off</div>
-                <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--d-ink)' }}>{selectedOrder.dropoff.address}{selectedOrder.dropoff.unit ? ` · ${selectedOrder.dropoff.unit}` : ''}</div>
-              </div>
-              {/* Earnings */}
-              <div style={{ background: 'var(--d-bg)', borderRadius: 12, padding: 14 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--d-muted)', letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 10 }}>Earnings</div>
-                {[
-                  { label: 'Base fare',    value: fmt(selectedOrder.priceBreakdown.baseFee) },
-                  { label: 'Distance fee', value: fmt(selectedOrder.priceBreakdown.distanceFee) },
-                  ...(selectedOrder.priceBreakdown.tip > 0 ? [{ label: 'Tip', value: '+' + fmt(selectedOrder.priceBreakdown.tip) }] : []),
-                  { label: 'Your payout',  value: fmt(driverPayout(selectedOrder)) },
-                ].map(row => (
-                  <div key={row.label} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, fontSize: 13 }}>
-                    <span style={{ color: 'var(--d-muted)' }}>{row.label}</span>
-                    <span style={{ fontFamily: 'monospace', fontWeight: row.label === 'Your payout' ? 700 : 400, color: row.label === 'Your payout' ? 'var(--d-ok)' : 'var(--d-ink)' }}>{row.value}</span>
-                  </div>
-                ))}
-              </div>
-              {/* Parcel */}
-              <div style={{ background: 'var(--d-bg)', borderRadius: 12, padding: 14 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--d-muted)', letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 10 }}>Parcel</div>
-                <div style={{ fontSize: 13, color: 'var(--d-ink)' }}>{SIZE_LABEL[selectedOrder.parcel.size]} · {selectedOrder.parcel.desc}</div>
-                {selectedOrder.parcel.fragile && <div style={{ fontSize: 12, color: '#92400e', marginTop: 4 }}>⚠ Fragile</div>}
-              </div>
-              {/* Date */}
-              <div style={{ fontSize: 12, color: 'var(--d-muted)', textAlign: 'center' }}>Completed {fmtDate(selectedOrder.updatedAt)}</div>
-            </div>
-          </div>
-        </div>
-      )}
+      {selected && <DetailSheet order={selected} onClose={() => setSelected(null)} />}
     </div>
   )
 }

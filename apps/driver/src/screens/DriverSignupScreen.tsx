@@ -3,14 +3,14 @@ import { supabase, isSupabaseConfigured } from '@shared/lib/supabase'
 
 // ── Design tokens (matches customer app) ─────────────────────────────────────
 const T = {
-  ink:      '#0b1220',
-  accent:   '#c94a1b',
-  paper:    '#fafbfc',
-  slate100: '#eceef2',
-  slate200: '#d8dde5',
-  slate400: '#8590a6',
-  slate500: '#5b657a',
-  err:      '#b3261e',
+  ink:      'var(--d-ink)',
+  accent:   'var(--d-accent)',
+  paper:    'var(--d-bg)',
+  slate100: 'var(--d-surface-2)',
+  slate200: 'var(--d-border)',
+  slate400: 'var(--d-muted-lt)',
+  slate500: 'var(--d-muted)',
+  err:      'var(--d-err)',
   font:     "'Geist', -apple-system, system-ui, sans-serif",
   mono:     "'Geist Mono', ui-monospace, Menlo, monospace",
 }
@@ -19,8 +19,8 @@ const T = {
 function LogoWordmark({ scale = 1 }: { scale?: number }) {
   return (
     <svg viewBox="0 0 182 52" width={182 * scale} height={52 * scale} style={{ display: 'block' }}>
-      <text x="0"  y="38" fontFamily="Geist, system-ui" fontWeight="700" fontSize="38" fill={T.ink} letterSpacing="-1.4">city</text>
-      <text x="89" y="38" fontFamily="Geist, system-ui" fontWeight="700" fontSize="38" fill={T.ink} letterSpacing="-1.4">send</text>
+      <text x="0"  y="38" fontFamily="Geist, system-ui" fontWeight="700" fontSize="38" style={{ fill: T.ink }} letterSpacing="-1.4">city</text>
+      <text x="89" y="38" fontFamily="Geist, system-ui" fontWeight="700" fontSize="38" style={{ fill: T.ink }} letterSpacing="-1.4">send</text>
       <g transform="translate(77.5, 26)">
         <path d="M0 0 L9 0 M6 -3 L9 0 L6 3" stroke={T.accent} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
       </g>
@@ -54,7 +54,7 @@ function Field({
       <div style={{
         display: 'flex', alignItems: 'center', gap: 10,
         height: 52, padding: '0 14px 0 16px',
-        background: '#fff',
+        background: 'var(--d-surface)',
         border: `1.5px solid ${error ? T.err : focused ? T.ink : T.slate200}`,
         borderRadius: 12, transition: 'border-color .15s',
       }}>
@@ -101,7 +101,7 @@ function SelectField({
         {label}
       </div>
       <div style={{
-        height: 52, padding: '0 14px 0 16px', background: '#fff',
+        height: 52, padding: '0 14px 0 16px', background: 'var(--d-surface)',
         border: `1.5px solid ${error ? T.err : focused ? T.ink : T.slate200}`,
         borderRadius: 12, transition: 'border-color .15s', position: 'relative',
         display: 'flex', alignItems: 'center',
@@ -159,8 +159,8 @@ function PillButton({
         display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 10,
         fontFamily: T.font, letterSpacing: -0.2,
         borderRadius: 999, cursor: inactive ? 'default' : 'pointer',
-        background: inactive ? '#e8ebf0' : kind === 'ink' ? T.ink : 'transparent',
-        color: inactive ? T.slate400 : kind === 'ink' ? '#fff' : T.slate500,
+        background: inactive ? 'var(--d-surface-2)' : kind === 'ink' ? T.ink : 'transparent',
+        color: inactive ? T.slate400 : kind === 'ink' ? 'var(--d-bg)' : T.slate500,
         border: 'none',
         boxShadow: inactive || kind === 'ghost' ? 'none' : '0 6px 16px -6px rgba(11,18,32,.4)',
         transform: press && !inactive ? 'scale(.97)' : 'scale(1)',
@@ -168,7 +168,7 @@ function PillButton({
         opacity: inactive ? 0.7 : 1,
       }}
     >
-      {loading && <span style={{ width: 16, height: 16, borderRadius: '50%', border: '2px solid rgba(255,255,255,.3)', borderTopColor: '#fff', animation: 'cs-auth-spin 0.7s linear infinite', display: 'inline-block', flexShrink: 0 }} />}
+      {loading && <span style={{ width: 16, height: 16, borderRadius: '50%', border: '2px solid currentColor', borderTopColor: 'transparent', animation: 'cs-auth-spin 0.7s linear infinite', display: 'inline-block', flexShrink: 0 }} />}
       {children}
     </button>
   )
@@ -265,7 +265,7 @@ export function DriverSignupScreen({ onBackToLogin }: Props) {
         </div>
       </div>
       <div style={{ width: '100%', maxWidth: 360 }}>{body}</div>
-      <div style={{ marginTop: 32, fontSize: 11, color: T.slate400, fontFamily: T.mono, letterSpacing: 0.8, textTransform: 'uppercase' }}>
+      <div style={{ marginTop: 32, fontSize: 11, color: T.slate500, fontFamily: T.mono, letterSpacing: 0.8, textTransform: 'uppercase' }}>
         SAME-DAY · WINNIPEG · citysend.ca
       </div>
       <style>{`@keyframes cs-auth-spin { to { transform: rotate(360deg) } }`}</style>
