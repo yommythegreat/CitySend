@@ -99,9 +99,9 @@ function DriverApp() {
 
   const [showSignup, setShowSignup] = useState(false)
 
-  // Light status-bar text in night mode, and on screens with a dark header.
+  // Light status-bar text in night mode (every screen follows the theme).
   const theme = useTheme()
-  const darkTop = theme === 'dark' || (!!state.auth && screen.name === 'earnings')
+  const darkTop = theme === 'dark'
   useEffect(() => { setStatusBarForDarkTop(darkTop) }, [darkTop])
 
   if (!state.auth) {

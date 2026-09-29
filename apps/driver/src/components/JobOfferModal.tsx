@@ -1,7 +1,11 @@
 import React, { useState, useEffect } from 'react'
 import { DELIVERY_WINDOW_LABELS } from '@shared/types'
 import type { Order } from '@shared/types'
-import { driverPayout } from '../utils/payout'
+import { payoutBreakdown } from '../utils/payout'
+import { subscribePosition, type Fix } from '../lib/locationBroadcast'
+import { formatDistance } from '../utils/proximity'
+import { haptic } from '../lib/haptics'
+import { Button, Icon, money } from '../ui'
 
 interface Props {
   order:     Order
@@ -13,13 +17,32 @@ interface Props {
   initialSeconds?: number
 }
 
-/**
- * JobOfferModal — Full-screen job offer with countdown ring.
- * Design matches DOfferScreen from driver-screens.jsx prototype.
- */
-export function JobOfferModal({ order, onAccept, onDecline, onTimeout, initialSeconds = 120 }: Props) {
-  const [t, setT]                   = useState(initialSeconds)
+const OFFER_SECONDS = 120
+const SIZE: Record<string, string> = { s: 'Small', m: 'Medium', l: 'Large' }
+
+function metersBetween(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
+  const R = 6_371_000, rad = Math.PI / 180
+  const h = Math.sin((b.lat - a.lat) * rad / 2) ** 2 +
+    Math.cos(a.lat * rad) * Math.cos(b.lat * rad) * Math.sin((b.lng - a.lng) * rad / 2) ** 2
+  return 2 * R * Math.asin(Math.sqrt(h))
+}
+
+function Chip({ children, tone }: { children: React.ReactNode; tone?: 'accent' | 'warn' }) {
+  const t = tone === 'accent' ? { background: 'var(--d-accent-lt)', color: 'var(--d-accent)' }
+          : tone === 'warn'   ? { background: 'var(--d-warn-bg)',   color: 'var(--d-warn)' }
+          :                     { background: 'var(--d-surface-2)', color: 'var(--d-ink-2)' }
+  return <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, height: 28, padding: '0 11px', borderRadius: 14, fontSize: 13, fontWeight: 600, ...t }}>{children}</span>
+}
+
+/** Full-screen job offer: payout first, the route, a countdown, and two clear choices. */
+export function JobOfferModal({ order, onAccept, onDecline, onTimeout, initialSeconds = OFFER_SECONDS }: Props) {
+  const [t, setT] = useState(initialSeconds)
   const [confirmDecline, setConfirmDecline] = useState(false)
+  const [me, setMe] = useState<Fix | null>(null)
+
+  // Alert the driver even if they're not looking at the screen.
+  useEffect(() => { haptic('warning'); const id = setTimeout(() => haptic('warning'), 700); return () => clearTimeout(id) }, [])
+  useEffect(() => subscribePosition(setMe), [])
 
   useEffect(() => {
     if (t <= 0) { onTimeout(); return }
@@ -28,230 +51,132 @@ export function JobOfferModal({ order, onAccept, onDecline, onTimeout, initialSe
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [t])
 
-  const pct         = t / 120
-  const radius      = 42
-  const circumf     = 2 * Math.PI * radius
-  const dashOffset  = circumf * (1 - pct)
+  const pay = payoutBreakdown(order)
+  const slot = order.parcel.deliveryWindow
+  const isExpress = slot === 'express' || order.deliveryType === 'express'
+  const toPickup = me && order.pickup.lat != null && order.pickup.lng != null
+    ? metersBetween(me, { lat: order.pickup.lat, lng: order.pickup.lng })
+    : null
 
-  const pickupAddr  = order.pickup.address.split(',')[0]
-  const dropoffAddr = order.dropoff.address.split(',')[0]
-  const distanceKm  = order.distanceKm
-  const payout      = driverPayout(order).toFixed(2)
-  const [dollars, cents] = payout.split('.')
-
-  const fragile = order.parcel.fragile
-  const size    = order.parcel.size === 's' ? 'Small' : order.parcel.size === 'l' ? 'Large' : 'Medium'
+  const radius = 26
+  const circumference = 2 * Math.PI * radius
+  const urgent = t <= 20
 
   return (
-    <div style={{
-      position: 'absolute', inset: 0, zIndex: 300,
-      background: '#111827',
-      display: 'flex', flexDirection: 'column', justifyContent: 'flex-end',
+    <div role="dialog" aria-label="New delivery offer" style={{
+      position: 'absolute', inset: 0, zIndex: 300, background: 'var(--d-bg)', color: 'var(--d-ink)',
+      display: 'flex', flexDirection: 'column', animation: 'd-fade-in .2s ease',
     }}>
-      {/* Dim map peek */}
-      <div style={{
-        position: 'absolute', inset: 0, opacity: 0.15, overflow: 'hidden', pointerEvents: 'none',
-      }}>
-        <iframe
-          title="map-peek"
-          src={`https://maps.google.com/maps?q=${encodeURIComponent(order.pickup.address)}&t=m&z=14&output=embed&iwloc=near`}
-          style={{ width: '100%', height: '100%', border: 'none', filter: 'grayscale(1)' }}
-        />
-      </div>
+      <div style={{ flex: 1, overflowY: 'auto', padding: 'calc(env(safe-area-inset-top, 0px) + 20px) 16px 16px' }}>
+        <div className="d-stack" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
 
-      {/* Timer ring */}
-      <div style={{
-        position: 'relative', flex: 1,
-        display: 'flex', flexDirection: 'column', justifyContent: 'flex-end',
-      }}>
-        <div style={{ padding: 'max(64px, env(safe-area-inset-top, 64px)) 20px 0', display: 'flex', justifyContent: 'center' }}>
-          <div style={{ position: 'relative', width: 96, height: 96 }}>
-            <svg width="96" height="96" viewBox="0 0 96 96">
-              <circle cx="48" cy="48" r={radius} fill="none" stroke="rgba(255,255,255,.15)" strokeWidth="6"/>
-              <circle
-                cx="48" cy="48" r={radius}
-                fill="none" stroke="#c94a1b" strokeWidth="6"
-                strokeLinecap="round"
-                strokeDasharray={`${circumf}`}
-                strokeDashoffset={`${dashOffset}`}
-                transform="rotate(-90 48 48)"
-                style={{ transition: 'stroke-dashoffset 1s linear' }}
-              />
-            </svg>
-            <div style={{
-              position: 'absolute', inset: 0,
-              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-              color: '#fff',
-            }}>
-              <div style={{ fontSize: 22, fontWeight: 600, letterSpacing: -1, fontFamily: 'monospace' }}>
-                {String(Math.floor(t / 60)).padStart(2, '0')}:{String(t % 60).padStart(2, '0')}
+          {/* Header: label + countdown */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 650, color: 'var(--d-accent)' }}>
+                <span style={{ position: 'relative', width: 8, height: 8 }}>
+                  <span style={{ position: 'absolute', inset: 0, borderRadius: 4, background: 'var(--d-accent)', animation: 'd-ping 1.4s ease-out infinite' }} />
+                  <span style={{ position: 'absolute', inset: 0, borderRadius: 4, background: 'var(--d-accent)' }} />
+                </span>
+                New delivery
               </div>
-              <div style={{ fontSize: 9, letterSpacing: 1.4, textTransform: 'uppercase', color: 'rgba(255,255,255,.5)', fontFamily: 'monospace' }}>left</div>
+              <div style={{ fontSize: 13, color: 'var(--d-muted)', marginTop: 2 }}>{order.id}</div>
             </div>
-          </div>
-        </div>
-
-        {/* White bottom sheet */}
-        <div style={{
-          background: 'var(--d-surface)', borderRadius: '24px 24px 0 0',
-          padding: '24px 20px', paddingBottom: 'max(28px, env(safe-area-inset-bottom, 28px))',
-          boxShadow: '0 -20px 50px -20px rgba(0,0,0,.5)',
-          display: 'flex', flexDirection: 'column', gap: 18,
-          position: 'relative',
-        }}>
-          {/* NEW tag + order ID */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <div style={{
-              display: 'inline-flex', alignItems: 'center', gap: 5,
-              background: 'var(--d-err-bg)', borderRadius: 99, padding: '4px 10px',
-            }}>
-              <div style={{ width: 6, height: 6, borderRadius: 3, background: 'var(--d-accent)' }} />
-              <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--d-accent)', letterSpacing: 1, textTransform: 'uppercase' }}>NEW</span>
+            <div style={{ position: 'relative', width: 64, height: 64 }} aria-label={`${t} seconds left`}>
+              <svg width="64" height="64" viewBox="0 0 64 64">
+                <circle cx="32" cy="32" r={radius} fill="none" stroke="var(--d-border)" strokeWidth="5" />
+                <circle
+                  cx="32" cy="32" r={radius} fill="none"
+                  style={{ stroke: urgent ? 'var(--d-err)' : 'var(--d-accent)', transition: 'stroke-dashoffset 1s linear' }}
+                  strokeWidth="5" strokeLinecap="round"
+                  strokeDasharray={circumference}
+                  strokeDashoffset={circumference * (1 - t / OFFER_SECONDS)}
+                  transform="rotate(-90 32 32)"
+                />
+              </svg>
+              <div style={{
+                position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontFamily: 'var(--d-mono)', fontSize: 15, fontWeight: 600, color: urgent ? 'var(--d-err)' : 'var(--d-ink)',
+              }}>
+                {Math.floor(t / 60)}:{String(t % 60).padStart(2, '0')}
+              </div>
             </div>
-            <span style={{
-              fontFamily: 'monospace', fontSize: 11,
-              color: order.parcel.deliveryWindow === 'express' ? 'var(--d-accent)' : '#6b7280',
-              fontWeight: order.parcel.deliveryWindow === 'express' ? 700 : 400,
-              letterSpacing: 1, textTransform: 'uppercase',
-            }}>
-              {order.id} · {order.parcel.deliveryWindow
-                ? DELIVERY_WINDOW_LABELS[order.parcel.deliveryWindow]
-                : 'Standard'}
-            </span>
           </div>
 
           {/* Payout */}
-          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 14 }}>
-            <div style={{ fontSize: 52, fontWeight: 600, letterSpacing: -2, color: 'var(--d-ink)', lineHeight: 1 }}>
-              ${dollars}<span style={{ fontSize: 28, color: 'var(--d-muted-lt)' }}>.{cents}</span>
+          <div>
+            <div style={{ fontSize: 56, fontWeight: 700, letterSpacing: -2.4, lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>
+              {money(pay.total)}
             </div>
-            <div style={{ paddingBottom: 8, fontSize: 13, color: 'var(--d-muted)', lineHeight: 1.5 }}>
-              <div><b style={{ color: 'var(--d-ink)' }}>{distanceKm.toFixed(1)} km</b> · ~{Math.round(distanceKm * 4 + 10)} min</div>
-              <div style={{ fontFamily: 'monospace', fontSize: 11 }}>80% to you</div>
+            <div style={{ fontSize: 15, color: 'var(--d-muted)', marginTop: 8 }}>
+              You earn{pay.tip > 0 ? `, including a ${money(pay.tip)} tip` : ''} · {order.distanceKm.toFixed(1)} km trip
             </div>
           </div>
 
-          {/* Route mini card */}
-          <div style={{ background: 'var(--d-surface-2)', borderRadius: 14, padding: 14, display: 'flex', gap: 14 }}>
-            {/* Route line */}
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', paddingTop: 6 }}>
-              <div style={{ width: 10, height: 10, borderRadius: 5, border: '2.5px solid #111827' }} />
-              <div style={{ width: 2, flex: 1, background: 'var(--d-border)', margin: '3px 0', minHeight: 22 }} />
-              <div style={{ width: 10, height: 10, background: 'var(--d-accent)', borderRadius: 2 }} />
-            </div>
-            <div style={{ flex: 1 }}>
-              <div style={{ marginBottom: 12 }}>
-                <div style={{ fontFamily: 'monospace', fontSize: 10, color: 'var(--d-muted)', letterSpacing: 1, textTransform: 'uppercase' }}>
-                  Pickup · {Math.round(distanceKm * 0.6 + 2)} min away
-                </div>
-                <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--d-ink)' }}>{pickupAddr}</div>
-                <div style={{ fontSize: 12, color: 'var(--d-muted)' }}>{order.pickup.name}</div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <Chip tone={isExpress ? 'accent' : undefined}>
+              {slot ? DELIVERY_WINDOW_LABELS[slot] : isExpress ? 'Express' : 'Standard'}
+            </Chip>
+            <Chip>{SIZE[order.parcel.size] ?? 'Medium'} parcel</Chip>
+            {order.parcel.fragile && <Chip tone="warn"><Icon name="alert" size={14} /> Fragile</Chip>}
+          </div>
+
+          {/* Route */}
+          <div style={{ background: 'var(--d-surface)', border: '1px solid var(--d-border)', borderRadius: 20, padding: 18 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '14px 1fr', columnGap: 12, rowGap: 16 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', paddingTop: 6 }}>
+                <span style={{ width: 10, height: 10, borderRadius: 5, border: '2.5px solid var(--d-ink)' }} />
+                <span style={{ flex: 1, width: 2, background: 'var(--d-border)', margin: '4px 0 -16px' }} />
               </div>
               <div>
-                <div style={{ fontFamily: 'monospace', fontSize: 10, color: 'var(--d-muted)', letterSpacing: 1, textTransform: 'uppercase' }}>Drop-off</div>
-                <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--d-ink)' }}>{dropoffAddr}{order.dropoff.unit ? ` · ${order.dropoff.unit}` : ''}</div>
-                <div style={{ fontSize: 12, color: 'var(--d-muted)' }}>{order.dropoff.name}</div>
+                <div style={{ fontSize: 13, color: 'var(--d-muted)' }}>
+                  Pickup{toPickup != null ? ` · ${formatDistance(toPickup)} from you` : ''}
+                </div>
+                <div style={{ fontSize: 17, fontWeight: 650, marginTop: 1 }}>{order.pickup.address.split(',')[0]}</div>
+                <div style={{ fontSize: 14, color: 'var(--d-muted)' }}>{order.pickup.name}</div>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 6 }}>
+                <span style={{ width: 10, height: 10, borderRadius: 2, background: 'var(--d-accent)' }} />
+              </div>
+              <div>
+                <div style={{ fontSize: 13, color: 'var(--d-muted)' }}>Drop-off</div>
+                <div style={{ fontSize: 17, fontWeight: 650, marginTop: 1 }}>
+                  {order.dropoff.address.split(',')[0]}{order.dropoff.unit ? ` · ${order.dropoff.unit}` : ''}
+                </div>
+                <div style={{ fontSize: 14, color: 'var(--d-muted)' }}>{order.dropoff.name}</div>
               </div>
             </div>
-          </div>
-
-          {/* Parcel tags */}
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <Tag>{size} · {order.parcel.size === 's' ? '~5 lb' : order.parcel.size === 'l' ? '~25 lb' : '~10 lb'}</Tag>
-            {fragile && <Tag tone="warn">⚠ Fragile</Tag>}
-            {order.parcel.desc && <Tag tone="neutral">{order.parcel.desc.slice(0, 24)}</Tag>}
-          </div>
-
-          {/* Actions */}
-          <div style={{ display: 'flex', gap: 10 }}>
-            <button
-              onClick={() => setConfirmDecline(true)}
-              style={{
-                flex: 1, height: 52, borderRadius: 26, cursor: 'pointer',
-                background: 'var(--d-surface-2)', border: 'none', color: 'var(--d-ink)',
-                fontFamily: 'inherit', fontSize: 15, fontWeight: 500,
-              }}
-            >Decline</button>
-            <button
-              onClick={onAccept}
-              style={{
-                flex: 2, height: 52, borderRadius: 26, cursor: 'pointer',
-                background: 'var(--d-accent)', border: 'none', color: '#fff',
-                fontFamily: 'inherit', fontSize: 15, fontWeight: 600, letterSpacing: -0.2,
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                boxShadow: '0 10px 24px -10px rgba(201,74,27,.5)',
-              }}
-            >
-              Accept · ${payout}
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M3 8h10M9 4l4 4-4 4"/>
-              </svg>
-            </button>
-          </div>
-
-          {/* Decline confirmation overlay */}
-          {confirmDecline && (
-            <div style={{
-              position: 'absolute', inset: 0, borderRadius: '24px 24px 0 0',
-              background: 'rgba(17,24,39,0.55)', backdropFilter: 'blur(4px)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              padding: 24, zIndex: 10,
-            }}>
-              <div style={{
-                background: 'var(--d-surface)', borderRadius: 20, padding: 24,
-                width: '100%', maxWidth: 320, textAlign: 'center',
-                boxShadow: '0 20px 60px -10px rgba(0,0,0,0.4)',
-              }}>
-                <div style={{ fontSize: 36, marginBottom: 12 }}>🚫</div>
-                <div style={{ fontSize: 17, fontWeight: 700, color: 'var(--d-ink)', marginBottom: 8, letterSpacing: -0.3 }}>
-                  Decline this job?
-                </div>
-                <div style={{ fontSize: 13, color: 'var(--d-muted)', lineHeight: 1.5, marginBottom: 22 }}>
-                  The order will be returned to the queue and the admin will be notified to reassign.
-                </div>
-                <div style={{ display: 'flex', gap: 10 }}>
-                  <button
-                    onClick={() => setConfirmDecline(false)}
-                    style={{
-                      flex: 1, height: 48, borderRadius: 24, cursor: 'pointer',
-                      background: 'var(--d-surface-2)', border: 'none', color: 'var(--d-ink-2)',
-                      fontFamily: 'inherit', fontSize: 15, fontWeight: 500,
-                    }}
-                  >Cancel</button>
-                  <button
-                    onClick={onDecline}
-                    style={{
-                      flex: 1, height: 48, borderRadius: 24, cursor: 'pointer',
-                      background: '#111827', border: 'none', color: '#fff',
-                      fontFamily: 'inherit', fontSize: 15, fontWeight: 600,
-                    }}
-                  >Yes, decline</button>
-                </div>
+            {order.parcel.desc && (
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 16, paddingTop: 14, borderTop: '1px solid var(--d-border)', fontSize: 14, color: 'var(--d-ink-2)' }}>
+                <Icon name="box" size={16} /> {order.parcel.desc}
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
-    </div>
-  )
-}
 
-// ── Inline tag component ──────────────────────────────────────────────────────
+      <div style={{ padding: '12px 16px calc(env(safe-area-inset-bottom, 0px) + 12px)', display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0 }}>
+        <Button size="xl" icon="check" onClick={onAccept}>Accept · {money(pay.total)}</Button>
+        <Button variant="ghost" onClick={() => setConfirmDecline(true)}>Decline</Button>
+      </div>
 
-function Tag({ children, tone = 'default' }: { children: React.ReactNode; tone?: 'default' | 'warn' | 'neutral' }) {
-  const colors: Record<string, { bg: string; color: string }> = {
-    default: { bg: 'var(--d-surface-2)', color: 'var(--d-ink-2)' },
-    warn:    { bg: 'var(--d-warn-bg)',   color: 'var(--d-warn)' },
-    neutral: { bg: 'var(--d-purple-bg)', color: 'var(--d-purple)' },
-  }
-  const { bg, color } = colors[tone]
-  return (
-    <div style={{
-      display: 'inline-flex', alignItems: 'center',
-      background: bg, color, borderRadius: 99,
-      padding: '4px 10px', fontSize: 12, fontWeight: 500,
-    }}>
-      {children}
+      {confirmDecline && (
+        <div onClick={() => setConfirmDecline(false)} style={{ position: 'absolute', inset: 0, zIndex: 10, background: 'var(--d-overlay)', display: 'flex', alignItems: 'flex-end', animation: 'd-fade-in .18s ease' }}>
+          <div onClick={e => e.stopPropagation()} style={{
+            width: '100%', background: 'var(--d-surface)', borderRadius: '24px 24px 0 0',
+            padding: '22px 16px calc(env(safe-area-inset-bottom, 0px) + 16px)', animation: 'd-slide-up .22s ease',
+          }}>
+            <div style={{ fontSize: 20, fontWeight: 650, letterSpacing: -0.4, margin: '0 4px' }}>Decline this job?</div>
+            <div style={{ fontSize: 14, color: 'var(--d-ink-2)', lineHeight: 1.5, margin: '6px 4px 18px' }}>
+              It goes back to dispatch to offer to another courier.
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <Button variant="danger" onClick={onDecline}>Yes, decline</Button>
+              <Button variant="ghost" onClick={() => setConfirmDecline(false)}>Keep the offer</Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
