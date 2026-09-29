@@ -14,6 +14,78 @@ function stars(r: number) {
   return '★'.repeat(full) + '☆'.repeat(5 - full)
 }
 
+/** In-app account deletion (Apple 5.1.1(v)). See migration 023. */
+function DeleteAccountSection({ onDeleted }: { onDeleted: () => void }) {
+  const [confirming, setConfirming] = useState(false)
+  const [loading,    setLoading]    = useState(false)
+  const [err,        setErr]        = useState<string | null>(null)
+
+  const del = async () => {
+    setErr(null)
+    setLoading(true)
+    try {
+      const { error } = await supabase.rpc('delete_own_account')
+      if (error) {
+        setErr(error.message.includes('active_delivery')
+          ? 'Finish or hand back your current delivery before deleting your account.'
+          : 'Could not delete your account. Please try again.')
+        setLoading(false)
+        return
+      }
+      onDeleted()
+    } catch {
+      setErr('Could not delete your account. Please try again.')
+      setLoading(false)
+    }
+  }
+
+  const btn: React.CSSProperties = {
+    flex: 1, height: 44, borderRadius: 12, fontFamily: 'var(--d-font)', fontSize: 14,
+    cursor: loading ? 'default' : 'pointer',
+  }
+
+  if (!confirming) {
+    return (
+      <button
+        onClick={() => setConfirming(true)}
+        style={{
+          width: '100%', background: 'none', border: 'none', padding: '6px 0',
+          fontFamily: 'var(--d-font)', fontSize: 13, color: 'var(--d-muted)', cursor: 'pointer',
+        }}
+      >
+        Delete account
+      </button>
+    )
+  }
+
+  return (
+    <div style={{ background: '#fff', border: '1px solid var(--d-border)', borderRadius: 14, padding: 16 }}>
+      <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--d-ink)', marginBottom: 4 }}>Delete your driver account?</div>
+      <div style={{ fontSize: 13, color: 'var(--d-muted)', lineHeight: 1.5, marginBottom: 12 }}>
+        This permanently deletes your CitySend driver account, profile and location data. It can't be undone.
+        Records of past deliveries are kept, without your personal details, for accounting purposes.
+      </div>
+      {err && <div style={{ fontSize: 13, color: '#ef4444', marginBottom: 10 }}>{err}</div>}
+      <div style={{ display: 'flex', gap: 8 }}>
+        <button
+          onClick={() => { setConfirming(false); setErr(null) }}
+          disabled={loading}
+          style={{ ...btn, border: '1px solid var(--d-border)', background: '#fff', color: 'var(--d-ink)', fontWeight: 500 }}
+        >
+          Cancel
+        </button>
+        <button
+          onClick={del}
+          disabled={loading}
+          style={{ ...btn, border: 'none', background: '#ef4444', color: '#fff', fontWeight: 600, opacity: loading ? 0.7 : 1 }}
+        >
+          {loading ? 'Deleting…' : 'Delete permanently'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
 export function DriverProfileScreen({ onBack, onSignOut }: Props) {
   const { state, dispatch } = useDriver()
   const { auth }  = state
@@ -282,11 +354,13 @@ export function DriverProfileScreen({ onBack, onSignOut }: Props) {
           Sign out
         </button>
 
+        {isSupabaseConfigured && <DeleteAccountSection onDeleted={onSignOut} />}
+
         {/* Legal */}
         <div style={{ display: 'flex', justifyContent: 'center', gap: 24, paddingTop: 8 }}>
           {([
-            { label: 'Privacy Policy',   url: 'https://citysend.ca/privacy' },
-            { label: 'Terms of Service', url: 'https://citysend.ca/terms'   },
+            { label: 'Privacy Policy',   url: 'https://www.citysend.ca/privacy' },
+            { label: 'Terms of Service', url: 'https://www.citysend.ca/terms'   },
           ] as const).map(({ label, url }) => (
             <a
               key={url}

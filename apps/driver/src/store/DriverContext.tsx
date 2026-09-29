@@ -22,7 +22,8 @@ import {
   startLocationBroadcast,
   stopLocationBroadcast,
   updateBroadcastOrder,
-} from '@shared/utils/locationStore'
+} from '../lib/locationBroadcast'
+import { ensurePushRegistered } from '../lib/capacitor'
 
 // ── Driver sub-steps (local UI only, not in shared model) ─────────────────────
 
@@ -519,7 +520,8 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
     return () => { cancelled = true }
   }, [state.auth?.driverId])
 
-  // Sync push-notification device token (cached by setupCapacitor) into the
+  // Ask for push permission after sign-in (not at launch), then sync the
+  // device token into the
   // push_tokens table for THIS driver's auth.users.id. The Edge Function uses
   // it to deliver job-offer pushes to the right device. push_tokens.user_id
   // is the Supabase auth UUID, not driverId, so we fetch it from the session.
@@ -531,6 +533,8 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
         const { data } = await supabase.auth.getUser()
         const authUserId = data?.user?.id
         if (!authUserId || cancelled) return
+        await ensurePushRegistered()
+        if (cancelled) return
         await syncPushTokenToSupabase(authUserId, 'driver')
       } catch (err) {
         console.warn('[Push] driver token sync failed', err)

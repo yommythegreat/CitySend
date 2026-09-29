@@ -9,6 +9,7 @@ import { EarningsScreen }         from './screens/EarningsScreen'
 import { HistoryScreen }          from './screens/HistoryScreen'
 import { DriverProfileScreen }    from './screens/DriverProfileScreen'
 import { JobOfferModal }          from './components/JobOfferModal'
+import { setStatusBarForDarkTop }  from './lib/capacitor'
 
 // ── Screen types ──────────────────────────────────────────────────────────────
 
@@ -95,6 +96,10 @@ function DriverApp() {
   }, [])
 
   const [showSignup, setShowSignup] = useState(false)
+
+  // Dashboard and earnings have a dark header; every other screen is light.
+  const darkTop = !!state.auth && (screen.name === 'dashboard' || screen.name === 'earnings')
+  useEffect(() => { setStatusBarForDarkTop(darkTop) }, [darkTop])
 
   if (!state.auth) {
     if (showSignup) {

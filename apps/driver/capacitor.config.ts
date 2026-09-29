@@ -12,14 +12,10 @@ const config: CapacitorConfig = {
       showSpinner:        false,
     },
     StatusBar: {
-      style:           'Light',   // white icons on dark background
-      backgroundColor: '#0f172a',
+      style: 'LIGHT',   // dark text for the light login screen; App.tsx switches per screen
     },
     PushNotifications: {
       presentationOptions: ['badge', 'sound', 'alert'],
-    },
-    Geolocation: {
-      // iOS: always-on background location for active deliveries
     },
   },
 }

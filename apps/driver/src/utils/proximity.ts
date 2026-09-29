@@ -1,3 +1,5 @@
+import { Capacitor } from '@capacitor/core'
+
 /** Haversine distance between two WGS-84 points, in metres. */
 function haversineMeters(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 6_371_000
@@ -9,7 +11,23 @@ function haversineMeters(lat1: number, lng1: number, lat2: number, lng2: number)
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
 }
 
-function getPosition(): Promise<GeolocationPosition> {
+interface Coords { latitude: number; longitude: number }
+
+/** Rejects with { code: 1 } when permission is denied (same shape as the web API). */
+async function getPosition(): Promise<{ coords: Coords }> {
+  if (Capacitor.isNativePlatform()) {
+    // Native CoreLocation — avoids WebKit's second "localhost would like to
+    // use your location" prompt that navigator.geolocation triggers.
+    const { Geolocation } = await import('@capacitor/geolocation')
+    const perm = await Geolocation.checkPermissions().catch(() => null)
+    if (perm?.location === 'denied') throw { code: 1 }
+    try {
+      return await Geolocation.getCurrentPosition({ enableHighAccuracy: true, timeout: 8_000, maximumAge: 30_000 })
+    } catch (e: any) {
+      if (/denied|not authorized/i.test(e?.message ?? '')) throw { code: 1 }
+      throw e
+    }
+  }
   return new Promise((resolve, reject) => {
     if (!navigator.geolocation) { reject(new Error('no_geolocation')); return }
     navigator.geolocation.getCurrentPosition(resolve, reject, {
@@ -48,7 +66,7 @@ const THRESHOLD_METERS = 300
 export async function checkProximity(
   contact: { address: string; lat?: number; lng?: number },
 ): Promise<ProximityResult> {
-  let pos: GeolocationPosition
+  let pos: { coords: Coords }
   try {
     pos = await getPosition()
   } catch (e: any) {
