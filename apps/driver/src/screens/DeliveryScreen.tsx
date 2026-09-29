@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
-import { useDriver } from '../store/DriverContext'
+import { useDriver, isAcceptedJob } from '../store/DriverContext'
 import { driverPayout } from '../utils/payout'
 import type { DeliverySubstep } from '../store/DriverContext'
 import { Toast } from '../components/Toast'
@@ -345,6 +345,20 @@ export function DeliveryScreen(props: Props) {
       </div>
     )
   }
+  // Not accepted yet (offered, or pre-assigned for a later window): no
+  // navigation until the driver has said yes to the job.
+  if (!isAcceptedJob(order) && order.status !== 'delivered' && order.status !== 'cancelled') {
+    return (
+      <div style={{ position: 'absolute', inset: 0, background: 'var(--d-bg)', color: 'var(--d-ink)', display: 'flex', flexDirection: 'column' }}>
+        <ScreenHeader title="Not started yet" subtitle={order.id} onBack={props.onBack} />
+        <div style={{ padding: '8px 20px', fontSize: 15, color: 'var(--d-muted)', lineHeight: 1.5 }}>
+          {order.status === 'offered'
+            ? 'Accept this job from the offer on your dashboard before heading to the pickup.'
+            : "This job hasn't been dispatched yet. You'll get an offer when it's ready."}
+        </div>
+      </div>
+    )
+  }
   return <DeliveryFlow {...props} order={order} />
 }
 
@@ -441,9 +455,9 @@ function DeliveryFlow({ order, onBack, onComplete, initialChatOpen = false }: Pr
     setTarget(null)
     if (party.lat != null && party.lng != null) { setTarget({ lat: party.lat, lng: party.lng }); return }
     let cancelled = false
-    geocodeAddress(party.address).then(p => { if (!cancelled && p) setTarget(p) })
+    geocodeAddress(party.address, order.cityId).then(p => { if (!cancelled && p) setTarget(p) })
     return () => { cancelled = true }
-  }, [party.address, party.lat, party.lng])
+  }, [party.address, party.lat, party.lng, order.cityId])
 
   const route = useDrivingRoute(driverPos, target)
   const mapRef = useRef<DeliveryMapHandle>(null)
@@ -481,7 +495,7 @@ function DeliveryFlow({ order, onBack, onComplete, initialChatOpen = false }: Pr
   const handleArrived = useCallback(async () => {
     setArrivalProblem(null)
     setCheckingLocation(true)
-    const result = await checkProximity(party)
+    const result = await checkProximity(party, order.cityId)
     setCheckingLocation(false)
 
     if (result.status !== 'ok') {
@@ -498,7 +512,7 @@ function DeliveryFlow({ order, onBack, onComplete, initialChatOpen = false }: Pr
       dispatch({ type: 'SET_SUBSTEP', orderId, substep: 'at_dropoff' })
       onComplete(orderId)
     }
-  }, [dispatch, orderId, party, isPickup, onComplete])
+  }, [dispatch, orderId, party, isPickup, onComplete, order.cityId])
 
   const handleConfirmPickup = useCallback(async () => {
     setConfirming(true)

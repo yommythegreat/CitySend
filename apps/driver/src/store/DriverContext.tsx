@@ -33,6 +33,12 @@ export type DeliverySubstep =
   | 'picked_up'
   | 'at_dropoff'
 
+// ── Job states ────────────────────────────────────────────────────────────────
+
+/** Statuses of a job the driver has accepted and is working on. */
+export const ACCEPTED_STATUSES = ['assigned', 'picked_up', 'in_transit'] as const
+export const isAcceptedJob = (o: Order) => (ACCEPTED_STATUSES as readonly string[]).includes(o.status)
+
 // ── Auth ──────────────────────────────────────────────────────────────────────
 
 export interface DriverAuth {
@@ -220,6 +226,20 @@ function reducer(state: DriverState, action: Action): DriverState {
               assignedDriverName: undefined,
               updatedAt: new Date().toISOString(),
             }
+          ),
+        }
+      }
+      // Accepted: flip offered → assigned locally right away (the DB write in
+      // syncDriverAction follows), so the delivery screen opens on the job
+      // instead of waiting for the realtime echo to mark it accepted.
+      if (action.accepted && state.jobOffer?.order) {
+        const acceptedId = state.jobOffer.order.id
+        return {
+          ...state,
+          jobOffer: null,
+          orders: state.orders.map(o =>
+            o.id !== acceptedId || o.status !== 'offered' ? o
+              : { ...o, status: 'assigned', updatedAt: new Date().toISOString() }
           ),
         }
       }
@@ -631,10 +651,11 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
     const driverId = state.auth?.driverId
     if (!driverId) { stopLocationBroadcast(); return }
 
-    // Find the active order ID (if any)
+    // Only a job the driver has accepted turns on delivery tracking —
+    // not one that's merely offered or pre-assigned for later.
     const activeOrder = state.orders.find(
       o => o.assignedDriverId === driverId &&
-           o.status !== 'delivered' && o.status !== 'cancelled',
+           isAcceptedJob(o),
     )
     startLocationBroadcast(driverId, activeOrder?.id ?? null)
 
@@ -649,14 +670,14 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
     if (!driverId) return
     const activeOrder = state.orders.find(
       o => o.assignedDriverId === driverId &&
-           o.status !== 'delivered' && o.status !== 'cancelled',
+           isAcceptedJob(o),
     )
     updateBroadcastOrder(driverId, activeOrder?.id ?? null)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     state.orders.find(o =>
       o.assignedDriverId === state.auth?.driverId &&
-      o.status !== 'delivered' && o.status !== 'cancelled',
+      isAcceptedJob(o),
     )?.id,
   ])
 

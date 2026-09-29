@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react'
 import { useDriver } from '../store/DriverContext'
-import type { DeliverySubstep } from '../store/DriverContext'
+import { isAcceptedJob, type DeliverySubstep } from '../store/DriverContext'
 import type { Order } from '@shared/types'
 import { driverPayout } from '../utils/payout'
 import { Button, Card, Icon, SectionLabel, TextLink, money } from '../ui'
@@ -84,6 +84,42 @@ function RouteLines({ order }: { order: Order }) {
         <div style={{ fontSize: 13, color: 'var(--d-muted)', marginTop: 1 }}>Drop-off · {order.dropoff.name}</div>
       </div>
     </div>
+  )
+}
+
+function OfferCard({ order, onReview }: { order: Order; onReview: () => void }) {
+  return (
+    <Card style={{ padding: 20, borderColor: 'var(--d-accent)', boxShadow: 'var(--d-shadow-md)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+        <Chip tone="accent">New offer</Chip>
+        <div style={{ flex: 1 }} />
+        <div style={{ fontSize: 20, fontWeight: 700, letterSpacing: -0.4, fontVariantNumeric: 'tabular-nums' }}>{money(driverPayout(order))}</div>
+      </div>
+      <RouteLines order={order} />
+      <Button size="xl" onClick={onReview} style={{ marginTop: 20 }}>Review offer</Button>
+    </Card>
+  )
+}
+
+function UpcomingCard({ order }: { order: Order }) {
+  const win = windowLabel(order)
+  return (
+    <Card style={{ padding: '14px 16px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div style={{ width: 36, height: 36, borderRadius: 18, flexShrink: 0, background: 'var(--d-info-bg)', color: 'var(--d-info)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <Icon name="clock" size={17} />
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 15, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {street(order.pickup.address)} → {street(order.dropoff.address)}
+          </div>
+          <div style={{ fontSize: 13, color: 'var(--d-muted)' }}>
+            {win ? `${win} window · ` : ''}You'll get an offer when it's dispatched
+          </div>
+        </div>
+        <div style={{ fontSize: 15, fontWeight: 650, fontVariantNumeric: 'tabular-nums' }}>{money(driverPayout(order))}</div>
+      </div>
+    </Card>
   )
 }
 
@@ -229,7 +265,12 @@ export function DashboardScreen({ onSelectOrder, onGoHistory, onGoProfile }: Pro
 
   if (!auth) return null
 
-  const [current, ...queued] = activeOrders
+  // Only jobs the driver accepted get the big "Navigate" card. Offers still
+  // need a decision; pre-assigned scheduled jobs wait for dispatch.
+  const accepted = activeOrders.filter(isAcceptedJob)
+  const offers   = activeOrders.filter(o => o.status === 'offered')
+  const upcoming = activeOrders.filter(o => !isAcceptedJob(o) && o.status !== 'offered')
+  const [current, ...queued] = accepted
   const recent = completedOrders.slice(0, 3)
   const firstName = auth.name.split(' ')[0]
   const initials = auth.name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2) || '?'
@@ -240,7 +281,7 @@ export function DashboardScreen({ onSelectOrder, onGoHistory, onGoProfile }: Pro
   }
 
   const handleSimulate = () => {
-    const realJob = activeOrders.find(o => o.status === 'assigned' && !state.substeps[o.id])
+    const realJob = offers[0] ?? activeOrders.find(o => o.status === 'assigned' && !state.substeps[o.id])
     if (realJob) { dispatch({ type: 'SHOW_JOB_OFFER', order: realJob }); return }
     const mock: Order = {
       id:                 `CS-DEMO-${Date.now().toString().slice(-4)}`,
@@ -307,6 +348,11 @@ export function DashboardScreen({ onSelectOrder, onGoHistory, onGoProfile }: Pro
 
         <main style={{ padding: '0 16px 32px', display: 'flex', flexDirection: 'column', gap: 28 }}>
 
+          {/* Offers waiting for a decision — never auto-accepted */}
+          {offers.map(o => (
+            <OfferCard key={o.id} order={o} onReview={() => dispatch({ type: 'SHOW_JOB_OFFER', order: o })} />
+          ))}
+
           {/* Current job takes over the top slot; availability sits below it */}
           {current ? (
             <section>
@@ -333,6 +379,15 @@ export function DashboardScreen({ onSelectOrder, onGoHistory, onGoProfile }: Pro
             </section>
           ) : (
             <StatusCard online={online} onToggle={toggleOnline} />
+          )}
+
+          {upcoming.length > 0 && (
+            <section>
+              <SectionLabel>Upcoming</SectionLabel>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {upcoming.map(o => <UpcomingCard key={o.id} order={o} />)}
+              </div>
+            </section>
           )}
 
           {/* Today */}
