@@ -238,6 +238,7 @@ export type NotificationEvent =
   | 'order_created'
   | 'preparing'          // scheduled order moved into Preparing (pre-dispatch)
   | 'driver_assigned'
+  | 'job_offered'        // driver: a job was offered to you (Accept/Decline)
   | 'driver_en_route'
   | 'picked_up'
   | 'in_transit'
