@@ -495,6 +495,16 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
         if (sessionStorage.getItem('cs_driver_auth')) {
           baseDispatch({ type: 'LOGOUT' })
         }
+      } else if (event === 'INITIAL_SESSION' && session && !sessionStorage.getItem('cs_driver_auth')) {
+        // Cold start (iOS cleared sessionStorage) with a still-valid Supabase
+        // session — restore the driver instead of forcing a fresh sign-in.
+        // Deferred: supabase calls inside this callback can deadlock the client.
+        const userId = session.user.id
+        setTimeout(() => {
+          loadDriverAuth(userId).then(auth => {
+            if (auth) baseDispatch({ type: 'LOGIN', auth })
+          })
+        }, 0)
       }
     })
 
@@ -678,6 +688,27 @@ export function useDriver() {
 
 // ── Authentication ────────────────────────────────────────────────────────────
 
+/** Load the driver record linked to an auth user (via user_id, not email). */
+async function loadDriverAuth(userId: string): Promise<DriverAuth | null> {
+  const { data: driverRow } = await supabase
+    .from('drivers')
+    .select('*')
+    .eq('user_id', userId)
+    .maybeSingle()
+
+  if (!driverRow) return null
+
+  return {
+    driverId:        driverRow.id,
+    name:            driverRow.name,
+    email:           driverRow.email,
+    vehicle:         driverRow.vehicle,
+    phone:           driverRow.phone,
+    rating:          Number(driverRow.rating),
+    completedOrders: driverRow.completed_orders,
+  }
+}
+
 /**
  * Sign in a driver using Supabase Auth.
  * Falls back to mock credentials when Supabase is not configured.
@@ -693,25 +724,7 @@ export async function authenticateDriver(
       email: canonEmail, password,
     })
     if (error || !data.user) return null
-
-    // Load driver record linked to this auth user via user_id (not email)
-    const { data: driverRow } = await supabase
-      .from('drivers')
-      .select('*')
-      .eq('user_id', data.user.id)
-      .maybeSingle()
-
-    if (!driverRow) return null
-
-    return {
-      driverId:        driverRow.id,
-      name:            driverRow.name,
-      email:           driverRow.email,
-      vehicle:         driverRow.vehicle,
-      phone:           driverRow.phone,
-      rating:          Number(driverRow.rating),
-      completedOrders: driverRow.completed_orders,
-    }
+    return loadDriverAuth(data.user.id)
   }
 
   // Supabase auth is required — no offline fallback in production
