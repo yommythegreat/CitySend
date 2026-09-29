@@ -574,3 +574,9 @@ textarea.d-input {
 /* Scrolling flex columns: never let cards shrink (overflow:hidden children
    would otherwise collapse to fit instead of scrolling). */
 .d-stack > * { flex-shrink: 0; }
+
+@keyframes d-shake {
+  0%, 100% { transform: none }
+  20% { transform: translateX(-6px) } 40% { transform: translateX(6px) }
+  60% { transform: translateX(-4px) } 80% { transform: translateX(4px) }
+}

@@ -149,11 +149,14 @@ export function Button({ children, onClick, variant = 'primary', size = 'lg', ic
       onClick={() => { if (disabled) return; haptic(size === 'xl' ? 'confirm' : 'tap'); onClick?.() }}
       style={{
         height, width: full ? '100%' : undefined, padding: full ? 0 : '0 18px',
-        borderRadius: height / 2, border: 'none', cursor: disabled ? 'default' : 'pointer',
+        ...({ border: 'none' } as React.CSSProperties),  // default; variants may override
+        borderRadius: height / 2, cursor: disabled ? 'default' : 'pointer',
         display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8,
         fontSize: size === 'xl' ? 17 : size === 'lg' ? 16 : 14, fontWeight: 600, letterSpacing: -0.1,
-        opacity: disabled ? 0.45 : 1,
         ...BUTTON_STYLES[variant],
+        ...(disabled && (variant === 'primary' || variant === 'go')
+          ? { background: 'var(--d-surface-2)', color: 'var(--d-muted)', border: '1px solid var(--d-border)' }
+          : { opacity: disabled ? 0.45 : 1 }),
         ...style,
       }}
     >
