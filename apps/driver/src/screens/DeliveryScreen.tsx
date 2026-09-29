@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
-import { useDriver } from '../store/DriverContext'
+import { useDriver, isAcceptedJob } from '../store/DriverContext'
 import { driverPayout } from '../utils/payout'
 import type { DeliverySubstep } from '../store/DriverContext'
 import { Toast } from '../components/Toast'
@@ -341,6 +341,20 @@ export function DeliveryScreen(props: Props) {
         <ScreenHeader title="Loading job…" subtitle={props.orderId} onBack={props.onBack} />
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--d-muted)', fontSize: 14 }}>
           Fetching the latest details
+        </div>
+      </div>
+    )
+  }
+  // Not accepted yet (offered, or pre-assigned for a later window): no
+  // navigation until the driver has said yes to the job.
+  if (!isAcceptedJob(order) && order.status !== 'delivered' && order.status !== 'cancelled') {
+    return (
+      <div style={{ position: 'absolute', inset: 0, background: 'var(--d-bg)', color: 'var(--d-ink)', display: 'flex', flexDirection: 'column' }}>
+        <ScreenHeader title="Not started yet" subtitle={order.id} onBack={props.onBack} />
+        <div style={{ padding: '8px 20px', fontSize: 15, color: 'var(--d-muted)', lineHeight: 1.5 }}>
+          {order.status === 'offered'
+            ? 'Accept this job from the offer on your dashboard before heading to the pickup.'
+            : "This job hasn't been dispatched yet. You'll get an offer when it's ready."}
         </div>
       </div>
     )

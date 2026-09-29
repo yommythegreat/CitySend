@@ -86,6 +86,16 @@ type Action =
 
 // ── Reducer ───────────────────────────────────────────────────────────────────
 
+/**
+ * Dispatching an order that already has a driver ("Dispatch now" on a
+ * pre-assigned scheduled order: preparing → new) must *offer* it to that
+ * driver, the same as assigning a new order does. Otherwise the driver never
+ * gets an Accept/Decline and the job silently lands in their queue.
+ */
+function dispatchStatus(order: Order, requested: OrderStatus): OrderStatus {
+  return requested === 'new' && order.assignedDriverId ? 'offered' : requested
+}
+
 function reducer(state: AdminState, action: Action): AdminState {
   switch (action.type) {
 
@@ -223,7 +233,7 @@ function reducer(state: AdminState, action: Action): AdminState {
       return {
         ...state,
         orders:   state.orders.map(o =>
-          o.id !== action.orderId ? o : { ...o, status: action.status, updatedAt: now }
+          o.id !== action.orderId ? o : { ...o, status: dispatchStatus(o, action.status), updatedAt: now }
         ),
         drivers:  newDrivers,
         receipts: newReceipts,
@@ -399,13 +409,16 @@ async function syncToSupabase(action: Action, snapshot: AdminState): Promise<voi
       const order = snapshot.orders.find(o => o.id === action.orderId)
       if (!order) return
 
+      const nextStatus = dispatchStatus(order, action.status)
       const statusAuditNote: AdminNote = {
         id: `audit-${Date.now()}`,
-        text: `🔧 ${adminLabel}: Status manually set to "${action.status}".`,
+        text: nextStatus === action.status
+          ? `🔧 ${adminLabel}: Status manually set to "${action.status}".`
+          : `🔧 ${adminLabel}: Dispatched — offered to ${order.assignedDriverName ?? 'the assigned driver'}.`,
         authorName: 'System', createdAt: now,
       }
       await supabase.from('orders').update({
-        status: action.status, updated_at: now,
+        status: nextStatus, updated_at: now,
         notes: [...order.notes, statusAuditNote],
       }).eq('id', action.orderId)
 
