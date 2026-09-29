@@ -20,7 +20,7 @@ import { supabase, isSupabaseConfigured } from '@shared/lib/supabase'
 const PUBLISH_EVERY_MS = 5_000
 const IS_NATIVE = Capacitor.isNativePlatform()
 
-interface Fix { lat: number; lng: number; heading: number | null; accuracyM: number | null }
+export interface Fix { lat: number; lng: number; heading: number | null; accuracyM: number | null }
 
 let driverId: string | null = null
 let orderId: string | null = null
@@ -50,9 +50,23 @@ async function publish(force = false): Promise<void> {
   if (error) console.warn('[location] publish failed:', error.message)
 }
 
+const listeners = new Set<(fix: Fix) => void>()
+
 function onFix(fix: Fix): void {
   lastFix = fix
+  listeners.forEach(l => l(fix))
   void publish()
+}
+
+/**
+ * Subscribe to the driver's live position (for the on-screen map). Reuses the
+ * broadcaster's watcher rather than starting a second GPS session. Calls back
+ * immediately with the last fix, if any.
+ */
+export function subscribePosition(listener: (fix: Fix) => void): () => void {
+  listeners.add(listener)
+  if (lastFix) listener(lastFix)
+  return () => { listeners.delete(listener) }
 }
 
 function startWatcher(): void {

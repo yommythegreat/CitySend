@@ -38,13 +38,20 @@ async function getPosition(): Promise<{ coords: Coords }> {
   })
 }
 
-async function geocodeAddress(address: string): Promise<{ lat: number; lng: number } | null> {
+const geocodeCache = new Map<string, { lat: number; lng: number }>()
+
+/** Address → coordinates via Nominatim (cached for the session). */
+export async function geocodeAddress(address: string): Promise<{ lat: number; lng: number } | null> {
+  const hit = geocodeCache.get(address)
+  if (hit) return hit
   try {
     const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(address)}&format=json&limit=1&countrycodes=ca`
     const res  = await fetch(url, { headers: { 'Accept-Language': 'en' } })
     const data = await res.json()
     if (!Array.isArray(data) || !data.length) return null
-    return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) }
+    const point = { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) }
+    geocodeCache.set(address, point)
+    return point
   } catch {
     return null
   }

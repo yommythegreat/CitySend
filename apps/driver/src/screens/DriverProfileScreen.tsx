@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { useDriver } from '../store/DriverContext'
 import { supabase, isSupabaseConfigured } from '@shared/lib/supabase'
 import { ScreenHeader } from '../ui'
+import { NAV_APPS, getNavApp, setNavApp, type NavApp } from '../lib/navigation'
 
 interface Props {
   onBack: () => void
@@ -13,6 +14,32 @@ const VEHICLE_OPTIONS = ['Cargo Bike', 'Scooter', 'Motorcycle', 'Car', 'Cargo Va
 function stars(r: number) {
   const full = Math.round(r)
   return '★'.repeat(full) + '☆'.repeat(5 - full)
+}
+
+/** Which maps app "Navigate" opens. Chosen on first use; changeable here. */
+function NavigationAppSetting() {
+  const [app, setApp] = useState<NavApp | null>(() => getNavApp())
+  return (
+    <div style={{ background: 'var(--d-surface)', border: '1px solid var(--d-border)', borderRadius: 16, padding: 16 }}>
+      <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--d-ink)', marginBottom: 12 }}>Navigation app</div>
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        {[{ id: null, label: 'Ask each time' }, ...NAV_APPS].map(o => {
+          const on = app === o.id
+          return (
+            <button
+              key={o.label}
+              onClick={() => { setNavApp(o.id as NavApp | null); setApp(o.id as NavApp | null) }}
+              style={{
+                height: 36, padding: '0 14px', borderRadius: 18, cursor: 'pointer', fontSize: 13, fontWeight: on ? 650 : 500,
+                border: on ? 'none' : '1px solid var(--d-border)',
+                background: on ? 'var(--d-ink)' : 'var(--d-surface)', color: on ? 'var(--d-bg)' : 'var(--d-ink)',
+              }}
+            >{o.label}</button>
+          )
+        })}
+      </div>
+    </div>
+  )
 }
 
 /** In-app account deletion (Apple 5.1.1(v)). See migration 023. */
@@ -163,7 +190,7 @@ export function DriverProfileScreen({ onBack, onSignOut }: Props) {
       <ScreenHeader title="Profile" onBack={onBack} />
 
       {/* Body */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '8px 16px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div className="d-stack" style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '8px 16px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
 
         {/* Avatar + name card */}
         <div style={{
@@ -325,6 +352,8 @@ export function DriverProfileScreen({ onBack, onSignOut }: Props) {
             ✓ Profile updated
           </div>
         )}
+
+        <NavigationAppSetting />
 
         {/* Sign out */}
         <button

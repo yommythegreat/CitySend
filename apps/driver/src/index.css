@@ -547,3 +547,30 @@ textarea.d-input {
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
 }
+
+/* ── Delivery map (components/DeliveryMap.tsx) ───────────────────────────── */
+
+.dmap { background: var(--d-surface-2); }
+.dmap .leaflet-control-attribution {
+  background: transparent; font-size: 9px; color: var(--d-muted-lt);
+}
+.dmap .leaflet-control-attribution a { color: inherit; }
+:root[data-theme="dark"] .dmap .leaflet-tile-pane {
+  filter: invert(1) hue-rotate(180deg) brightness(.92) contrast(.88) saturate(.6);
+}
+.dmap-route-casing { stroke: var(--d-surface); }
+.dmap-route        { stroke: var(--d-info); }
+.dmap-pin { width: 22px; height: 22px; box-shadow: 0 3px 10px rgba(11,18,32,.35); }
+.dmap-pickup  { border-radius: 50%; background: #fff; border: 5px solid #0b1220; }
+.dmap-dropoff { border-radius: 5px; background: var(--d-accent); border: 3px solid #fff; }
+.dmap-driver {
+  width: 26px; height: 26px; border-radius: 50%;
+  background: rgba(37,99,235,.18); display: flex; align-items: center; justify-content: center;
+  animation: dmap-breathe 2.4s ease-in-out infinite;
+}
+.dmap-driver span { width: 14px; height: 14px; border-radius: 50%; background: #2563eb; border: 3px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,.35); }
+@keyframes dmap-breathe { 0%,100% { box-shadow: 0 0 0 0 rgba(37,99,235,.25) } 50% { box-shadow: 0 0 0 8px rgba(37,99,235,0) } }
+
+/* Scrolling flex columns: never let cards shrink (overflow:hidden children
+   would otherwise collapse to fit instead of scrolling). */
+.d-stack > * { flex-shrink: 0; }

@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react'
+import { haptic } from '../lib/haptics'
 
 interface Props {
   label:           string
@@ -43,6 +44,7 @@ export function SlideAction({ label, onSlideComplete, variant = 'dark', disabled
     if (drag > 0.92) {
       setDrag(1)
       setDone(true)
+      haptic('confirm')
       setTimeout(() => {
         onSlideComplete()
         setDrag(0)
