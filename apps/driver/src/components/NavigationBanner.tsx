@@ -23,7 +23,7 @@ export function NavigationBanner({ instruction, distanceCue = 'In 250 m' }: Prop
     }}>
       {/* Direction icon */}
       <div style={{
-        width: 48, height: 48, borderRadius: 12, background: '#c94a1b',
+        width: 48, height: 48, borderRadius: 12, background: 'var(--d-accent)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         flexShrink: 0,
       }}>

@@ -458,6 +458,7 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
   const [subscribeKey, setSubscribeKey] = useState(0)
 
   const snapshotRef = React.useRef<DriverState>(state)
+  const ordersHydratedRef = React.useRef(false)
   useEffect(() => { snapshotRef.current = state }, [state])
 
   const dispatch = useCallback((action: Action) => {
@@ -525,6 +526,7 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
       } catch {
         if (!cancelled) baseDispatch({ type: '_HYDRATE_ORDERS', orders: getSharedOrders() })
       }
+      ordersHydratedRef.current = true
     }
     load()
     return () => { cancelled = true }
@@ -553,9 +555,13 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
     return () => { cancelled = true }
   }, [state.auth?.driverId])
 
-  // Push order status changes to shared store (localStorage fallback)
+  // Push order status changes to shared store (localStorage fallback).
+  // Skip until the first load has hydrated (else the initial [] wipes the
+  // stored orders) and skip no-op writes: setSharedOrders fires a same-tab
+  // storage event that re-hydrates state, which would loop forever.
   useEffect(() => {
-    if (isSupabaseConfigured) return
+    if (isSupabaseConfigured || !ordersHydratedRef.current) return
+    if (localStorage.getItem(ORDERS_STORAGE_KEY) === JSON.stringify(state.orders)) return
     setSharedOrders(state.orders)
   }, [state.orders])
 

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { useDriver } from '../store/DriverContext'
 import { supabase, isSupabaseConfigured } from '@shared/lib/supabase'
+import { ScreenHeader } from '../ui'
 
 interface Props {
   onBack: () => void
@@ -59,25 +60,25 @@ function DeleteAccountSection({ onDeleted }: { onDeleted: () => void }) {
   }
 
   return (
-    <div style={{ background: '#fff', border: '1px solid var(--d-border)', borderRadius: 14, padding: 16 }}>
+    <div style={{ background: 'var(--d-surface)', border: '1px solid var(--d-border)', borderRadius: 14, padding: 16 }}>
       <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--d-ink)', marginBottom: 4 }}>Delete your driver account?</div>
       <div style={{ fontSize: 13, color: 'var(--d-muted)', lineHeight: 1.5, marginBottom: 12 }}>
         This permanently deletes your CitySend driver account, profile and location data. It can't be undone.
         Records of past deliveries are kept, without your personal details, for accounting purposes.
       </div>
-      {err && <div style={{ fontSize: 13, color: '#ef4444', marginBottom: 10 }}>{err}</div>}
+      {err && <div style={{ fontSize: 13, color: 'var(--d-err)', marginBottom: 10 }}>{err}</div>}
       <div style={{ display: 'flex', gap: 8 }}>
         <button
           onClick={() => { setConfirming(false); setErr(null) }}
           disabled={loading}
-          style={{ ...btn, border: '1px solid var(--d-border)', background: '#fff', color: 'var(--d-ink)', fontWeight: 500 }}
+          style={{ ...btn, border: '1px solid var(--d-border)', background: 'var(--d-surface)', color: 'var(--d-ink)', fontWeight: 500 }}
         >
           Cancel
         </button>
         <button
           onClick={del}
           disabled={loading}
-          style={{ ...btn, border: 'none', background: '#ef4444', color: '#fff', fontWeight: 600, opacity: loading ? 0.7 : 1 }}
+          style={{ ...btn, border: 'none', background: 'var(--d-err)', color: '#fff', fontWeight: 600, opacity: loading ? 0.7 : 1 }}
         >
           {loading ? 'Deleting…' : 'Delete permanently'}
         </button>
@@ -159,25 +160,10 @@ export function DriverProfileScreen({ onBack, onSignOut }: Props) {
       minHeight: '100vh', background: 'var(--d-bg)', color: 'var(--d-ink)',
       display: 'flex', flexDirection: 'column',
     }}>
-      {/* Header */}
-      <div style={{
-        background: '#111827', flexShrink: 0,
-        paddingTop: 'max(52px, env(safe-area-inset-top, 52px))',
-        paddingBottom: 20, paddingLeft: 20, paddingRight: 20,
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-          <button
-            onClick={onBack}
-            style={{ width: 36, height: 36, borderRadius: '50%', background: 'rgba(255,255,255,0.1)', border: 'none', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
-          >
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="white" strokeWidth="2.2" strokeLinecap="round"><path d="M9 2L4 7l5 5"/></svg>
-          </button>
-          <div style={{ fontSize: 18, fontWeight: 700, color: '#fff' }}>My Profile</div>
-        </div>
-      </div>
+      <ScreenHeader title="Profile" onBack={onBack} />
 
       {/* Body */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '24px 20px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div style={{ flex: 1, overflowY: 'auto', padding: '8px 16px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
 
         {/* Avatar + name card */}
         <div style={{
@@ -186,7 +172,7 @@ export function DriverProfileScreen({ onBack, onSignOut }: Props) {
         }}>
           <div style={{
             width: 72, height: 72, borderRadius: '50%',
-            background: 'linear-gradient(135deg, #c94a1b, #e06840)',
+            background: 'linear-gradient(135deg, var(--d-accent), #e06840)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             fontSize: 28, fontWeight: 700, color: '#fff',
             margin: '0 auto 14px',
@@ -322,7 +308,7 @@ export function DriverProfileScreen({ onBack, onSignOut }: Props) {
           )}
 
           {error && (
-            <div style={{ margin: '0 16px 16px', padding: '10px 12px', background: 'rgba(185,28,28,.1)', borderRadius: 8, fontSize: 13, color: '#ef4444' }}>
+            <div style={{ margin: '0 16px 16px', padding: '10px 12px', background: 'rgba(185,28,28,.1)', borderRadius: 8, fontSize: 13, color: 'var(--d-err)' }}>
               {error}
             </div>
           )}
@@ -347,7 +333,7 @@ export function DriverProfileScreen({ onBack, onSignOut }: Props) {
             width: '100%', height: 48, borderRadius: 12,
             border: '1px solid rgba(185,28,28,.3)',
             background: 'rgba(185,28,28,.08)',
-            color: '#ef4444', fontFamily: 'var(--d-font)', fontSize: 15, fontWeight: 600,
+            color: 'var(--d-err)', fontFamily: 'var(--d-font)', fontSize: 15, fontWeight: 600,
             cursor: 'pointer', marginTop: 8,
           }}
         >

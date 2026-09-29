@@ -75,12 +75,12 @@ function ReportIssueSheet({
     <div onClick={onClose} style={{ position: 'absolute', inset: 0, zIndex: 200, background: 'rgba(0,0,0,0.5)' }}>
       <div onClick={e => e.stopPropagation()} style={{
         position: 'absolute', bottom: 0, left: 0, right: 0,
-        background: '#fff', borderRadius: '20px 20px 0 0',
+        background: 'var(--d-surface)', borderRadius: '20px 20px 0 0',
         paddingBottom: 'env(safe-area-inset-bottom, 20px)',
         maxHeight: '85vh', overflowY: 'auto',
       }}>
         <div style={{ padding: 8, display: 'flex', justifyContent: 'center' }}>
-          <div style={{ width: 40, height: 4, background: '#e0e0e0', borderRadius: 2 }} />
+          <div style={{ width: 40, height: 4, background: 'var(--d-border)', borderRadius: 2 }} />
         </div>
         <div style={{ padding: '4px 20px 16px', fontSize: 18, fontWeight: 700, color: 'var(--d-ink)' }}>
           Report an Issue
@@ -92,8 +92,8 @@ function ReportIssueSheet({
           {ISSUE_TYPES.map(type => (
             <button key={type} onClick={() => setSelected(type)} style={{
               width: '100%', padding: '12px 14px', marginBottom: 6,
-              background: selected === type ? 'rgba(201,74,27,0.06)' : '#f8f9fb',
-              border: `1.5px solid ${selected === type ? 'var(--d-accent)' : '#e8ebf0'}`,
+              background: selected === type ? 'var(--d-accent-lt)' : 'var(--d-surface-2)',
+              border: `1.5px solid ${selected === type ? 'var(--d-accent)' : 'var(--d-border)'}`,
               borderRadius: 10, textAlign: 'left', cursor: 'pointer',
               fontSize: 14, fontWeight: selected === type ? 600 : 400,
               color: selected === type ? 'var(--d-accent)' : 'var(--d-ink)',
@@ -102,15 +102,15 @@ function ReportIssueSheet({
           <textarea
             value={detail} onChange={e => setDetail(e.target.value)}
             placeholder="Additional details (optional)…"
-            style={{ marginTop: 6, minHeight: 70, width: '100%', boxSizing: 'border-box', border: '1.5px solid #e8ebf0', borderRadius: 10, padding: '10px 12px', fontSize: 14, fontFamily: 'inherit', resize: 'vertical', outline: 'none' }}
+            style={{ marginTop: 6, minHeight: 70, width: '100%', boxSizing: 'border-box', border: '1.5px solid var(--d-border)', borderRadius: 10, padding: '10px 12px', fontSize: 14, fontFamily: 'inherit', resize: 'vertical', outline: 'none' }}
           />
           <div style={{ display: 'flex', gap: 10, marginTop: 12, paddingBottom: 8 }}>
-            <button onClick={onClose} style={{ flex: 1, padding: '12px 0', border: '1.5px solid #e8ebf0', borderRadius: 10, background: '#fff', cursor: 'pointer', fontSize: 14, fontWeight: 600, color: 'var(--d-ink)' }}>
+            <button onClick={onClose} style={{ flex: 1, padding: '12px 0', border: '1.5px solid var(--d-border)', borderRadius: 10, background: 'var(--d-surface)', cursor: 'pointer', fontSize: 14, fontWeight: 600, color: 'var(--d-ink)' }}>
               Cancel
             </button>
             <button disabled={!selected} onClick={() => selected && onSubmit(selected, detail)} style={{
               flex: 2, padding: '12px 0', border: 'none', borderRadius: 10,
-              background: selected ? '#ef4444' : '#e8ebf0', color: selected ? '#fff' : '#aaa',
+              background: selected ? 'var(--d-err)' : 'var(--d-surface-2)', color: selected ? '#fff' : 'var(--d-muted-lt)',
               cursor: selected ? 'pointer' : 'default', fontSize: 14, fontWeight: 700,
             }}>Submit Report</button>
           </div>
@@ -148,19 +148,19 @@ function ChatPanel({ order, myId, messages, fetchError, sending, inputText, call
       </div>
 
       {callNotice && (
-        <div style={{ padding: '10px 16px', background: '#fff7ed', borderBottom: '1px solid #fed7aa', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+        <div style={{ padding: '10px 16px', background: 'var(--d-warn-bg)', borderBottom: '1px solid #fed7aa', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
           <span style={{ fontSize: 16 }}>📵</span>
-          <span style={{ flex: 1, fontSize: 13, color: '#92400e' }}><strong>Calling is not available yet.</strong> Please message the customer instead.</span>
-          <button onClick={onDismissCallNotice} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: '#92400e', lineHeight: 1, padding: '0 4px' }}>×</button>
+          <span style={{ flex: 1, fontSize: 13, color: 'var(--d-warn)' }}><strong>Calling is not available yet.</strong> Please message the customer instead.</span>
+          <button onClick={onDismissCallNotice} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: 'var(--d-warn)', lineHeight: 1, padding: '0 4px' }}>×</button>
         </div>
       )}
 
       <div style={{ flex: 1, overflowY: 'auto', padding: '16px 12px', display: 'flex', flexDirection: 'column', gap: 8, scrollbarWidth: 'none' }}>
         {fetchError ? (
           <div style={{ textAlign: 'center', padding: '40px 16px' }}>
-            <div style={{ fontSize: 13, color: '#dc2626', fontWeight: 600, marginBottom: 6 }}>Unable to load messages.</div>
+            <div style={{ fontSize: 13, color: 'var(--d-err)', fontWeight: 600, marginBottom: 6 }}>Unable to load messages.</div>
             <div style={{ fontSize: 11, color: 'var(--d-muted)', marginBottom: 12, fontFamily: 'monospace' }}>{fetchError}</div>
-            <button onClick={onRetry} style={{ padding: '8px 18px', border: '1.5px solid var(--d-border)', borderRadius: 10, background: '#fff', fontSize: 13, cursor: 'pointer' }}>Retry</button>
+            <button onClick={onRetry} style={{ padding: '8px 18px', border: '1.5px solid var(--d-border)', borderRadius: 10, background: 'var(--d-surface)', fontSize: 13, cursor: 'pointer' }}>Retry</button>
           </div>
         ) : messages.length === 0 ? (
           <div style={{ textAlign: 'center', color: 'var(--d-muted)', fontSize: 13, marginTop: 40 }}>No messages yet.</div>
@@ -168,7 +168,7 @@ function ChatPanel({ order, myId, messages, fetchError, sending, inputText, call
           const isMine = m.senderId === myId
           return (
             <div key={m.id} style={{ display: 'flex', justifyContent: isMine ? 'flex-end' : 'flex-start' }}>
-              <div style={{ maxWidth: '78%', padding: '9px 13px', background: isMine ? 'var(--d-accent)' : '#fff', color: isMine ? '#fff' : 'var(--d-ink)', borderRadius: isMine ? '14px 14px 4px 14px' : '14px 14px 14px 4px', boxShadow: '0 1px 3px rgba(0,0,0,0.08)', fontSize: 14, lineHeight: 1.45 }}>
+              <div style={{ maxWidth: '78%', padding: '9px 13px', background: isMine ? 'var(--d-accent)' : 'var(--d-surface)', color: isMine ? '#fff' : 'var(--d-ink)', borderRadius: isMine ? '14px 14px 4px 14px' : '14px 14px 14px 4px', boxShadow: '0 1px 3px rgba(0,0,0,0.08)', fontSize: 14, lineHeight: 1.45 }}>
                 {m.messageText}
                 <div style={{ fontSize: 10, marginTop: 4, opacity: 0.7, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 3 }}>
                   {fmtTime(m.createdAt)}
@@ -184,7 +184,7 @@ function ChatPanel({ order, myId, messages, fetchError, sending, inputText, call
       {!isTerminal && !fetchError && (
         <div style={{ display: 'flex', gap: 8, padding: '6px 12px', overflowX: 'auto', scrollbarWidth: 'none', flexShrink: 0, background: 'var(--d-surface)' }}>
           {QUICK_REPLIES.map(reply => (
-            <button key={reply} onClick={() => onSend(reply)} disabled={sending} style={{ flexShrink: 0, padding: '6px 12px', border: '1.5px solid var(--d-accent)', borderRadius: 20, background: '#fff', color: 'var(--d-accent)', fontSize: 12, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', opacity: sending ? 0.6 : 1 }}>
+            <button key={reply} onClick={() => onSend(reply)} disabled={sending} style={{ flexShrink: 0, padding: '6px 12px', border: '1.5px solid var(--d-accent)', borderRadius: 20, background: 'var(--d-surface)', color: 'var(--d-accent)', fontSize: 12, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', opacity: sending ? 0.6 : 1 }}>
               {reply}
             </button>
           ))}
@@ -192,16 +192,16 @@ function ChatPanel({ order, myId, messages, fetchError, sending, inputText, call
       )}
 
       {isTerminal ? (
-        <div style={{ padding: '14px 16px', paddingBottom: 'max(14px, env(safe-area-inset-bottom))', background: '#fff', borderTop: '1px solid var(--d-border)', textAlign: 'center', fontSize: 13, color: 'var(--d-muted)' }}>
+        <div style={{ padding: '14px 16px', paddingBottom: 'max(14px, env(safe-area-inset-bottom))', background: 'var(--d-surface)', borderTop: '1px solid var(--d-border)', textAlign: 'center', fontSize: 13, color: 'var(--d-muted)' }}>
           Messaging is closed for this delivery.
         </div>
       ) : (
-        <div style={{ padding: '10px 12px', paddingBottom: 'max(10px, env(safe-area-inset-bottom))', background: '#fff', borderTop: '1px solid var(--d-border)', display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+        <div style={{ padding: '10px 12px', paddingBottom: 'max(10px, env(safe-area-inset-bottom))', background: 'var(--d-surface)', borderTop: '1px solid var(--d-border)', display: 'flex', gap: 8, alignItems: 'flex-end' }}>
           <textarea
             value={inputText} onChange={e => onInputChange(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); onSend() } }}
             placeholder="Message customer…" rows={1}
-            style={{ flex: 1, resize: 'none', border: '1.5px solid var(--d-border)', borderRadius: 20, padding: '9px 14px', fontSize: 14, outline: 'none', fontFamily: 'inherit', lineHeight: 1.4, background: '#f5f6f8' }}
+            style={{ flex: 1, resize: 'none', border: '1.5px solid var(--d-border)', borderRadius: 20, padding: '9px 14px', fontSize: 14, outline: 'none', fontFamily: 'inherit', lineHeight: 1.4, background: 'var(--d-surface-2)' }}
           />
           <button onClick={() => onSend()} disabled={!inputText.trim() || sending} style={{ width: 40, height: 40, borderRadius: '50%', border: 'none', background: inputText.trim() && !sending ? 'var(--d-accent)' : 'var(--d-border)', color: inputText.trim() && !sending ? '#fff' : 'var(--d-muted)', fontSize: 16, cursor: inputText.trim() && !sending ? 'pointer' : 'default', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>↑</button>
         </div>
@@ -474,7 +474,7 @@ export function DeliveryScreen({ orderId, onBack, onComplete, initialChatOpen = 
             </div>
 
             {/* Contact card */}
-            <div style={{ background: '#fff', border: '1px solid var(--d-border)', borderRadius: 12, padding: '14px', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{ background: 'var(--d-surface)', border: '1px solid var(--d-border)', borderRadius: 12, padding: '14px', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 12 }}>
               <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--d-accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 700, fontSize: 14, flexShrink: 0 }}>
                 {initials(order.pickup.name)}
               </div>
@@ -493,7 +493,7 @@ export function DeliveryScreen({ orderId, onBack, onComplete, initialChatOpen = 
             </div>
 
             {/* Parcel details table */}
-            <div style={{ background: '#fff', border: '1px solid var(--d-border)', borderRadius: 12, padding: '4px 0', marginBottom: 14, overflow: 'hidden' }}>
+            <div style={{ background: 'var(--d-surface)', border: '1px solid var(--d-border)', borderRadius: 12, padding: '4px 0', marginBottom: 14, overflow: 'hidden' }}>
               {[
                 { label: 'SIZE',        value: SIZE_LABEL[order.parcel.size] ?? order.parcel.size },
                 { label: 'DESCRIPTION', value: order.parcel.desc },
@@ -509,7 +509,7 @@ export function DeliveryScreen({ orderId, onBack, onComplete, initialChatOpen = 
 
             {/* Admin notes */}
             {order.notes.length > 0 && (
-              <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10, padding: '10px 12px', marginBottom: 14, fontSize: 13, color: '#92400e' }}>
+              <div style={{ background: 'var(--d-warn-bg)', border: '1px solid #fde68a', borderRadius: 10, padding: '10px 12px', marginBottom: 14, fontSize: 13, color: 'var(--d-warn)' }}>
                 {order.notes.map(n => n.text).join(' · ')}
               </div>
             )}
@@ -539,7 +539,7 @@ export function DeliveryScreen({ orderId, onBack, onComplete, initialChatOpen = 
         </div>
 
         {/* Bottom action */}
-        <div style={{ padding: '12px 20px', paddingBottom: 'max(12px, env(safe-area-inset-bottom, 12px))', background: '#fff', borderTop: '1px solid var(--d-border)', flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div style={{ padding: '12px 20px', paddingBottom: 'max(12px, env(safe-area-inset-bottom, 12px))', background: 'var(--d-surface)', borderTop: '1px solid var(--d-border)', flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 10 }}>
           <SlideAction
             label={confirming ? 'Confirming…' : 'Slide to confirm pickup'}
             variant="green"
@@ -547,7 +547,7 @@ export function DeliveryScreen({ orderId, onBack, onComplete, initialChatOpen = 
             disabled={confirming}
           />
           <div style={{ display: 'flex', gap: 10 }}>
-            <button onClick={() => setShowIssue(true)} style={{ flex: 1, padding: '11px 0', border: '1px solid var(--d-border)', borderRadius: 10, background: '#fff', fontSize: 13, fontWeight: 500, color: 'var(--d-ink)', cursor: 'pointer' }}>
+            <button onClick={() => setShowIssue(true)} style={{ flex: 1, padding: '11px 0', border: '1px solid var(--d-border)', borderRadius: 10, background: 'var(--d-surface)', fontSize: 13, fontWeight: 500, color: 'var(--d-ink)', cursor: 'pointer' }}>
               Wrong parcel?
             </button>
             <button onClick={() => {
@@ -555,7 +555,7 @@ export function DeliveryScreen({ orderId, onBack, onComplete, initialChatOpen = 
                 dispatch({ type: 'UPDATE_STATUS', orderId, status: 'cancelled' })
                 onBack()
               }
-            }} style={{ flex: 1, padding: '11px 0', border: '1px solid var(--d-border)', borderRadius: 10, background: '#fff', fontSize: 13, fontWeight: 500, color: '#ef4444', cursor: 'pointer' }}>
+            }} style={{ flex: 1, padding: '11px 0', border: '1px solid var(--d-border)', borderRadius: 10, background: 'var(--d-surface)', fontSize: 13, fontWeight: 500, color: 'var(--d-err)', cursor: 'pointer' }}>
               Cancel job
             </button>
           </div>
@@ -600,7 +600,7 @@ export function DeliveryScreen({ orderId, onBack, onComplete, initialChatOpen = 
 
       {/* Sender note (drop-off only) */}
       {!isPickup && order.dropoff.note && (
-        <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 10, padding: '10px 12px', marginBottom: 14 }}>
+        <div style={{ background: 'var(--d-info-bg)', border: '1px solid var(--d-border)', borderRadius: 10, padding: '10px 12px', marginBottom: 14 }}>
           <div style={{ fontSize: 10, fontWeight: 700, color: '#3b82f6', letterSpacing: 0.5, marginBottom: 4, textTransform: 'uppercase' }}>Note from sender</div>
           <div style={{ fontSize: 13, color: '#1e3a5f' }}>{order.dropoff.note}</div>
         </div>
@@ -613,7 +613,7 @@ export function DeliveryScreen({ orderId, onBack, onComplete, initialChatOpen = 
           { label: 'Distance', value: `${order.distanceKm} km`     },
           { label: 'Payout',   value: payout, accent: true          },
         ].map(s => (
-          <div key={s.label} style={{ padding: 10, background: '#f9fafb', borderRadius: 10 }}>
+          <div key={s.label} style={{ padding: 10, background: 'var(--d-surface-2)', borderRadius: 10 }}>
             <div style={{ fontFamily: 'monospace', fontSize: 9, color: 'var(--d-muted)', letterSpacing: 1, textTransform: 'uppercase' }}>{s.label}</div>
             <div style={{ fontSize: 15, fontWeight: 600, color: (s as any).accent ? 'var(--d-accent)' : 'var(--d-ink)', marginTop: 2, letterSpacing: -0.2 }}>{s.value}</div>
           </div>
@@ -621,7 +621,7 @@ export function DeliveryScreen({ orderId, onBack, onComplete, initialChatOpen = 
       </div>
 
       {/* Navigation helper */}
-      <button onClick={() => openMapsNav(party.address)} style={{ width: '100%', padding: '10px', border: '1px solid var(--d-border)', borderRadius: 10, background: '#fff', fontSize: 13, fontWeight: 500, color: 'var(--d-ink)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, marginBottom: 12 }}>
+      <button onClick={() => openMapsNav(party.address)} style={{ width: '100%', padding: '10px', border: '1px solid var(--d-border)', borderRadius: 10, background: 'var(--d-surface)', fontSize: 13, fontWeight: 500, color: 'var(--d-ink)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, marginBottom: 12 }}>
         <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M7 1l5.5 11.5L7 10.5 1.5 12.5z"/></svg>
         Open in Maps
       </button>
@@ -637,7 +637,7 @@ export function DeliveryScreen({ orderId, onBack, onComplete, initialChatOpen = 
   )
 
   return (
-    <div style={{ position: 'absolute', inset: 0, background: '#e5e5e5', overflow: 'hidden' }}>
+    <div style={{ position: 'absolute', inset: 0, background: 'var(--d-surface-2)', overflow: 'hidden' }}>
 
       {/* Map */}
       <iframe
@@ -647,7 +647,7 @@ export function DeliveryScreen({ orderId, onBack, onComplete, initialChatOpen = 
       />
 
       {/* Back */}
-      <button onClick={onBack} style={{ position: 'absolute', top: 'max(16px, env(safe-area-inset-top, 16px))', left: 16, zIndex: 60, width: 40, height: 40, borderRadius: '50%', background: '#fff', border: 'none', boxShadow: '0 2px 8px rgba(0,0,0,0.15)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <button onClick={onBack} style={{ position: 'absolute', top: 'max(16px, env(safe-area-inset-top, 16px))', left: 16, zIndex: 60, width: 40, height: 40, borderRadius: '50%', background: 'var(--d-surface)', border: 'none', boxShadow: '0 2px 8px rgba(0,0,0,0.15)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="var(--d-ink)" strokeWidth="2.2" strokeLinecap="round"><path d="M9 2L4 7l5 5"/></svg>
       </button>
 
@@ -692,7 +692,7 @@ export function DeliveryScreen({ orderId, onBack, onComplete, initialChatOpen = 
             <path d="M14 2H2a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h2v3l4-3h6a1 1 0 0 0 1-1V3a1 1 0 0 0-1-1z"/>
           </svg>
           {unreadCount > 0 && (
-            <div style={{ position: 'absolute', top: -2, right: -2, width: 14, height: 14, borderRadius: '50%', background: '#c94a1b', border: '2px solid #fff', fontSize: 9, fontWeight: 700, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div style={{ position: 'absolute', top: -2, right: -2, width: 14, height: 14, borderRadius: '50%', background: 'var(--d-accent)', border: '2px solid #fff', fontSize: 9, fontWeight: 700, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               {unreadCount}
             </div>
           )}
@@ -702,7 +702,7 @@ export function DeliveryScreen({ orderId, onBack, onComplete, initialChatOpen = 
       {/* Bottom sheet */}
       <div style={{
         position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 60,
-        background: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20,
+        background: 'var(--d-surface)', borderTopLeftRadius: 20, borderTopRightRadius: 20,
         boxShadow: '0 -4px 24px rgba(0,0,0,0.14)',
         transform: sheetOpen ? 'translateY(0)' : 'translateY(calc(100% - 64px))',
         transition: 'transform 0.28s ease-out',

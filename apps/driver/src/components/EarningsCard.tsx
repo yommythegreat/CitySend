@@ -51,7 +51,7 @@ export function EarningsCard({ earnings, compact = false }: Props) {
   return (
     <div
       style={{
-        background: '#fff',
+        background: 'var(--d-surface)',
         borderRadius: 12,
         border: '1px solid var(--d-border)',
         padding: 20,

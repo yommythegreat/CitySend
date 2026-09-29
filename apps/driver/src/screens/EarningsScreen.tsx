@@ -76,15 +76,15 @@ export function EarningsScreen({ order, onContinue }: Props) {
 
       {/* Earnings card */}
       <div style={{ padding: '28px 20px 12px' }}>
-        <div style={{ background: '#fff', borderRadius: 22, padding: 20 }}>
-          <div style={{ fontFamily: 'monospace', fontSize: 11, color: '#6b7280', letterSpacing: 1.4, textTransform: 'uppercase' }}>
+        <div style={{ background: 'var(--d-surface)', borderRadius: 22, padding: 20 }}>
+          <div style={{ fontFamily: 'monospace', fontSize: 11, color: 'var(--d-muted)', letterSpacing: 1.4, textTransform: 'uppercase' }}>
             You earned
           </div>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginTop: 4 }}>
-            <div style={{ fontSize: 54, fontWeight: 600, letterSpacing: -2.2, color: '#111827', lineHeight: 1 }}>
-              ${dollars}<span style={{ color: '#9ca3af' }}>.{cents}</span>
+            <div style={{ fontSize: 54, fontWeight: 600, letterSpacing: -2.2, color: 'var(--d-ink)', lineHeight: 1 }}>
+              ${dollars}<span style={{ color: 'var(--d-muted-lt)' }}>.{cents}</span>
             </div>
-            <div style={{ fontFamily: 'monospace', fontSize: 12, color: '#6b7280' }}>CAD</div>
+            <div style={{ fontFamily: 'monospace', fontSize: 12, color: 'var(--d-muted)' }}>CAD</div>
           </div>
 
           <div style={{ marginTop: 18, paddingTop: 14, borderTop: '1px solid #f3f4f6', display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -97,10 +97,10 @@ export function EarningsScreen({ order, onContinue }: Props) {
               { label: 'Time on job',      value: `~${Math.round((new Date(order.updatedAt).getTime() - new Date(order.createdAt).getTime()) / 60000)} min`, accent: false },
             ].filter(Boolean).map((row) => (
               <div key={row!.label} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
-                <div style={{ color: '#374151' }}>{row!.label}</div>
+                <div style={{ color: 'var(--d-ink-2)' }}>{row!.label}</div>
                 <div style={{
                   fontFamily: 'monospace',
-                  color: row!.accent ? '#c94a1b' : '#111827',
+                  color: row!.accent ? 'var(--d-accent)' : 'var(--d-ink)',
                   fontWeight: row!.accent ? 600 : 500,
                 }}>{row!.value}</div>
               </div>
@@ -116,7 +116,7 @@ export function EarningsScreen({ order, onContinue }: Props) {
           display: 'flex', alignItems: 'center', gap: 14, color: '#fff',
           border: '1px solid rgba(255,255,255,.08)',
         }}>
-          <div style={{ width: 40, height: 40, borderRadius: 20, background: '#c94a1b', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ width: 40, height: 40, borderRadius: 20, background: 'var(--d-accent)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             {/* Wallet icon */}
             <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="#fff" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
               <rect x="2" y="5" width="14" height="10" rx="2"/>
@@ -147,7 +147,7 @@ export function EarningsScreen({ order, onContinue }: Props) {
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
             <div style={{
               width: 40, height: 40, borderRadius: 20,
-              background: 'linear-gradient(135deg, #c94a1b, #e76a3a)',
+              background: 'linear-gradient(135deg, var(--d-accent), #e76a3a)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               fontSize: 14, fontWeight: 600, color: '#fff',
             }}>
@@ -193,7 +193,7 @@ export function EarningsScreen({ order, onContinue }: Props) {
           }}
           style={{
             width: '100%', height: 56, borderRadius: 28, border: 'none', cursor: 'pointer',
-            background: '#c94a1b', color: '#fff',
+            background: 'var(--d-accent)', color: '#fff',
             fontFamily: 'inherit', fontSize: 15, fontWeight: 600, letterSpacing: -0.2,
             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
             boxShadow: '0 12px 24px -8px rgba(201,74,27,.5)',

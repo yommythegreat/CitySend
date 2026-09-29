@@ -73,7 +73,7 @@ export function ProofOfDeliveryScreen({ orderId, onBack, onConfirmed, onUnavaila
     ctx.beginPath()
     ctx.moveTo(lastPt.current.x, lastPt.current.y)
     ctx.lineTo(pt.x, pt.y)
-    ctx.strokeStyle = '#111827'
+    ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--d-ink').trim() || '#0b1220'
     ctx.lineWidth   = 2.5
     ctx.lineCap     = 'round'
     ctx.lineJoin    = 'round'
@@ -201,7 +201,7 @@ export function ProofOfDeliveryScreen({ orderId, onBack, onConfirmed, onUnavaila
         </div>
 
         <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'rgba(255,255,255,0.1)', borderRadius: 99, padding: '5px 12px', marginBottom: 10 }}>
-          <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#fff' }} />
+          <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--d-surface)' }} />
           <span style={{ fontSize: 11, fontWeight: 700, color: '#fff', letterSpacing: 0.5 }}>AT DROP-OFF</span>
           <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', marginLeft: 2 }}>{order.id}</span>
         </div>
@@ -225,15 +225,15 @@ export function ProofOfDeliveryScreen({ orderId, onBack, onConfirmed, onUnavaila
             </div>
             <div style={{
               fontSize: 10, fontWeight: 700, letterSpacing: 0.8,
-              color: codeComplete ? '#22c55e' : '#c94a1b',
+              color: codeComplete ? '#22c55e' : 'var(--d-accent)',
               background: codeComplete ? 'rgba(34,197,94,0.08)' : 'rgba(201,74,27,0.08)',
               padding: '3px 8px', borderRadius: 99,
             }}>
               {codeComplete ? '✓ ENTERED' : 'REQUIRED'}
             </div>
           </div>
-          <div style={{ background: '#fff', border: '1.5px solid var(--d-border)', borderRadius: 16, padding: 20, display: 'flex', flexDirection: 'column', gap: 14, alignItems: 'center' }}>
-            <div style={{ fontSize: 14, color: '#374151', textAlign: 'center', maxWidth: 280 }}>
+          <div style={{ background: 'var(--d-surface)', border: '1.5px solid var(--d-border)', borderRadius: 16, padding: 20, display: 'flex', flexDirection: 'column', gap: 14, alignItems: 'center' }}>
+            <div style={{ fontSize: 14, color: 'var(--d-ink-2)', textAlign: 'center', maxWidth: 280 }}>
               Ask the recipient for the 4-digit code from their CitySend notification.
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
@@ -254,9 +254,9 @@ export function ProofOfDeliveryScreen({ orderId, onBack, onConfirmed, onUnavaila
                   }}
                   style={{
                     width: 44, height: 56, textAlign: 'center', fontSize: 24,
-                    fontFamily: 'monospace', fontWeight: 600, color: '#111827',
-                    border: `1.5px solid ${digit ? '#111827' : 'var(--d-border)'}`,
-                    borderRadius: 10, outline: 'none', background: '#fff',
+                    fontFamily: 'monospace', fontWeight: 600, color: 'var(--d-ink)',
+                    border: `1.5px solid ${digit ? 'var(--d-ink)' : 'var(--d-border)'}`,
+                    borderRadius: 10, outline: 'none', background: 'var(--d-surface)',
                   }}
                 />
               ))}
@@ -307,7 +307,7 @@ export function ProofOfDeliveryScreen({ orderId, onBack, onConfirmed, onUnavaila
             </div>
             {signed && <button onClick={clearSignature} style={{ fontSize: 12, color: 'var(--d-muted)', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>Clear</button>}
           </div>
-          <div style={{ border: `1.5px solid ${signed ? '#22c55e' : 'var(--d-border)'}`, borderRadius: 12, overflow: 'hidden', background: '#fafafa', position: 'relative', transition: 'border-color 0.2s' }}>
+          <div style={{ border: `1.5px solid ${signed ? '#22c55e' : 'var(--d-border)'}`, borderRadius: 12, overflow: 'hidden', background: 'var(--d-surface-2)', position: 'relative', transition: 'border-color 0.2s' }}>
             <canvas
               ref={canvasRef} width={360} height={140}
               style={{ width: '100%', height: 140, display: 'block', touchAction: 'none', cursor: 'crosshair' }}
@@ -331,7 +331,7 @@ export function ProofOfDeliveryScreen({ orderId, onBack, onConfirmed, onUnavaila
           <input
             type="text" value={receiverName} onChange={e => setReceiverName(e.target.value)}
             placeholder="Full name of person who received the parcel"
-            style={{ width: '100%', boxSizing: 'border-box', padding: '12px 14px', border: '1.5px solid var(--d-border)', borderRadius: 10, fontSize: 14, outline: 'none', fontFamily: 'inherit', background: '#fff' }}
+            style={{ width: '100%', boxSizing: 'border-box', padding: '12px 14px', border: '1.5px solid var(--d-border)', borderRadius: 10, fontSize: 14, outline: 'none', fontFamily: 'inherit', background: 'var(--d-surface)' }}
           />
           <div style={{ fontSize: 11, color: 'var(--d-muted)', marginTop: 4 }}>
             Pre-filled with recipient — update if someone else received it.
@@ -343,18 +343,18 @@ export function ProofOfDeliveryScreen({ orderId, onBack, onConfirmed, onUnavaila
           <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--d-muted)', letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 8 }}>
             Delivery notes <span style={{ fontWeight: 400, textTransform: 'none', fontSize: 12 }}>(optional)</span>
           </div>
-          <textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="Left at front door, given to concierge, etc." style={{ width: '100%', boxSizing: 'border-box', minHeight: 70, resize: 'vertical', border: '1.5px solid var(--d-border)', borderRadius: 10, padding: '10px 12px', fontSize: 14, fontFamily: 'inherit', outline: 'none', background: '#fff' }} />
+          <textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="Left at front door, given to concierge, etc." style={{ width: '100%', boxSizing: 'border-box', minHeight: 70, resize: 'vertical', border: '1.5px solid var(--d-border)', borderRadius: 10, padding: '10px 12px', fontSize: 14, fontFamily: 'inherit', outline: 'none', background: 'var(--d-surface)' }} />
         </div>
 
         {error && (
-          <div style={{ padding: '12px 14px', background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 10, fontSize: 13, color: '#dc2626', marginBottom: 12 }}>
+          <div style={{ padding: '12px 14px', background: 'var(--d-err-bg)', border: '1px solid #fca5a5', borderRadius: 10, fontSize: 13, color: 'var(--d-err)', marginBottom: 12 }}>
             {error}
           </div>
         )}
       </div>
 
       {/* Bottom action */}
-      <div style={{ padding: '12px 20px', background: '#fff', borderTop: '1px solid var(--d-border)', flexShrink: 0, paddingBottom: 'env(safe-area-inset-bottom, 12px)', display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div style={{ padding: '12px 20px', background: 'var(--d-surface)', borderTop: '1px solid var(--d-border)', flexShrink: 0, paddingBottom: 'env(safe-area-inset-bottom, 12px)', display: 'flex', flexDirection: 'column', gap: 10 }}>
         {canSubmit ? (
           <SlideAction
             label={submitting ? 'Confirming…' : 'Slide to complete delivery'}
@@ -363,18 +363,18 @@ export function ProofOfDeliveryScreen({ orderId, onBack, onConfirmed, onUnavaila
             disabled={submitting}
           />
         ) : (
-          <button disabled style={{ width: '100%', padding: '16px 0', border: 'none', borderRadius: 28, background: '#e5e7eb', color: '#9ca3af', fontSize: 14, fontWeight: 600, cursor: 'not-allowed' }}>
+          <button disabled style={{ width: '100%', padding: '16px 0', border: 'none', borderRadius: 28, background: '#e5e7eb', color: 'var(--d-muted-lt)', fontSize: 14, fontWeight: 600, cursor: 'not-allowed' }}>
             {!codeComplete ? 'Enter the 4-digit code to continue' : !receiverName.trim() ? 'Enter receiver name to continue' : 'Complete all required fields'}
           </button>
         )}
         <div style={{ display: 'flex', gap: 10 }}>
           <button
             onClick={handleRecipientUnavailable}
-            style={{ flex: 1, padding: '11px 0', border: '1px solid var(--d-border)', borderRadius: 10, background: '#fff', fontSize: 13, fontWeight: 500, color: '#ef4444', cursor: 'pointer' }}
+            style={{ flex: 1, padding: '11px 0', border: '1px solid var(--d-border)', borderRadius: 10, background: 'var(--d-surface)', fontSize: 13, fontWeight: 500, color: 'var(--d-err)', cursor: 'pointer' }}
           >
             Recipient unavailable
           </button>
-          <button onClick={() => window.open('mailto:support@citysend.ca?subject=Help+with+delivery+' + orderId)} style={{ flex: 1, padding: '11px 0', border: '1px solid var(--d-border)', borderRadius: 10, background: '#fff', fontSize: 13, fontWeight: 500, color: 'var(--d-muted)', cursor: 'pointer' }}>
+          <button onClick={() => window.open('mailto:support@citysend.ca?subject=Help+with+delivery+' + orderId)} style={{ flex: 1, padding: '11px 0', border: '1px solid var(--d-border)', borderRadius: 10, background: 'var(--d-surface)', fontSize: 13, fontWeight: 500, color: 'var(--d-muted)', cursor: 'pointer' }}>
             Need help?
           </button>
         </div>

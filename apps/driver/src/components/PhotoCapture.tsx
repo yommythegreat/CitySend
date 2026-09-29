@@ -108,7 +108,7 @@ export function PhotoCapture({ orderId, label, onCapture, onClear, captured, pre
         width: '100%', aspectRatio: '4/3',
         border: '1.5px dashed #d1d5db',
         borderRadius: 16, cursor: 'pointer',
-        background: '#f9fafb',
+        background: 'var(--d-surface-2)',
         display: 'flex', flexDirection: 'column',
         alignItems: 'center', justifyContent: 'center', gap: 10,
       }}
@@ -116,7 +116,7 @@ export function PhotoCapture({ orderId, label, onCapture, onClear, captured, pre
       {/* Camera icon */}
       <div style={{
         width: 52, height: 52, borderRadius: 26,
-        background: '#f3f4f6',
+        background: 'var(--d-surface-2)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
       }}>
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -124,10 +124,10 @@ export function PhotoCapture({ orderId, label, onCapture, onClear, captured, pre
           <circle cx="12" cy="13" r="4"/>
         </svg>
       </div>
-      <div style={{ fontSize: 14, color: '#6b7280', fontWeight: 500 }}>
+      <div style={{ fontSize: 14, color: 'var(--d-muted)', fontWeight: 500 }}>
         {label === 'pickup' ? 'Tap to photograph the parcel' : 'Tap to photograph the door'}
       </div>
-      <div style={{ fontSize: 11, fontFamily: 'monospace', color: '#c94a1b', letterSpacing: 0.5, fontWeight: 600 }}>
+      <div style={{ fontSize: 11, fontFamily: 'monospace', color: 'var(--d-accent)', letterSpacing: 0.5, fontWeight: 600 }}>
         {required ? 'REQUIRED' : 'RECOMMENDED'}
       </div>
       <input

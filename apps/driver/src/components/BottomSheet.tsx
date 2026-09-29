@@ -112,7 +112,7 @@ export function BottomSheet({
           top: sheetTop,
           left: 0,
           right: 0,
-          background: '#fff',
+          background: 'var(--d-surface)',
           borderTopLeftRadius: 20,
           borderTopRightRadius: 20,
           zIndex: 99,

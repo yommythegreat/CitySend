@@ -93,7 +93,7 @@ export function JobOfferModal({ order, onAccept, onDecline, onTimeout, initialSe
 
         {/* White bottom sheet */}
         <div style={{
-          background: '#fff', borderRadius: '24px 24px 0 0',
+          background: 'var(--d-surface)', borderRadius: '24px 24px 0 0',
           padding: '24px 20px', paddingBottom: 'max(28px, env(safe-area-inset-bottom, 28px))',
           boxShadow: '0 -20px 50px -20px rgba(0,0,0,.5)',
           display: 'flex', flexDirection: 'column', gap: 18,
@@ -103,14 +103,14 @@ export function JobOfferModal({ order, onAccept, onDecline, onTimeout, initialSe
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <div style={{
               display: 'inline-flex', alignItems: 'center', gap: 5,
-              background: '#fef2f0', borderRadius: 99, padding: '4px 10px',
+              background: 'var(--d-err-bg)', borderRadius: 99, padding: '4px 10px',
             }}>
-              <div style={{ width: 6, height: 6, borderRadius: 3, background: '#c94a1b' }} />
-              <span style={{ fontSize: 10, fontWeight: 700, color: '#c94a1b', letterSpacing: 1, textTransform: 'uppercase' }}>NEW</span>
+              <div style={{ width: 6, height: 6, borderRadius: 3, background: 'var(--d-accent)' }} />
+              <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--d-accent)', letterSpacing: 1, textTransform: 'uppercase' }}>NEW</span>
             </div>
             <span style={{
               fontFamily: 'monospace', fontSize: 11,
-              color: order.parcel.deliveryWindow === 'express' ? '#c94a1b' : '#6b7280',
+              color: order.parcel.deliveryWindow === 'express' ? 'var(--d-accent)' : '#6b7280',
               fontWeight: order.parcel.deliveryWindow === 'express' ? 700 : 400,
               letterSpacing: 1, textTransform: 'uppercase',
             }}>
@@ -122,35 +122,35 @@ export function JobOfferModal({ order, onAccept, onDecline, onTimeout, initialSe
 
           {/* Payout */}
           <div style={{ display: 'flex', alignItems: 'flex-end', gap: 14 }}>
-            <div style={{ fontSize: 52, fontWeight: 600, letterSpacing: -2, color: '#111827', lineHeight: 1 }}>
-              ${dollars}<span style={{ fontSize: 28, color: '#9ca3af' }}>.{cents}</span>
+            <div style={{ fontSize: 52, fontWeight: 600, letterSpacing: -2, color: 'var(--d-ink)', lineHeight: 1 }}>
+              ${dollars}<span style={{ fontSize: 28, color: 'var(--d-muted-lt)' }}>.{cents}</span>
             </div>
-            <div style={{ paddingBottom: 8, fontSize: 13, color: '#6b7280', lineHeight: 1.5 }}>
-              <div><b style={{ color: '#111827' }}>{distanceKm.toFixed(1)} km</b> · ~{Math.round(distanceKm * 4 + 10)} min</div>
+            <div style={{ paddingBottom: 8, fontSize: 13, color: 'var(--d-muted)', lineHeight: 1.5 }}>
+              <div><b style={{ color: 'var(--d-ink)' }}>{distanceKm.toFixed(1)} km</b> · ~{Math.round(distanceKm * 4 + 10)} min</div>
               <div style={{ fontFamily: 'monospace', fontSize: 11 }}>80% to you</div>
             </div>
           </div>
 
           {/* Route mini card */}
-          <div style={{ background: '#f9fafb', borderRadius: 14, padding: 14, display: 'flex', gap: 14 }}>
+          <div style={{ background: 'var(--d-surface-2)', borderRadius: 14, padding: 14, display: 'flex', gap: 14 }}>
             {/* Route line */}
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', paddingTop: 6 }}>
               <div style={{ width: 10, height: 10, borderRadius: 5, border: '2.5px solid #111827' }} />
-              <div style={{ width: 2, flex: 1, background: '#e5e7ea', margin: '3px 0', minHeight: 22 }} />
-              <div style={{ width: 10, height: 10, background: '#c94a1b', borderRadius: 2 }} />
+              <div style={{ width: 2, flex: 1, background: 'var(--d-border)', margin: '3px 0', minHeight: 22 }} />
+              <div style={{ width: 10, height: 10, background: 'var(--d-accent)', borderRadius: 2 }} />
             </div>
             <div style={{ flex: 1 }}>
               <div style={{ marginBottom: 12 }}>
-                <div style={{ fontFamily: 'monospace', fontSize: 10, color: '#6b7280', letterSpacing: 1, textTransform: 'uppercase' }}>
+                <div style={{ fontFamily: 'monospace', fontSize: 10, color: 'var(--d-muted)', letterSpacing: 1, textTransform: 'uppercase' }}>
                   Pickup · {Math.round(distanceKm * 0.6 + 2)} min away
                 </div>
-                <div style={{ fontSize: 14, fontWeight: 500, color: '#111827' }}>{pickupAddr}</div>
-                <div style={{ fontSize: 12, color: '#6b7280' }}>{order.pickup.name}</div>
+                <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--d-ink)' }}>{pickupAddr}</div>
+                <div style={{ fontSize: 12, color: 'var(--d-muted)' }}>{order.pickup.name}</div>
               </div>
               <div>
-                <div style={{ fontFamily: 'monospace', fontSize: 10, color: '#6b7280', letterSpacing: 1, textTransform: 'uppercase' }}>Drop-off</div>
-                <div style={{ fontSize: 14, fontWeight: 500, color: '#111827' }}>{dropoffAddr}{order.dropoff.unit ? ` · ${order.dropoff.unit}` : ''}</div>
-                <div style={{ fontSize: 12, color: '#6b7280' }}>{order.dropoff.name}</div>
+                <div style={{ fontFamily: 'monospace', fontSize: 10, color: 'var(--d-muted)', letterSpacing: 1, textTransform: 'uppercase' }}>Drop-off</div>
+                <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--d-ink)' }}>{dropoffAddr}{order.dropoff.unit ? ` · ${order.dropoff.unit}` : ''}</div>
+                <div style={{ fontSize: 12, color: 'var(--d-muted)' }}>{order.dropoff.name}</div>
               </div>
             </div>
           </div>
@@ -168,7 +168,7 @@ export function JobOfferModal({ order, onAccept, onDecline, onTimeout, initialSe
               onClick={() => setConfirmDecline(true)}
               style={{
                 flex: 1, height: 52, borderRadius: 26, cursor: 'pointer',
-                background: '#f3f4f6', border: 'none', color: '#111827',
+                background: 'var(--d-surface-2)', border: 'none', color: 'var(--d-ink)',
                 fontFamily: 'inherit', fontSize: 15, fontWeight: 500,
               }}
             >Decline</button>
@@ -176,7 +176,7 @@ export function JobOfferModal({ order, onAccept, onDecline, onTimeout, initialSe
               onClick={onAccept}
               style={{
                 flex: 2, height: 52, borderRadius: 26, cursor: 'pointer',
-                background: '#c94a1b', border: 'none', color: '#fff',
+                background: 'var(--d-accent)', border: 'none', color: '#fff',
                 fontFamily: 'inherit', fontSize: 15, fontWeight: 600, letterSpacing: -0.2,
                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
                 boxShadow: '0 10px 24px -10px rgba(201,74,27,.5)',
@@ -198,15 +198,15 @@ export function JobOfferModal({ order, onAccept, onDecline, onTimeout, initialSe
               padding: 24, zIndex: 10,
             }}>
               <div style={{
-                background: '#fff', borderRadius: 20, padding: 24,
+                background: 'var(--d-surface)', borderRadius: 20, padding: 24,
                 width: '100%', maxWidth: 320, textAlign: 'center',
                 boxShadow: '0 20px 60px -10px rgba(0,0,0,0.4)',
               }}>
                 <div style={{ fontSize: 36, marginBottom: 12 }}>🚫</div>
-                <div style={{ fontSize: 17, fontWeight: 700, color: '#111827', marginBottom: 8, letterSpacing: -0.3 }}>
+                <div style={{ fontSize: 17, fontWeight: 700, color: 'var(--d-ink)', marginBottom: 8, letterSpacing: -0.3 }}>
                   Decline this job?
                 </div>
-                <div style={{ fontSize: 13, color: '#6b7280', lineHeight: 1.5, marginBottom: 22 }}>
+                <div style={{ fontSize: 13, color: 'var(--d-muted)', lineHeight: 1.5, marginBottom: 22 }}>
                   The order will be returned to the queue and the admin will be notified to reassign.
                 </div>
                 <div style={{ display: 'flex', gap: 10 }}>
@@ -214,7 +214,7 @@ export function JobOfferModal({ order, onAccept, onDecline, onTimeout, initialSe
                     onClick={() => setConfirmDecline(false)}
                     style={{
                       flex: 1, height: 48, borderRadius: 24, cursor: 'pointer',
-                      background: '#f3f4f6', border: 'none', color: '#374151',
+                      background: 'var(--d-surface-2)', border: 'none', color: 'var(--d-ink-2)',
                       fontFamily: 'inherit', fontSize: 15, fontWeight: 500,
                     }}
                   >Cancel</button>
@@ -240,9 +240,9 @@ export function JobOfferModal({ order, onAccept, onDecline, onTimeout, initialSe
 
 function Tag({ children, tone = 'default' }: { children: React.ReactNode; tone?: 'default' | 'warn' | 'neutral' }) {
   const colors: Record<string, { bg: string; color: string }> = {
-    default: { bg: '#f3f4f6',  color: '#374151' },
-    warn:    { bg: '#fef3c7',  color: '#92400e' },
-    neutral: { bg: '#ede9fe',  color: '#5b21b6' },
+    default: { bg: 'var(--d-surface-2)', color: 'var(--d-ink-2)' },
+    warn:    { bg: 'var(--d-warn-bg)',   color: 'var(--d-warn)' },
+    neutral: { bg: 'var(--d-purple-bg)', color: 'var(--d-purple)' },
   }
   const { bg, color } = colors[tone]
   return (
