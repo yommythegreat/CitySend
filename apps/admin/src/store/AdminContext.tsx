@@ -96,6 +96,17 @@ function dispatchStatus(order: Order, requested: OrderStatus): OrderStatus {
   return requested === 'new' && order.assignedDriverId ? 'offered' : requested
 }
 
+/** Push-worthy notice to the driver that a job is waiting for Accept/Decline. */
+function offerNotification(order: Order, driverId: string) {
+  const street = (a: string) => a.split(',')[0]
+  return pushNotification({
+    event: 'job_offered', audience: 'driver',
+    orderId: order.id, title: 'New delivery offer',
+    body: `${street(order.pickup.address)} → ${street(order.dropoff.address)}. Open CitySend Driver to accept.`,
+    customerId: order.customerId, driverId,
+  })
+}
+
 function reducer(state: AdminState, action: Action): AdminState {
   switch (action.type) {
 
@@ -368,6 +379,7 @@ async function syncToSupabase(action: Action, snapshot: AdminState): Promise<voi
           body: `${driver.name} will pick up your parcel soon.`,
           customerId: order.customerId, driverId: driver.id,
         }),
+        ...(newStatus === 'offered' ? [offerNotification(order, driver.id)] : []),
         pushNotification({
           event: 'driver_assigned', audience: 'driver',
           orderId: action.orderId, title: 'New delivery assigned',
@@ -421,6 +433,10 @@ async function syncToSupabase(action: Action, snapshot: AdminState): Promise<voi
         status: nextStatus, updated_at: now,
         notes: [...order.notes, statusAuditNote],
       }).eq('id', action.orderId)
+
+      if (nextStatus === 'offered' && order.assignedDriverId) {
+        await offerNotification(order, order.assignedDriverId)
+      }
 
       const notifMap: Partial<Record<OrderStatus, { title: string; body: string }>> = {
         preparing:  { title: 'Preparing your delivery', body: 'We’re preparing your delivery. A courier will be assigned shortly.' },
